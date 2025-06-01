@@ -289,7 +289,12 @@ class Board:
         start = locs.get('The Fractured Vestibule', {'Description': 'Start'})
         gate = locs.get('The Final Gate', {'Description': 'Exit'})
 
-        start_tile = self.grid[0][0]
+        # randomly place the Fractured Vestibule each game
+        self.start_pos = (
+            random.randint(0, size - 1),
+            random.randint(0, size - 1),
+        )
+        start_tile = self.grid[self.start_pos[0]][self.start_pos[1]]
         start_tile.location = EncounterCard(
             name='The Fractured Vestibule',
             description=start['Description'],
@@ -299,7 +304,7 @@ class Board:
         # place the Final Gate somewhere other than start
         while True:
             x, y = random.randint(0, size - 1), random.randint(0, size - 1)
-            if (x, y) != (0, 0):
+            if (x, y) != self.start_pos:
                 self.final_pos = (x, y)
                 break
 
@@ -363,20 +368,10 @@ class Game:
         random.shuffle(self.deck)
         self.discovered_log: List[str] = []
 
-        # Random starting positions adjacent but not identical
-        while True:
-            x = random.randint(0, self.board.size - 1)
-            y = random.randint(0, self.board.size - 1)
-            adj = [(x + dx, y + dy) for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]
-                   if self.board.in_bounds(x + dx, y + dy)]
-            if adj:
-                rob_pos = (x, y)
-                cait_pos = random.choice(adj)
-                if cait_pos != rob_pos:
-                    break
-
-        self.players[0].x, self.players[0].y = rob_pos
-        self.players[1].x, self.players[1].y = cait_pos
+        # Both players begin at the Fractured Vestibule
+        start_x, start_y = self.board.start_pos
+        for p in self.players:
+            p.x, p.y = start_x, start_y
 
         for p in self.players:
             tile = self.board.tile_at(p.x, p.y)
@@ -385,7 +380,8 @@ class Game:
                 tile.location = self.draw_card()
             if tile.location:
                 entry = f"[{p.x},{p.y}] - {tile.location.name} (Encounter)"
-                self.discovered_log.append(entry)
+                if entry not in self.discovered_log:
+                    self.discovered_log.append(entry)
 
     def load_locations(self):
         with open('locations.csv', newline='') as f:
@@ -533,12 +529,9 @@ class Game:
             buffer.append(self.last_action_summary)
             buffer.append('')
 
-        # Player stats
-        if len(left) + len(right) + 1 <= width:
-            buffer.append(left + ' ' * (width - len(left) - len(right)) + right)
-        else:
-            buffer.append(left)
-            buffer.append(right.rjust(width))
+        # Player stats stacked for readability
+        buffer.append(left.ljust(width))
+        buffer.append(right.ljust(width))
         buffer.append('')
 
         # Discovered tile log
