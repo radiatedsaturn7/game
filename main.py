@@ -347,6 +347,54 @@ def glimpse_of_light(game: 'Game', players: Iterable[Player]):
     for p in players:
         p.apply_effect(sanity=1, morality=1)
 
+# ----- Item Use Effects -----
+def use_echo_stone(game: 'Game', player: Player, location: str) -> bool:
+    """Reveal an unrevealed tile adjacent to either player."""
+    candidates = []
+    for p in game.players:
+        for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            x, y = p.x + dx, p.y + dy
+            if game.board.in_bounds(x, y):
+                tile = game.board.tile_at(x, y)
+                if not tile.revealed and (x, y) not in candidates:
+                    candidates.append((x, y))
+    if not candidates:
+        print('No adjacent unrevealed tiles to reveal.')
+        return True
+    print('Choose a tile to reveal:')
+    for idx, (x, y) in enumerate(candidates, 1):
+        print(f' {idx}. ({x},{y})')
+    choice = input('Select number: ').strip()
+    if choice.isdigit() and 1 <= int(choice) <= len(candidates):
+        x, y = candidates[int(choice) - 1]
+        game.reveal_tile(x, y)
+    else:
+        print('Cancelled.')
+    return True
+
+
+def use_tearshard(game: 'Game', player: Player, location: str) -> bool:
+    """Reveal any unrevealed tile on the board."""
+    coords = []
+    for x in range(game.board.size):
+        for y in range(game.board.size):
+            tile = game.board.tile_at(x, y)
+            if not tile.revealed:
+                coords.append((x, y))
+    if not coords:
+        print('All tiles are already revealed.')
+        return True
+    print('Choose a tile to reveal:')
+    for idx, (x, y) in enumerate(coords, 1):
+        print(f' {idx}. ({x},{y})')
+    choice = input('Select number: ').strip()
+    if choice.isdigit() and 1 <= int(choice) <= len(coords):
+        x, y = coords[int(choice) - 1]
+        game.reveal_tile(x, y)
+    else:
+        print('Cancelled.')
+    return True
+
 class Tile:
     def __init__(self):
         self.revealed = False
@@ -495,7 +543,13 @@ class Game:
         with open('items.csv', newline='') as f:
             for row in csv.DictReader(f):
                 item = Item(row['Name'], row['Description'], effect_text=row['Effect'])
-                items.append(Item(item.name, item.description, effect_text=item.effect_text))
+                # Assign special use effects by item name
+                if item.name == 'Echo Stone':
+                    item.use_effect = use_echo_stone
+                if item.name == 'Tearshard':
+                    item.use_effect = use_tearshard
+                # store a copy for the deck
+                items.append(Item(item.name, item.description, effect_text=item.effect_text, use_effect=item.use_effect))
                 self.item_registry[item.name.lower()] = item
         random.shuffle(items)
         return items
@@ -789,6 +843,31 @@ class Game:
             print(f"{player.name} has fallen in the Abyss...")
             return True, summary
         return False, summary
+
+    def reveal_tile(self, x: int, y: int):
+        """Reveal a tile without moving a player."""
+        if not self.board.in_bounds(x, y):
+            print('That tile is outside the Abyss.')
+            return
+        tile = self.board.tile_at(x, y)
+        if tile.revealed:
+            print('Tile already revealed.')
+            return
+        tile.revealed = True
+        if tile.encounter is None:
+            tile.encounter = self.draw_encounter()
+        if tile.location:
+            entry = f"[{x},{y}] - {tile.location.name} (Location)"
+            if entry not in self.discovered_log:
+                self.discovered_log.append(entry)
+        if tile.encounter:
+            entry = f"[{x},{y}] - {tile.encounter.name} (Encounter)"
+            if entry not in self.discovered_log:
+                self.discovered_log.append(entry)
+        if tile.location:
+            print_location_text(tile.location)
+        if tile.encounter:
+            print_encounter_text(tile.encounter)
 
     def trade(self, from_player: Player, to_player: Player, item_name: str):
         if from_player.x != to_player.x or from_player.y != to_player.y:
