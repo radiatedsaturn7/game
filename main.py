@@ -328,7 +328,7 @@ class Board:
     def tile_at(self, x: int, y: int) -> Tile:
         return self.grid[x][y]
 
-    def display_lines(self, players: List[Player], width: int = 15) -> List[str]:
+    def display_lines(self, players: List[Player], location_lookup: Dict[str, Dict[str, str]], width: int = 15) -> List[str]:
         lines: List[str] = []
         border = '+' + '+'.join('-' * width for _ in range(self.size)) + '+'
         lines.append(border)
@@ -344,6 +344,17 @@ class Board:
                         cell = '???'
                     else:
                         cell = tile.location.name if tile.location else ''
+                        lookup = location_lookup.get(cell.lower(), {})
+                        effect = lookup.get('Effect', '')
+                        color_code = ''
+                        if effect:
+                            eff = effect.lower()
+                            if any(tok in eff for tok in ['+1', '+2', '+3', 'gain', 'restore']):
+                                color_code = 'green'
+                            if any(tok in eff for tok in ['-1', '-2', '-3', 'lose']):
+                                color_code = 'red'
+                        if color_code:
+                            cell = color(cell, color_code)
                 cell = shorten_name(cell, width)
                 row += cell.center(width) + '|'
             lines.append(row)
@@ -503,8 +514,27 @@ class Game:
             for entry in self.discovered_log:
                 print(entry)
             print()
-        for line in self.board.display_lines(self.players):
+        for line in self.board.display_lines(self.players, self.location_lookup):
             print(line)
+
+    def show_discovered_locations(self):
+        found = False
+        print('Discovered Locations:')
+        for x in range(self.board.size):
+            for y in range(self.board.size):
+                tile = self.board.grid[x][y]
+                if tile.revealed and tile.location:
+                    found = True
+                    loc = tile.location
+                    info = self.location_lookup.get(loc.name.lower(), {})
+                    desc = info.get('Description', loc.description)
+                    effect = info.get('Effect', loc.effect_text)
+                    line = f"[{x},{y}] - {loc.name}: {desc}"
+                    if effect:
+                        line += f" | Effect: {effect}"
+                    print(line)
+        if not found:
+            print('None yet.')
 
     def format_stats(self, player: Player, inv_width: int = 10) -> str:
         items = ', '.join(shorten_name(it.name, inv_width) for it in player.inventory)
@@ -518,7 +548,7 @@ class Game:
 
     def render_screen(self, active_player: Player) -> str:
         os.system('cls' if os.name == 'nt' else 'clear')
-        board_lines = self.board.display_lines(self.players)
+        board_lines = self.board.display_lines(self.players, self.location_lookup)
         width = len(board_lines[0])
         left = self.format_stats(self.players[0])
         right = self.format_stats(self.players[1])
@@ -534,18 +564,12 @@ class Game:
         buffer.append(right.ljust(width))
         buffer.append('')
 
-        # Discovered tile log
-        if self.discovered_log:
-            buffer.append('Discovered Tiles:')
-            buffer.extend(self.discovered_log)
-            buffer.append('')
-
         # Game board
         buffer.extend(board_lines)
         buffer.append('')
 
         # Command options
-        buffer.append('Commands: w/a/s/d, use <item>, trade <item>, lookup encounter <name>, lookup item <name>, lookup location <name>')
+        buffer.append('Commands: w/a/s/d, use <item>, trade <item>, items <player>, discovered, lookup encounter <name>, lookup item <name>, lookup location <name>')
         buffer.append('')
 
         # Prompt
@@ -644,6 +668,23 @@ class Game:
     def player_turn(self, player: Player) -> bool:
         while True:
             action = self.render_screen(player)
+            if action.startswith('items'):
+                parts = action.split(maxsplit=1)
+                name = parts[1] if len(parts) == 2 else player.name
+                target = next((p for p in self.players if p.name.lower() == name.lower()), None)
+                if target:
+                    if target.inventory:
+                        print(f"{target.name} has: " + ', '.join(it.name for it in target.inventory))
+                    else:
+                        print(f"{target.name} has no items.")
+                else:
+                    print('Unknown player.')
+                input('Press Enter to continue...')
+                continue
+            if action.startswith('discovered'):
+                self.show_discovered_locations()
+                input('Press Enter to continue...')
+                continue
             if action.startswith('lookup'):
                 parts = action.split(maxsplit=2)
                 if len(parts) >= 3:
@@ -657,18 +698,24 @@ class Game:
                 if len(parts) == 2:
                     other = self.players[1] if player == self.players[0] else self.players[0]
                     self.trade(player, other, parts[1])
-                self.last_action_summary = f"{player.name} traded {parts[1]}."
+                    self.last_action_summary = f"{player.name} traded {parts[1]}."
+                    input('Press Enter to continue...')
+                    return False
+                print('Specify an item to trade.')
                 input('Press Enter to continue...')
-                return False
+                continue
             if action.startswith('use'):
                 parts = action.split(maxsplit=1)
-                if len(parts) == 2:
+                if len(parts) == 2 and parts[1]:
                     tile = self.board.tile_at(player.x, player.y)
                     name = tile.location.name if tile.location else ''
                     player.use_item(self, parts[1], name)
-                self.last_action_summary = f"{player.name} used {parts[1]}."
+                    self.last_action_summary = f"{player.name} used {parts[1]}."
+                    input('Press Enter to continue...')
+                    return False
+                print('Specify an item to use.')
                 input('Press Enter to continue...')
-                return False
+                continue
             moves = {'w': (0,-1), 'a': (-1,0), 's': (0,1), 'd': (1,0)}
             if action in moves:
                 dx, dy = moves[action]
