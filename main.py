@@ -1,6 +1,7 @@
 import random
 import csv
 import re
+import os
 from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Iterable, Dict
 
@@ -13,6 +14,22 @@ def roll_d6() -> int:
 def roll_d20() -> int:
     """Return a random number between 1 and 20."""
     return random.randint(1, 20)
+
+
+def shorten_name(name: str, max_length: int = 15) -> str:
+    """Return a name shortened to fit within max_length."""
+    if len(name) <= max_length:
+        return name
+    if name.lower().startswith('the '):
+        name = name[4:]
+        if len(name) <= max_length:
+            return name
+    parts = name.split()
+    if len(parts) > 1:
+        short = f"{parts[0]} {parts[1][0]}."
+        if len(short) <= max_length:
+            return short
+    return name[: max_length - 1] + '.'
 
 
 @dataclass
@@ -293,9 +310,10 @@ class Board:
     def tile_at(self, x: int, y: int) -> Tile:
         return self.grid[x][y]
 
-    def display(self, players: List[Player], width: int = 15):
+    def display_lines(self, players: List[Player], width: int = 15) -> List[str]:
+        lines: List[str] = []
         border = '+' + '+'.join('-' * width for _ in range(self.size)) + '+'
-        print(border)
+        lines.append(border)
         for y in range(self.size):
             row = '|'
             for x in range(self.size):
@@ -308,34 +326,45 @@ class Board:
                         cell = '???'
                     else:
                         cell = tile.location.name if tile.location else ''
+                cell = shorten_name(cell, width)
                 row += cell.center(width) + '|'
-            print(row)
-            print(border)
+            lines.append(row)
+            lines.append(border)
+        return lines
 
 class Game:
     def __init__(self):
+        self.encounter_lookup: Dict[str, EncounterCard] = {}
+        self.item_lookup: Dict[str, Item] = {}
+        self.location_lookup: Dict[str, Dict[str, str]] = {}
         self.board = Board()
         self.players = [
             Player('Rob', 'R'),
             Player('Cait', 'C')
         ]
+        self.load_locations()
         self.deck = self.create_deck()
         self.item_deck = self.create_item_deck()
         self.final_deck = self.create_final_deck()
         random.shuffle(self.deck)
         self.discovered_log: List[str] = []
 
+    def load_locations(self):
+        with open('locations.csv', newline='') as f:
+            for row in csv.DictReader(f):
+                self.location_lookup[row['Name'].lower()] = row
+
     def create_deck(self) -> List[EncounterCard]:
         deck: List[EncounterCard] = []
         with open('cards.csv', newline='') as f:
             for row in csv.DictReader(f):
-                deck.append(
-                    EncounterCard(
-                        name=row['Name'],
-                        description=row['Description'],
-                        effect_text=row['Effect']
-                    )
+                card = EncounterCard(
+                    name=row['Name'],
+                    description=row['Description'],
+                    effect_text=row['Effect']
                 )
+                deck.append(card)
+                self.encounter_lookup[card.name.lower()] = card
         random.shuffle(deck)
         return deck
 
@@ -416,7 +445,62 @@ class Game:
             for entry in self.discovered_log:
                 print(entry)
             print()
-        self.board.display(self.players)
+        for line in self.board.display_lines(self.players):
+            print(line)
+
+    def format_stats(self, player: Player, inv_width: int = 10) -> str:
+        items = ', '.join(shorten_name(it.name, inv_width) for it in player.inventory)
+        return f"{player.name} H:{player.health} M:{player.morality} S:{player.sanity} [{items}]"
+
+    def render_screen(self, active_player: Player) -> str:
+        os.system('cls' if os.name == 'nt' else 'clear')
+        board_lines = self.board.display_lines(self.players)
+        width = len(board_lines[0])
+        left = self.format_stats(self.players[0])
+        right = self.format_stats(self.players[1])
+        buffer: List[str] = []
+        if len(left) + len(right) + 1 <= width:
+            buffer.append(left + ' ' * (width - len(left) - len(right)) + right)
+        else:
+            buffer.append(left)
+            buffer.append(right.rjust(width))
+        buffer.append('')
+        if self.discovered_log:
+            buffer.append('Discovered Tiles:')
+            buffer.extend(self.discovered_log)
+            buffer.append('')
+        buffer.extend(board_lines)
+        buffer.append('')
+        buffer.append('Commands: w/a/s/d, use <item>, trade <item>, lookup encounter <name>, lookup item <name>, lookup location <name>')
+        buffer.append('')
+        buffer.append(f"{active_player.name}'s move:")
+        print('\n'.join(buffer))
+        return input('> ').strip().lower()
+
+    def perform_lookup(self, category: str, name: str):
+        key = name.lower()
+        if category == 'item':
+            item = self.item_lookup.get(key)
+            if item:
+                print(f"{item.name}: {item.description}")
+                if item.effect_text:
+                    print(f"Effect: {item.effect_text}")
+                return
+        elif category in ('encounter', 'card'):
+            card = self.encounter_lookup.get(key)
+            if card:
+                print(f"{card.name}: {card.description}")
+                if card.effect_text:
+                    print(f"Effect: {card.effect_text}")
+                return
+        elif category == 'location':
+            loc = self.location_lookup.get(key)
+            if loc:
+                print(f"{loc['Name']}: {loc['Description']}")
+                if loc.get('Effect'):
+                    print(f"Effect: {loc['Effect']}")
+                return
+        print('Nothing found with that name.')
 
 
     def handle_tile(self, player: Player):
@@ -452,31 +536,40 @@ class Game:
         print(f"{from_player.name} does not have {item_name}.")
 
     def player_turn(self, player: Player) -> bool:
-        self.show_board()
-        items = [it.name for it in player.inventory]
-        print(f"{player.name}'s stats: H={player.health} M={player.morality} S={player.sanity} Items={items}")
-        action = input(f"{player.name}'s move (w/a/s/d, trade <item>, use <item>): ").strip().lower()
-        if action.startswith('trade'):
-            parts = action.split()
-            if len(parts) == 2:
-                other = self.players[1] if player == self.players[0] else self.players[0]
-                self.trade(player, other, parts[1])
-            return False
-        if action.startswith('use'):
-            parts = action.split()
-            if len(parts) == 2:
-                tile = self.board.tile_at(player.x, player.y)
-                name = tile.location.name if tile.location else ''
-                player.use_item(self, parts[1], name)
-            return False
-        moves = {'w': (0,-1), 'a': (-1,0), 's': (0,1), 'd': (1,0)}
-        if action in moves:
-            dx, dy = moves[action]
-            if self.board.move_player(player, dx, dy):
-                return self.handle_tile(player)
-        else:
+        while True:
+            action = self.render_screen(player)
+            if action.startswith('lookup'):
+                parts = action.split(maxsplit=2)
+                if len(parts) >= 3:
+                    self.perform_lookup(parts[1], parts[2])
+                else:
+                    print('Usage: lookup <encounter|item|location> <name>')
+                input('Press Enter to continue...')
+                continue
+            if action.startswith('trade'):
+                parts = action.split(maxsplit=1)
+                if len(parts) == 2:
+                    other = self.players[1] if player == self.players[0] else self.players[0]
+                    self.trade(player, other, parts[1])
+                input('Press Enter to continue...')
+                return False
+            if action.startswith('use'):
+                parts = action.split(maxsplit=1)
+                if len(parts) == 2:
+                    tile = self.board.tile_at(player.x, player.y)
+                    name = tile.location.name if tile.location else ''
+                    player.use_item(self, parts[1], name)
+                input('Press Enter to continue...')
+                return False
+            moves = {'w': (0,-1), 'a': (-1,0), 's': (0,1), 'd': (1,0)}
+            if action in moves:
+                dx, dy = moves[action]
+                if self.board.move_player(player, dx, dy):
+                    return self.handle_tile(player)
+                input('Press Enter to continue...')
+                return False
             print('Invalid action.')
-        return False
+            input('Press Enter to continue...')
 
     def play(self):
         print('--- Laughing in the Abyss ---')
