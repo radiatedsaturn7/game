@@ -45,6 +45,25 @@ def shorten_name(name: str, max_length: int = 15) -> str:
     return name[: max_length - 1] + '.'
 
 
+def print_encounter_text(card: 'EncounterCard'):
+    """Display a stylized encounter description."""
+    print(color(card.name, 'magenta'))
+    print(card.description)
+
+
+def print_location_text(location: 'LocationCard'):
+    """Display a stylized location description."""
+    print(color(location.name, 'cyan'))
+    print(location.description)
+
+
+def print_item_gain(item: 'Item'):
+    """Show narrative when gaining an item."""
+    print(color(f"You gained {item.name}", 'bold') + f" – {item.description}")
+    if item.effect_text:
+        print(f"Effect: {item.effect_text}")
+
+
 @dataclass
 class Item:
     name: str
@@ -82,6 +101,7 @@ class Player:
 
     def add_item(self, item: Item):
         self.inventory.append(item)
+        print_item_gain(item)
 
     def remove_item(self, item_name: str) -> bool:
         for i, it in enumerate(self.inventory):
@@ -109,17 +129,39 @@ class EncounterCard:
     immediate: Optional[Callable[['Game', Player], None]] = None
     revisit: Optional[Callable[['Game', Player], None]] = None
 
+    triggered: bool = False
+
     def apply(self, game: 'Game', player: Player, first_time: bool = True):
         if first_time:
-            print(f"{player.name} encounters {self.name}: {self.description}")
+            print_encounter_text(self)
             if self.immediate:
                 self.immediate(game, player)
             if self.effect_text:
                 game.apply_effect_text(self.effect_text, player)
+            self.triggered = True
         else:
-            print(f"{player.name} revisits {self.name}.")
             if self.revisit:
                 self.revisit(game, player)
+
+    @property
+    def short(self) -> str:
+        title = self.name.replace('The ', '')
+        return title.split()[0]
+
+
+@dataclass
+class LocationCard:
+    name: str
+    description: str
+    effect_text: str = ''
+    effect: Optional[Callable[['Game', Player], None]] = None
+
+    def apply(self, game: 'Game', player: Player):
+        print_location_text(self)
+        if self.effect:
+            self.effect(game, player)
+        if self.effect_text:
+            game.apply_effect_text(self.effect_text, player)
 
     @property
     def short(self) -> str:
@@ -276,7 +318,8 @@ def glimpse_of_light(game: 'Game', players: Iterable[Player]):
 class Tile:
     def __init__(self):
         self.revealed = False
-        self.location: Optional[EncounterCard] = None
+        self.encounter: Optional[EncounterCard] = None
+        self.location: Optional[LocationCard] = None
 
 class Board:
     def __init__(self, size: int = 5):
@@ -295,7 +338,7 @@ class Board:
             random.randint(0, size - 1),
         )
         start_tile = self.grid[self.start_pos[0]][self.start_pos[1]]
-        start_tile.location = EncounterCard(
+        start_tile.location = LocationCard(
             name='The Fractured Vestibule',
             description=start['Description'],
         )
@@ -308,7 +351,7 @@ class Board:
                 self.final_pos = (x, y)
                 break
 
-        self.grid[self.final_pos[0]][self.final_pos[1]].location = EncounterCard(
+        self.grid[self.final_pos[0]][self.final_pos[1]].location = LocationCard(
             name='Final Gate',
             description=gate['Description'],
         )
@@ -344,15 +387,20 @@ class Board:
                     if not tile.revealed:
                         cell = '???'
                     else:
-                        cell = tile.location.name if tile.location else ''
-                        lookup = location_lookup.get(cell.lower(), {})
-                        effect = lookup.get('Effect', '')
-                        if effect:
-                            eff = effect.lower()
-                            if any(tok in eff for tok in ['+1', '+2', '+3', 'gain', 'restore']):
-                                color_code = 'green'
-                            if any(tok in eff for tok in ['-1', '-2', '-3', 'lose']):
-                                color_code = 'red'
+                        names = []
+                        if tile.location:
+                            names.append(tile.location.name)
+                            lookup = location_lookup.get(tile.location.name.lower(), {})
+                            effect = lookup.get('Effect', '')
+                            if effect:
+                                eff = effect.lower()
+                                if any(tok in eff for tok in ['+1', '+2', '+3', 'gain', 'restore']):
+                                    color_code = 'green'
+                                if any(tok in eff for tok in ['-1', '-2', '-3', 'lose']):
+                                    color_code = 'red'
+                        if tile.encounter:
+                            names.append(tile.encounter.name)
+                        cell = '/'.join(names)
                 cell = shorten_name(cell, width)
                 if color_code:
                     cell = color(cell, color_code)
@@ -387,12 +435,8 @@ class Game:
         for p in self.players:
             tile = self.board.tile_at(p.x, p.y)
             tile.revealed = True
-            if tile.location is None:
-                tile.location = self.draw_card()
-            if tile.location:
-                entry = f"[{p.x},{p.y}] - {tile.location.name} (Encounter)"
-                if entry not in self.discovered_log:
-                    self.discovered_log.append(entry)
+            if tile.location and f"[{p.x},{p.y}] - {tile.location.name} (Location)" not in self.discovered_log:
+                self.discovered_log.append(f"[{p.x},{p.y}] - {tile.location.name} (Location)")
 
     def load_locations(self):
         with open('locations.csv', newline='') as f:
@@ -441,7 +485,7 @@ class Game:
             return None
         return self.item_deck.pop()
 
-    def draw_card(self) -> EncounterCard:
+    def draw_encounter(self) -> EncounterCard:
         if not self.deck:
             return EncounterCard('Empty Expanse', 'Nothing happens here.', lambda g, p: None)
         return self.deck.pop()
@@ -464,7 +508,6 @@ class Game:
             name = match.strip().title()
             item = self.item_lookup.get(name.lower(), Item(name, name))
             player.add_item(item)
-            print(f'{player.name} gains item: {item.name}')
         if 'lose 1 item' in lower or 'discard one item' in lower:
             if player.inventory:
                 lost = player.inventory.pop(0)
@@ -488,20 +531,21 @@ class Game:
         self,
         player: Player,
         action: str,
-        tile_name: str,
-        first_time: bool,
+        encounter_name: str,
+        first_encounter: bool,
+        location_name: str,
         stat_changes: List[str],
         item_changes: List[str],
     ) -> str:
         """Create a single line summary describing the player's action."""
         parts = [f"{player.name} moved {action}"]
-        if tile_name:
-            if first_time:
-                parts.append(f"and discovered {tile_name} (Encounter)")
+        if encounter_name:
+            if first_encounter:
+                parts.append(f"and encountered {encounter_name}")
             else:
-                parts.append(f"and revisited {tile_name}")
-        else:
-            parts.append("and found nothing")
+                parts.append(f"and revisited {encounter_name}")
+        if location_name:
+            parts.append(f"at {location_name}")
         if stat_changes:
             parts.append(". " + ", ".join(stat_changes))
         if item_changes:
@@ -523,16 +567,23 @@ class Game:
         for x in range(self.board.size):
             for y in range(self.board.size):
                 tile = self.board.grid[x][y]
-                if tile.revealed and tile.location:
+                if tile.revealed:
                     found = True
-                    loc = tile.location
-                    info = self.location_lookup.get(loc.name.lower(), {})
-                    desc = info.get('Description', loc.description)
-                    effect = info.get('Effect', loc.effect_text)
-                    line = f"[{x},{y}] - {loc.name}: {desc}"
-                    if effect:
-                        line += f" | Effect: {effect}"
-                    print(line)
+                    if tile.location:
+                        loc = tile.location
+                        info = self.location_lookup.get(loc.name.lower(), {})
+                        desc = info.get('Description', loc.description)
+                        effect = info.get('Effect', loc.effect_text)
+                        line = f"[{x},{y}] - {loc.name}: {desc}"
+                        if effect:
+                            line += f" | Effect: {effect}"
+                        print(line)
+                    if tile.encounter:
+                        enc = tile.encounter
+                        line = f"[{x},{y}] - {enc.name}: {enc.description}"
+                        if enc.effect_text:
+                            line += f" | Effect: {enc.effect_text}"
+                        print(line)
         if not found:
             print('None yet.')
 
@@ -623,17 +674,28 @@ class Game:
         first_time = not tile.revealed
         if first_time:
             tile.revealed = True
-            if tile.location is None:
-                tile.location = self.draw_card()
-            if tile.location:
-                entry = f"[{player.x},{player.y}] - {tile.location.name} (Encounter)"
+            if tile.encounter is None:
+                tile.encounter = self.draw_encounter()
+            if tile.encounter:
+                entry = f"[{player.x},{player.y}] - {tile.encounter.name} (Encounter)"
                 self.discovered_log.append(entry)
+            if tile.location:
+                entry = f"[{player.x},{player.y}] - {tile.location.name} (Location)"
+                if entry not in self.discovered_log:
+                    self.discovered_log.append(entry)
 
         before = (player.health, player.sanity, player.morality)
         before_items = [it.name for it in player.inventory]
 
+        enc_first = False
+        if tile.encounter and not tile.encounter.triggered:
+            enc_first = True
+            tile.encounter.apply(self, player, True)
+        elif tile.encounter and tile.encounter.revisit:
+            tile.encounter.apply(self, player, False)
+
         if tile.location:
-            tile.location.apply(self, player, first_time)
+            tile.location.apply(self, player)
 
         after = (player.health, player.sanity, player.morality)
         after_items = [it.name for it in player.inventory]
@@ -655,8 +717,9 @@ class Game:
         for it in lost:
             item_changes.append(color(f"lost item: {it}", 'red'))
 
-        tile_name = tile.location.name if tile.location else ''
-        summary = self.generate_summary(player, direction, tile_name, first_time, stat_changes, item_changes)
+        encounter_name = tile.encounter.name if tile.encounter else ''
+        location_name = tile.location.name if tile.location else ''
+        summary = self.generate_summary(player, direction, encounter_name, enc_first, location_name, stat_changes, item_changes)
 
         if tile.location and tile.location.name == 'Final Gate':
             if all(p.x == player.x and p.y == player.y and p.sanity >= 3 and p.morality >= 3 for p in self.players):
