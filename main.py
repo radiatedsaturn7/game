@@ -512,13 +512,15 @@ class Game:
                 player.apply_effect(sanity=val)
             elif attr == 'morality':
                 player.apply_effect(morality=val)
-        for match in re.findall(r'gain(?: item)?[: ]+([^,.]+)', lower):
-            name = match.strip().title()
+        for match in re.findall(r'gain(?: item)?[: ]+([^,(.]+)', lower):
+            name = re.sub(r'\(.*?\)', '', match).strip()
+            name = re.sub(r'\b(?:a|an|the)\b\s*', '', name, flags=re.I)
+            if not name or name[0].isdigit() or name[0] in '+-':
+                continue
+            name = name.title()
             reg = self.item_registry.get(name.lower())
             if reg:
                 player.add_item(Item(reg.name, reg.description, effect_text=reg.effect_text))
-            else:
-                print(f"Item '{name}' not found in your world.")
         if 'lose 1 item' in lower or 'discard one item' in lower:
             if player.inventory:
                 lost = player.inventory.pop(0)
@@ -631,7 +633,7 @@ class Game:
         buffer.append('')
 
         # Command options
-        buffer.append('Commands: w/a/s/d, use, trade, end, items <player>, discovered, lookup encounter <name>, lookup item <name>, lookup location <name>')
+        buffer.append('Commands: w/a/s/d, use, trade, pass, end, items <player>, discovered, lookup encounter <name>, lookup item <name>, lookup location <name>')
         buffer.append('')
 
         # Prompt
@@ -772,39 +774,8 @@ class Game:
                 return player.inventory[int(choice) - 1].name
             print('Invalid choice.')
 
-    def pre_move_phase(self, acting: Player, target: Player):
-        while True:
-            choice = input(f"Would you like to use an item or trade before {target.name} moves? (y/n) ").strip().lower()
-            if choice != 'y':
-                break
-            while True:
-                cmd = input("Action (use, trade, done): ").strip().lower()
-                if cmd == 'done':
-                    break
-                if cmd.startswith('use'):
-                    parts = cmd.split(maxsplit=1)
-                    item = parts[1] if len(parts) == 2 else self.select_item(acting)
-                    if item:
-                        tile = self.board.tile_at(acting.x, acting.y)
-                        loc = tile.location.name if tile.location else ''
-                        acting.use_item(self, item, loc)
-                        self.last_action_summary = f"{acting.name} used {item}."
-                        input('Press Enter to continue...')
-                    continue
-                if cmd.startswith('trade'):
-                    if acting.x != target.x or acting.y != target.y:
-                        print("Both players must be on the same tile to trade.")
-                        continue
-                    parts = cmd.split(maxsplit=1)
-                    item = parts[1] if len(parts) == 2 else self.select_item(acting)
-                    if item:
-                        self.trade(acting, target, item)
-                        self.last_action_summary = f"{acting.name} gave {item} to {target.name}."
-                        input('Press Enter to continue...')
-                    continue
-                print('Invalid action.')
 
-    def player_turn(self, player: Player) -> bool:
+    def player_turn(self, player: Player, can_move: bool = True) -> bool:
         while True:
             action = self.render_screen(player)
             if action.startswith('items'):
@@ -830,7 +801,14 @@ class Game:
                     print('Usage: lookup <encounter|item|location> <name>')
                 continue
             if action in ('help', 'commands'):
-                print('Commands: w/a/s/d, use, trade, end, items <player>, discovered, lookup encounter <name>, lookup item <name>, lookup location <name>')
+                print('Commands: w/a/s/d, use, trade, pass, end, items <player>, discovered, lookup encounter <name>, lookup item <name>, lookup location <name>')
+                continue
+            if action == 'pass':
+                if not can_move:
+                    return False
+                other = self.players[1] if player == self.players[0] else self.players[0]
+                self.last_action_summary = f"{player.name} passed to {other.name}."
+                self.player_turn(other, False)
                 continue
             if action.startswith('trade'):
                 other = self.players[1] if player == self.players[0] else self.players[0]
@@ -858,10 +836,18 @@ class Game:
                 input('Press Enter to continue...')
                 continue
             if action == 'end':
+                if not can_move:
+                    print('You cannot end during a pass. Type "pass" to return.')
+                    input('Press Enter to continue...')
+                    continue
                 self.last_action_summary = f"{player.name} ended their turn."
                 return False
             moves = {'w': (0,-1), 'a': (-1,0), 's': (0,1), 'd': (1,0)}
             if action in moves:
+                if not can_move:
+                    print('You cannot move right now.')
+                    input('Press Enter to continue...')
+                    continue
                 dx, dy = moves[action]
                 if self.board.move_player(player, dx, dy):
                     dir_word = {'w': 'up', 'a': 'left', 's': 'down', 'd': 'right'}[action]
@@ -878,17 +864,11 @@ class Game:
     def play(self):
         print('--- Laughing in the Abyss ---')
         game_over = False
+        active = 0
         while not game_over:
-            # Rob's turn
-            game_over = self.player_turn(self.players[0])
-            if game_over:
-                break
-            # Intermission before Cait moves
-            self.pre_move_phase(self.players[0], self.players[1])
-            # Cait's turn
-            game_over = self.player_turn(self.players[1])
-            if game_over:
-                break
+            player = self.players[active]
+            game_over = self.player_turn(player)
+            active = 1 - active
 
 if __name__ == '__main__':
     Game().play()

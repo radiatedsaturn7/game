@@ -23,4 +23,12 @@ ID,Name,Description,Effect
 22,Rusty Band,A broken promise looped in iron.,Reduce Morality penalty by 1.
 23,Echo Thread,Tangles with forgotten speech.,Speak through one locked door.
 24,Oracle Wick,Burns fate for truth.,Cancel one encounter effect.
+26,Bone Lantern,Its flame flickers with whispers of death.,Sense death tiles nearby.
+27,Husk Mask,A disguise woven from emptiness.,Hide tile effects from view.
+28,Halo Fragment,A shard of fallen grace.,+1 Morality but lose 1 Health every third turn.
+29,Saltword Scroll,Ink crusted with salt and secrets.,Used to inscribe protective runes.
+30,Wax Crown,Soft wax shaped into regality.,+1 Morality, -1 Sanity when worn.
+31,Veil of Remorse,A shroud heavy with regrets.,Prevents shared sanity loss at Watcher's Gallows.
+32,Rusted Band,A broken promise looped in iron.,Reduce Morality penalty by 1.
 25,Splintered Mask,Lies better than you ever could.,+1 Morality when entering performance-themed room.
+
