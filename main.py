@@ -4,6 +4,31 @@ import re
 import os
 from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Iterable, Dict
+import sys
+from io import StringIO
+
+
+class CaptureBuffer:
+    """Capture printed text while still echoing to stdout."""
+
+    def __enter__(self):
+        self._stdout = sys.stdout
+        self.buffer = StringIO()
+        sys.stdout = self
+        return self
+
+    def write(self, text):
+        self._stdout.write(text)
+        self.buffer.write(text)
+
+    def flush(self):
+        self._stdout.flush()
+
+    def __exit__(self, exc_type, exc, tb):
+        sys.stdout = self._stdout
+
+    def getvalue(self) -> str:
+        return self.buffer.getvalue()
 
 
 def color(text: str, code: str) -> str:
@@ -427,6 +452,7 @@ class Game:
             Player('Cait', 'C')
         ]
         self.last_action_summary: str = 'Welcome to the Abyss.'
+        self.last_action_description: str = ''
         self.load_locations()
         self.deck = self.create_deck()
         self.item_deck = self.create_item_deck()
@@ -621,6 +647,9 @@ class Game:
         # Narrative summary block
         if self.last_action_summary:
             buffer.append(self.last_action_summary)
+        if self.last_action_description:
+            buffer.append(self.last_action_description.rstrip())
+        if self.last_action_summary or self.last_action_description:
             buffer.append('')
 
         # Player stats stacked for readability
@@ -633,7 +662,7 @@ class Game:
         buffer.append('')
 
         # Command options
-        buffer.append('Commands: w/a/s/d, use, trade, pass, end, items <player>, discovered, lookup encounter <name>, lookup item <name>, lookup location <name>')
+        buffer.append('Commands: w/a/s/d, use, trade, pass, end, items <player>, discovered, lookup <name>')
         buffer.append('')
 
         # Prompt
@@ -643,6 +672,18 @@ class Game:
 
     def perform_lookup(self, category: str, name: str):
         key = name.lower()
+        if category in ('any', 'auto'):
+            if key in self.item_registry:
+                self.perform_lookup('item', name)
+                return
+            if key in self.encounter_lookup:
+                self.perform_lookup('encounter', name)
+                return
+            if key in self.location_lookup:
+                self.perform_lookup('location', name)
+                return
+            print('Nothing found with that name.')
+            return
         if category == 'item':
             item = self.item_registry.get(key)
             if item:
@@ -704,14 +745,16 @@ class Game:
         before_items = [it.name for it in player.inventory]
 
         enc_first = False
-        if tile.encounter and not tile.encounter.triggered:
-            enc_first = True
-            tile.encounter.apply(self, player, True)
-        elif tile.encounter and tile.encounter.revisit:
-            tile.encounter.apply(self, player, False)
+        with CaptureBuffer() as cap:
+            if tile.encounter and not tile.encounter.triggered:
+                enc_first = True
+                tile.encounter.apply(self, player, True)
+            elif tile.encounter and tile.encounter.revisit:
+                tile.encounter.apply(self, player, False)
 
-        if tile.location:
-            tile.location.apply(self, player)
+            if tile.location:
+                tile.location.apply(self, player)
+        self.last_action_description = cap.getvalue().strip()
 
         after = (player.health, player.sanity, player.morality)
         after_items = [it.name for it in player.inventory]
@@ -795,13 +838,18 @@ class Game:
                 continue
             if action.startswith('lookup'):
                 parts = action.split(maxsplit=2)
-                if len(parts) >= 3:
-                    self.perform_lookup(parts[1], parts[2])
+                if len(parts) >= 2:
+                    if len(parts) >= 3 and parts[1] in ('encounter', 'item', 'location', 'card'):
+                        self.perform_lookup(parts[1], parts[2])
+                    else:
+                        query = action[len('lookup'):].strip()
+                        self.perform_lookup('auto', query)
                 else:
-                    print('Usage: lookup <encounter|item|location> <name>')
+                    print('Usage: lookup <name>')
+                input('Press Enter to continue...')
                 continue
             if action in ('help', 'commands'):
-                print('Commands: w/a/s/d, use, trade, pass, end, items <player>, discovered, lookup encounter <name>, lookup item <name>, lookup location <name>')
+                print('Commands: w/a/s/d, use, trade, pass, end, items <player>, discovered, lookup <name>')
                 continue
             if action == 'pass':
                 if not can_move:
@@ -853,6 +901,7 @@ class Game:
                     dir_word = {'w': 'up', 'a': 'left', 's': 'down', 'd': 'right'}[action]
                     game_over, summary = self.handle_tile(player, dir_word)
                     self.last_action_summary = summary
+                    input('Press Enter to continue...')
                     return game_over
                 self.last_action_summary = f"{player.name} cannot move that way."
                 input('Press Enter to continue...')
