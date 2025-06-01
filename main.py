@@ -337,6 +337,7 @@ class Board:
             for x in range(self.size):
                 tile = self.grid[x][y]
                 players_here = [p for p in players if p.x == x and p.y == y]
+                color_code = ''
                 if players_here:
                     cell = 'Both' if len(players_here) == 2 else players_here[0].name
                 else:
@@ -346,16 +347,15 @@ class Board:
                         cell = tile.location.name if tile.location else ''
                         lookup = location_lookup.get(cell.lower(), {})
                         effect = lookup.get('Effect', '')
-                        color_code = ''
                         if effect:
                             eff = effect.lower()
                             if any(tok in eff for tok in ['+1', '+2', '+3', 'gain', 'restore']):
                                 color_code = 'green'
                             if any(tok in eff for tok in ['-1', '-2', '-3', 'lose']):
                                 color_code = 'red'
-                        if color_code:
-                            cell = color(cell, color_code)
                 cell = shorten_name(cell, width)
+                if color_code:
+                    cell = color(cell, color_code)
                 row += cell.center(width) + '|'
             lines.append(row)
             lines.append(border)
@@ -601,6 +601,21 @@ class Game:
                     print(f"Effect: {loc['Effect']}")
                 return
         print('Nothing found with that name.')
+        if category == 'item':
+            names = sorted(self.item_lookup.keys())
+        elif category in ('encounter', 'card'):
+            names = sorted(self.encounter_lookup.keys())
+        elif category == 'location':
+            names = sorted(self.location_lookup.keys())
+        else:
+            names = []
+        if names:
+            print('Available options:')
+            for n in names:
+                print(f' - {n}')
+            choice = input('Enter a name from the list for more details (or press Enter to cancel): ').strip().lower()
+            if choice:
+                self.perform_lookup(category, choice)
 
 
     def handle_tile(self, player: Player, direction: str) -> (bool, str):
