@@ -6,6 +6,19 @@ from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Iterable, Dict
 
 
+def color(text: str, code: str) -> str:
+    """Return text wrapped in ANSI color codes if supported."""
+    codes = {
+        'red': '\033[91m',
+        'green': '\033[92m',
+        'cyan': '\033[96m',
+        'magenta': '\033[95m',
+        'bold': '\033[1m',
+        'reset': '\033[0m',
+    }
+    return f"{codes.get(code, '')}{text}{codes['reset']}"
+
+
 def roll_d6() -> int:
     """Return a random number between 1 and 6."""
     return random.randint(1, 6)
@@ -342,12 +355,37 @@ class Game:
             Player('Rob', 'R'),
             Player('Cait', 'C')
         ]
+        self.last_action_summary: str = 'Welcome to the Abyss.'
         self.load_locations()
         self.deck = self.create_deck()
         self.item_deck = self.create_item_deck()
         self.final_deck = self.create_final_deck()
         random.shuffle(self.deck)
         self.discovered_log: List[str] = []
+
+        # Random starting positions adjacent but not identical
+        while True:
+            x = random.randint(0, self.board.size - 1)
+            y = random.randint(0, self.board.size - 1)
+            adj = [(x + dx, y + dy) for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]
+                   if self.board.in_bounds(x + dx, y + dy)]
+            if adj:
+                rob_pos = (x, y)
+                cait_pos = random.choice(adj)
+                if cait_pos != rob_pos:
+                    break
+
+        self.players[0].x, self.players[0].y = rob_pos
+        self.players[1].x, self.players[1].y = cait_pos
+
+        for p in self.players:
+            tile = self.board.tile_at(p.x, p.y)
+            tile.revealed = True
+            if tile.location is None:
+                tile.location = self.draw_card()
+            if tile.location:
+                entry = f"[{p.x},{p.y}] - {tile.location.name} (Encounter)"
+                self.discovered_log.append(entry)
 
     def load_locations(self):
         with open('locations.csv', newline='') as f:
@@ -438,6 +476,30 @@ class Game:
                     return True
         print('You have overcome the final trials and escape the Abyss!')
         return True
+
+    def generate_summary(
+        self,
+        player: Player,
+        action: str,
+        tile_name: str,
+        first_time: bool,
+        stat_changes: List[str],
+        item_changes: List[str],
+    ) -> str:
+        """Create a single line summary describing the player's action."""
+        parts = [f"{player.name} moved {action}"]
+        if tile_name:
+            if first_time:
+                parts.append(f"and discovered {tile_name} (Encounter)")
+            else:
+                parts.append(f"and revisited {tile_name}")
+        else:
+            parts.append("and found nothing")
+        if stat_changes:
+            parts.append(". " + ", ".join(stat_changes))
+        if item_changes:
+            parts.append(" " + ", ".join(item_changes))
+        return " ".join(parts).strip()
       
     def show_board(self):
         if self.discovered_log:
@@ -450,7 +512,13 @@ class Game:
 
     def format_stats(self, player: Player, inv_width: int = 10) -> str:
         items = ', '.join(shorten_name(it.name, inv_width) for it in player.inventory)
-        return f"{player.name} H:{player.health} M:{player.morality} S:{player.sanity} [{items}]"
+        if not items:
+            items = 'None'
+        return (
+            f"{player.name} – Health: {player.health} | "
+            f"Sanity: {player.sanity} | Morality: {player.morality} | "
+            f"Items: [{items}]"
+        )
 
     def render_screen(self, active_player: Player) -> str:
         os.system('cls' if os.name == 'nt' else 'clear')
@@ -459,20 +527,35 @@ class Game:
         left = self.format_stats(self.players[0])
         right = self.format_stats(self.players[1])
         buffer: List[str] = []
+
+        # Narrative summary block
+        if self.last_action_summary:
+            buffer.append(self.last_action_summary)
+            buffer.append('')
+
+        # Player stats
         if len(left) + len(right) + 1 <= width:
             buffer.append(left + ' ' * (width - len(left) - len(right)) + right)
         else:
             buffer.append(left)
             buffer.append(right.rjust(width))
         buffer.append('')
+
+        # Discovered tile log
         if self.discovered_log:
             buffer.append('Discovered Tiles:')
             buffer.extend(self.discovered_log)
             buffer.append('')
+
+        # Game board
         buffer.extend(board_lines)
         buffer.append('')
+
+        # Command options
         buffer.append('Commands: w/a/s/d, use <item>, trade <item>, lookup encounter <name>, lookup item <name>, lookup location <name>')
         buffer.append('')
+
+        # Prompt
         buffer.append(f"{active_player.name}'s move:")
         print('\n'.join(buffer))
         return input('> ').strip().lower()
@@ -503,7 +586,7 @@ class Game:
         print('Nothing found with that name.')
 
 
-    def handle_tile(self, player: Player):
+    def handle_tile(self, player: Player, direction: str) -> (bool, str):
         tile = self.board.tile_at(player.x, player.y)
         first_time = not tile.revealed
         if first_time:
@@ -513,15 +596,45 @@ class Game:
             if tile.location:
                 entry = f"[{player.x},{player.y}] - {tile.location.name} (Encounter)"
                 self.discovered_log.append(entry)
+
+        before = (player.health, player.sanity, player.morality)
+        before_items = [it.name for it in player.inventory]
+
         if tile.location:
             tile.location.apply(self, player, first_time)
+
+        after = (player.health, player.sanity, player.morality)
+        after_items = [it.name for it in player.inventory]
+
+        stat_changes = []
+        labels = ['Health', 'Sanity', 'Morality']
+        for idx, (b, a) in enumerate(zip(before, after)):
+            diff = a - b
+            if diff:
+                sign = '+' if diff > 0 else ''
+                color_code = 'green' if diff > 0 else 'red'
+                stat_changes.append(color(f"{sign}{diff} {labels[idx]}", color_code))
+
+        gained = [it for it in after_items if it not in before_items]
+        lost = [it for it in before_items if it not in after_items]
+        item_changes = []
+        for it in gained:
+            item_changes.append(color(f"gained item: {it}", 'cyan'))
+        for it in lost:
+            item_changes.append(color(f"lost item: {it}", 'red'))
+
+        tile_name = tile.location.name if tile.location else ''
+        summary = self.generate_summary(player, direction, tile_name, first_time, stat_changes, item_changes)
+
         if tile.location and tile.location.name == 'Final Gate':
             if all(p.x == player.x and p.y == player.y and p.sanity >= 3 and p.morality >= 3 for p in self.players):
-                return self.run_final_gate()
+                game_over = self.run_final_gate()
+                return game_over, summary
+
         if player.health == 0 or player.sanity == 0 or player.morality == 0:
             print(f"{player.name} has fallen in the Abyss...")
-            return True
-        return False
+            return True, summary
+        return False, summary
 
     def trade(self, from_player: Player, to_player: Player, item_name: str):
         if from_player.x != to_player.x or from_player.y != to_player.y:
@@ -551,6 +664,7 @@ class Game:
                 if len(parts) == 2:
                     other = self.players[1] if player == self.players[0] else self.players[0]
                     self.trade(player, other, parts[1])
+                self.last_action_summary = f"{player.name} traded {parts[1]}."
                 input('Press Enter to continue...')
                 return False
             if action.startswith('use'):
@@ -559,13 +673,18 @@ class Game:
                     tile = self.board.tile_at(player.x, player.y)
                     name = tile.location.name if tile.location else ''
                     player.use_item(self, parts[1], name)
+                self.last_action_summary = f"{player.name} used {parts[1]}."
                 input('Press Enter to continue...')
                 return False
             moves = {'w': (0,-1), 'a': (-1,0), 's': (0,1), 'd': (1,0)}
             if action in moves:
                 dx, dy = moves[action]
                 if self.board.move_player(player, dx, dy):
-                    return self.handle_tile(player)
+                    dir_word = {'w': 'up', 'a': 'left', 's': 'down', 'd': 'right'}[action]
+                    game_over, summary = self.handle_tile(player, dir_word)
+                    self.last_action_summary = summary
+                    return game_over
+                self.last_action_summary = f"{player.name} cannot move that way."
                 input('Press Enter to continue...')
                 return False
             print('Invalid action.')
