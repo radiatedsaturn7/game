@@ -837,6 +837,7 @@ class Game:
 
             if tile.location:
                 tile.location.apply(self, player)
+            self.check_item_triggers(player, tile)
         self.last_action_description = cap.getvalue().strip()
 
         after = (player.health, player.sanity, player.morality)
@@ -924,6 +925,20 @@ class Game:
         random.shuffle(coords)
         for x, y in coords[:count]:
             self.reveal_tile(x, y)
+
+    def check_item_triggers(self, player: Player, tile: Tile):
+        """Apply automatic item effects based on the current tile."""
+        mask = next((it for it in player.inventory if it.name == 'Splintered Mask'), None)
+        if mask:
+            keywords = ['stage', 'choir', 'rehearsal', 'puppet', 'performance']
+            names = []
+            if tile.location:
+                names.append(tile.location.name.lower())
+            if tile.encounter:
+                names.append(tile.encounter.name.lower())
+            if any(any(k in n for k in keywords) for n in names):
+                print('The Splintered Mask hums with forgotten applause.')
+                player.apply_effect(morality=1)
 
     def trade(self, from_player: Player, to_player: Player, item_name: str):
         if from_player.x != to_player.x or from_player.y != to_player.y:
