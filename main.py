@@ -1,26 +1,46 @@
 import random
+import csv
+import re
 from dataclasses import dataclass, field
-from typing import List, Callable, Optional
+from typing import List, Callable, Optional, Iterable, Dict
+
+
+def roll_d6() -> int:
+    """Return a random number between 1 and 6."""
+    return random.randint(1, 6)
+
+
+def roll_d20() -> int:
+    """Return a random number between 1 and 20."""
+    return random.randint(1, 20)
 
 
 @dataclass
 class Item:
     name: str
     description: str
-    use_effect: Optional[Callable[['Player', str], bool]] = None
+    effect_text: str = ''
+    use_effect: Optional[Callable[['Game', 'Player', str], bool]] = None
 
     def __str__(self) -> str:
         return self.name
+
+    def apply(self, game: 'Game', player: 'Player', location: str):
+        if self.use_effect:
+            if self.use_effect(game, player, location):
+                return
+        if self.effect_text:
+            game.apply_effect_text(self.effect_text, player)
 
 @dataclass
 class Player:
     name: str
     symbol: str
-    x: int = 2
-    y: int = 2
+    x: int = 0
+    y: int = 0
     health: int = 10
-    morality: int = 10
-    sanity: int = 10
+    morality: int = 6
+    sanity: int = 6
     inventory: List[Item] = field(default_factory=list)
 
     def apply_effect(self, health=0, morality=0, sanity=0, item: Optional[Item]=None):
@@ -43,11 +63,11 @@ class Player:
     def has_item(self, item_name: str) -> bool:
         return any(it.name.lower() == item_name.lower() for it in self.inventory)
 
-    def use_item(self, item_name: str, location: str):
+    def use_item(self, game: 'Game', item_name: str, location: str):
         for i, it in enumerate(self.inventory):
             if it.name.lower() == item_name.lower():
-                if it.use_effect and it.use_effect(self, location):
-                    del self.inventory[i]
+                it.apply(game, self, location)
+                del self.inventory[i]
                 return
         print(f"{self.name} does not have {item_name}.")
 
@@ -55,21 +75,42 @@ class Player:
 class EncounterCard:
     name: str
     description: str
-    immediate: Callable[['Game', Player], None]
-    revisit: Callable[['Game', Player], None] = lambda game, player: None
+    effect_text: str = ''
+    immediate: Optional[Callable[['Game', Player], None]] = None
+    revisit: Optional[Callable[['Game', Player], None]] = None
 
     def apply(self, game: 'Game', player: Player, first_time: bool = True):
         if first_time:
             print(f"{player.name} encounters {self.name}: {self.description}")
-            self.immediate(game, player)
+            if self.immediate:
+                self.immediate(game, player)
+            if self.effect_text:
+                game.apply_effect_text(self.effect_text, player)
         else:
             print(f"{player.name} revisits {self.name}.")
-            self.revisit(game, player)
+            if self.revisit:
+                self.revisit(game, player)
 
     @property
     def short(self) -> str:
         title = self.name.replace('The ', '')
         return title.split()[0]
+
+
+@dataclass
+class FinalGateCard:
+    """Cards used during the Final Gate sequence."""
+    name: str
+    description: str
+    effect: Optional[Callable[['Game', Iterable[Player]], None]] = None
+    effect_text: str = ''
+
+    def apply(self, game: 'Game', players: Iterable[Player]):
+        if self.effect:
+            self.effect(game, players)
+        if self.effect_text:
+            for p in players:
+                game.apply_effect_text(self.effect_text, p)
 
 def mirror_of_broken_memories(game: 'Game', player: Player):
     player.apply_effect(sanity=-1)
@@ -175,6 +216,33 @@ def bleeding_window_revisit(game: 'Game', player: Player):
     elif choice == 'm':
         player.apply_effect(morality=1, sanity=-1)
 
+# ----- Final Gate encounter effects -----
+def abyssal_laugh(game: 'Game', players: Iterable[Player]):
+    print('Unseen voices laugh from the darkness...')
+    for p in players:
+        roll = roll_d6()
+        if roll <= 3:
+            p.apply_effect(sanity=-1)
+            print(f'{p.name} loses 1 Sanity.')
+        else:
+            p.apply_effect(sanity=1)
+            print(f'{p.name} steels themselves and gains 1 Sanity.')
+
+
+def weighing_sins(game: 'Game', players: Iterable[Player]):
+    for p in players:
+        choice = input(f'{p.name}: lose 2 Health (h) or 1 Morality (m)? ').strip().lower()
+        if choice == 'h':
+            p.apply_effect(health=-2)
+        else:
+            p.apply_effect(morality=-1)
+
+
+def glimpse_of_light(game: 'Game', players: Iterable[Player]):
+    print('A warm light cuts through the gloom, if only for a moment.')
+    for p in players:
+        p.apply_effect(sanity=1, morality=1)
+
 class Tile:
     def __init__(self):
         self.revealed = False
@@ -184,12 +252,30 @@ class Board:
     def __init__(self, size: int = 5):
         self.size = size
         self.grid = [[Tile() for _ in range(size)] for _ in range(size)]
-        self.final_pos = (random.randint(0, size-1), random.randint(0, size-1))
+        # load location data
+        with open('locations.csv', newline='') as f:
+            locs = {row['Name']: row for row in csv.DictReader(f)}
+
+        start = locs.get('The Fractured Vestibule', {'Description': 'Start'})
+        gate = locs.get('The Final Gate', {'Description': 'Exit'})
+
+        start_tile = self.grid[0][0]
+        start_tile.location = EncounterCard(
+            name='The Fractured Vestibule',
+            description=start['Description'],
+        )
+        start_tile.revealed = True
+
+        # place the Final Gate somewhere other than start
+        while True:
+            x, y = random.randint(0, size - 1), random.randint(0, size - 1)
+            if (x, y) != (0, 0):
+                self.final_pos = (x, y)
+                break
+
         self.grid[self.final_pos[0]][self.final_pos[1]].location = EncounterCard(
             name='Final Gate',
-            description='The gateway out of the Abyss.',
-            immediate=lambda g, p: None,
-            revisit=lambda g, p: None
+            description=gate['Description'],
         )
 
     def in_bounds(self, x: int, y: int) -> bool:
@@ -241,39 +327,45 @@ class Game:
         ]
         self.deck = self.create_deck()
         self.item_deck = self.create_item_deck()
+        self.final_deck = self.create_final_deck()
         random.shuffle(self.deck)
 
     def create_deck(self) -> List[EncounterCard]:
-        return [
-            EncounterCard('Mirror of Broken Memories', 'Shards reflect forgotten faces.', mirror_of_broken_memories, revisit_minus_sanity),
-            EncounterCard('The Whispering Wound', 'Pain speaks softly here.', whispering_wound, whispering_wound_revisit),
-            EncounterCard('The Laughing Statue', 'Its grin unsettles yet comforts.', laughing_statue),
-            EncounterCard('Echo Well', 'Voices echo with truth.', echo_well, revisit_plus_morality),
-            EncounterCard('Beneath the Clockface', 'Time twists around you.', beneath_clockface, laughing_statue),
-
-            EncounterCard('The Crooked Bell', 'It rings once when you arrive. And again when you lie.', crooked_bell_first, crooked_bell_revisit),
-            EncounterCard('The Hungering Gate', 'A doorway with teeth. It doesn\'t open. It feeds.', hungering_gate_first, hungering_gate_revisit),
-            EncounterCard('The Nameless Grave', 'A mound of earth. Yours? Mine? Who\'s counting anymore.', nameless_grave_first, nameless_grave_revisit),
-            EncounterCard('The Shiverglass Lake', 'A reflection that trembles. It looks back.', shiverglass_lake_first, shiverglass_lake_revisit),
-            EncounterCard('The Bleeding Window', 'Something on the other side weeps when you approach.', bleeding_window_first, bleeding_window_revisit)
-        ]
+        deck: List[EncounterCard] = []
+        with open('cards.csv', newline='') as f:
+            for row in csv.DictReader(f):
+                deck.append(
+                    EncounterCard(
+                        name=row['Name'],
+                        description=row['Description'],
+                        effect_text=row['Effect']
+                    )
+                )
+        random.shuffle(deck)
+        return deck
 
     def create_item_deck(self) -> List[Item]:
-        def glass_memory_effect(player: Player, location: str) -> bool:
-            if location == 'Mirror of Broken Memories':
-                player.apply_effect(sanity=1)
-                print('The shard restores a sliver of your sanity.')
-                return True
-            print('Nothing happens.')
-            return False
+        items: List[Item] = []
+        with open('items.csv', newline='') as f:
+            for row in csv.DictReader(f):
+                items.append(Item(row['Name'], row['Description'], effect_text=row['Effect']))
+        random.shuffle(items)
+        self.item_lookup = {it.name.lower(): Item(it.name, it.description, effect_text=it.effect_text) for it in items}
+        return items
 
-        return [
-            Item('Glass Memory', 'A broken shard that reflects who you were, not who you are.', glass_memory_effect),
-            Item('Eternal Candle', 'Burns in defiance of darkness. Comforts the soul.'),
-            Item('Bone Charm', 'Strung together from something that used to laugh.'),
-            Item('Memory Tome', 'Pages filled with words you didn\'t write but remember anyway.'),
-            Item('Muted Stone', 'Warm and silent, like holding someone\'s last word.')
-        ]
+    def create_final_deck(self) -> List[FinalGateCard]:
+        deck: List[FinalGateCard] = []
+        with open('final_encounters.csv', newline='') as f:
+            for row in csv.DictReader(f):
+                deck.append(
+                    FinalGateCard(
+                        name=row['Name'],
+                        description=row['Description'],
+                        effect_text=row['Effect']
+                    )
+                )
+        random.shuffle(deck)
+        return deck
 
     def draw_item(self) -> Optional[Item]:
         if not self.item_deck:
@@ -284,6 +376,44 @@ class Game:
         if not self.deck:
             return EncounterCard('Empty Expanse', 'Nothing happens here.', lambda g, p: None)
         return self.deck.pop()
+
+    def apply_effect_text(self, text: str, player: Player):
+        if not text:
+            return
+        print(f"Effect: {text}")
+        lower = text.lower()
+        for match in re.findall(r'([+-]?\d+)\s*(health|sanity|morality)', lower):
+            val = int(match[0])
+            attr = match[1]
+            if attr == 'health':
+                player.apply_effect(health=val)
+            elif attr == 'sanity':
+                player.apply_effect(sanity=val)
+            elif attr == 'morality':
+                player.apply_effect(morality=val)
+        for match in re.findall(r'gain(?: item)?[: ]+([^,.]+)', lower):
+            name = match.strip().title()
+            item = self.item_lookup.get(name.lower(), Item(name, name))
+            player.add_item(item)
+            print(f'{player.name} gains item: {item.name}')
+        if 'lose 1 item' in lower or 'discard one item' in lower:
+            if player.inventory:
+                lost = player.inventory.pop(0)
+                print(f'{player.name} loses {lost.name}')
+
+    def run_final_gate(self) -> bool:
+        random.shuffle(self.final_deck)
+        trials = self.final_deck[:3]
+        print('--- Final Gate Trials ---')
+        for card in trials:
+            print(f'[{card.name}] {card.description}')
+            card.apply(self, self.players)
+            for p in self.players:
+                if p.health <= 0 or p.sanity <= 0 or p.morality <= 0:
+                    print(f'{p.name} could not withstand the final trial...')
+                    return True
+        print('You have overcome the final trials and escape the Abyss!')
+        return True
 
     def handle_tile(self, player: Player):
         tile = self.board.tile_at(player.x, player.y)
@@ -296,8 +426,7 @@ class Game:
             tile.location.apply(self, player, first_time)
         if tile.location and tile.location.name == 'Final Gate':
             if all(p.x == player.x and p.y == player.y and p.sanity >= 3 and p.morality >= 3 for p in self.players):
-                print('Both players stand before the Final Gate with clear minds. You escape!')
-                return True
+                return self.run_final_gate()
         if player.health == 0 or player.sanity == 0 or player.morality == 0:
             print(f"{player.name} has fallen in the Abyss...")
             return True
@@ -331,7 +460,7 @@ class Game:
             if len(parts) == 2:
                 tile = self.board.tile_at(player.x, player.y)
                 name = tile.location.name if tile.location else ''
-                player.use_item(parts[1], name)
+                player.use_item(self, parts[1], name)
             return False
         moves = {'w': (0,-1), 'a': (-1,0), 's': (0,1), 'd': (1,0)}
         if action in moves:
