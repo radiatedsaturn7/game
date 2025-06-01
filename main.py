@@ -293,30 +293,24 @@ class Board:
     def tile_at(self, x: int, y: int) -> Tile:
         return self.grid[x][y]
 
-    def display(self, players: List[Player]):
+    def display(self, players: List[Player], width: int = 15):
+        border = '+' + '+'.join('-' * width for _ in range(self.size)) + '+'
+        print(border)
         for y in range(self.size):
-            row = []
+            row = '|'
             for x in range(self.size):
-                symbol = '?'
+                tile = self.grid[x][y]
                 players_here = [p for p in players if p.x == x and p.y == y]
                 if players_here:
-                    if len(players_here) == 2:
-                        symbol = '2'
-                    else:
-                        symbol = players_here[0].symbol
+                    cell = 'Both' if len(players_here) == 2 else players_here[0].name
                 else:
-                    tile = self.grid[x][y]
-                    if tile.revealed:
-                        symbol = tile.location.short if tile.location else 'X'
-                row.append(symbol)
-            print(' '.join(row))
-        print('\nDiscovered locations:')
-        for x in range(self.size):
-            for y in range(self.size):
-                tile = self.grid[x][y]
-                if tile.revealed and tile.location:
-                    print(f"({x},{y}) {tile.location.name}")
-        print()
+                    if not tile.revealed:
+                        cell = '???'
+                    else:
+                        cell = tile.location.name if tile.location else ''
+                row += cell.center(width) + '|'
+            print(row)
+            print(border)
 
 class Game:
     def __init__(self):
@@ -329,6 +323,7 @@ class Game:
         self.item_deck = self.create_item_deck()
         self.final_deck = self.create_final_deck()
         random.shuffle(self.deck)
+        self.discovered_log: List[str] = []
 
     def create_deck(self) -> List[EncounterCard]:
         deck: List[EncounterCard] = []
@@ -414,6 +409,15 @@ class Game:
                     return True
         print('You have overcome the final trials and escape the Abyss!')
         return True
+      
+    def show_board(self):
+        if self.discovered_log:
+            print('Discovered Tiles:')
+            for entry in self.discovered_log:
+                print(entry)
+            print()
+        self.board.display(self.players)
+
 
     def handle_tile(self, player: Player):
         tile = self.board.tile_at(player.x, player.y)
@@ -422,6 +426,9 @@ class Game:
             tile.revealed = True
             if tile.location is None:
                 tile.location = self.draw_card()
+            if tile.location:
+                entry = f"[{player.x},{player.y}] - {tile.location.name} (Encounter)"
+                self.discovered_log.append(entry)
         if tile.location:
             tile.location.apply(self, player, first_time)
         if tile.location and tile.location.name == 'Final Gate':
@@ -445,7 +452,7 @@ class Game:
         print(f"{from_player.name} does not have {item_name}.")
 
     def player_turn(self, player: Player) -> bool:
-        self.board.display(self.players)
+        self.show_board()
         items = [it.name for it in player.inventory]
         print(f"{player.name}'s stats: H={player.health} M={player.morality} S={player.sanity} Items={items}")
         action = input(f"{player.name}'s move (w/a/s/d, trade <item>, use <item>): ").strip().lower()
