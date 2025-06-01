@@ -114,6 +114,9 @@ class Player:
         return any(it.name.lower() == item_name.lower() for it in self.inventory)
 
     def use_item(self, game: 'Game', item_name: str, location: str):
+        if item_name.lower() not in game.item_registry:
+            print(f"Item '{item_name}' not found in your world.")
+            return
         for i, it in enumerate(self.inventory):
             if it.name.lower() == item_name.lower():
                 it.apply(game, self, location)
@@ -270,8 +273,12 @@ def shiverglass_lake_revisit(game: 'Game', player: Player):
         other = others[0]
         item_name = player.inventory[0].name
         player.inventory.pop(0)
-        other.add_item(Item(item_name, 'Traded item'))
-        print(f'Traded {item_name} with {other.name}.')
+        reg = game.item_registry.get(item_name.lower())
+        if reg:
+            other.add_item(Item(reg.name, reg.description, effect_text=reg.effect_text))
+            print(f'Traded {item_name} with {other.name}.')
+        else:
+            print(f"Item '{item_name}' not found in your world.")
 
 def bleeding_window_first(game: 'Game', player: Player):
     player.apply_effect(sanity=-1)
@@ -412,7 +419,7 @@ class Board:
 class Game:
     def __init__(self):
         self.encounter_lookup: Dict[str, EncounterCard] = {}
-        self.item_lookup: Dict[str, Item] = {}
+        self.item_registry: Dict[str, Item] = {}
         self.location_lookup: Dict[str, Dict[str, str]] = {}
         self.board = Board()
         self.players = [
@@ -461,9 +468,10 @@ class Game:
         items: List[Item] = []
         with open('items.csv', newline='') as f:
             for row in csv.DictReader(f):
-                items.append(Item(row['Name'], row['Description'], effect_text=row['Effect']))
+                item = Item(row['Name'], row['Description'], effect_text=row['Effect'])
+                items.append(Item(item.name, item.description, effect_text=item.effect_text))
+                self.item_registry[item.name.lower()] = item
         random.shuffle(items)
-        self.item_lookup = {it.name.lower(): Item(it.name, it.description, effect_text=it.effect_text) for it in items}
         return items
 
     def create_final_deck(self) -> List[FinalGateCard]:
@@ -506,8 +514,11 @@ class Game:
                 player.apply_effect(morality=val)
         for match in re.findall(r'gain(?: item)?[: ]+([^,.]+)', lower):
             name = match.strip().title()
-            item = self.item_lookup.get(name.lower(), Item(name, name))
-            player.add_item(item)
+            reg = self.item_registry.get(name.lower())
+            if reg:
+                player.add_item(Item(reg.name, reg.description, effect_text=reg.effect_text))
+            else:
+                print(f"Item '{name}' not found in your world.")
         if 'lose 1 item' in lower or 'discard one item' in lower:
             if player.inventory:
                 lost = player.inventory.pop(0)
@@ -631,29 +642,35 @@ class Game:
     def perform_lookup(self, category: str, name: str):
         key = name.lower()
         if category == 'item':
-            item = self.item_lookup.get(key)
+            item = self.item_registry.get(key)
             if item:
-                print(f"{item.name}: {item.description}")
+                print(color(f"\U0001F4D8 ITEM: {item.name}", 'bold'))
+                print(f"{item.description}")
                 if item.effect_text:
                     print(f"Effect: {item.effect_text}")
                 return
         elif category in ('encounter', 'card'):
             card = self.encounter_lookup.get(key)
             if card:
-                print(f"{card.name}: {card.description}")
+                print(color(f"\U0001F4DC ENCOUNTER: {card.name}", 'bold'))
+                print(card.description)
                 if card.effect_text:
                     print(f"Effect: {card.effect_text}")
                 return
         elif category == 'location':
             loc = self.location_lookup.get(key)
             if loc:
-                print(f"{loc['Name']}: {loc['Description']}")
+                print(color(f"\U0001F4D6 LOCATION: {loc['Name']}", 'bold'))
+                print(loc['Description'])
                 if loc.get('Effect'):
                     print(f"Effect: {loc['Effect']}")
                 return
-        print('Nothing found with that name.')
         if category == 'item':
-            names = sorted(self.item_lookup.keys())
+            print(f"Item '{name}' not found in your world.")
+        else:
+            print('Nothing found with that name.')
+        if category == 'item':
+            names = sorted(self.item_registry.keys())
         elif category in ('encounter', 'card'):
             names = sorted(self.encounter_lookup.keys())
         elif category == 'location':
@@ -664,9 +681,6 @@ class Game:
             print('Available options:')
             for n in names:
                 print(f' - {n}')
-            choice = input('Enter a name from the list for more details (or press Enter to cancel): ').strip().lower()
-            if choice:
-                self.perform_lookup(category, choice)
 
 
     def handle_tile(self, player: Player, direction: str) -> (bool, str):
@@ -757,11 +771,9 @@ class Game:
                         print(f"{target.name} has no items.")
                 else:
                     print('Unknown player.')
-                input('Press Enter to continue...')
                 continue
             if action.startswith('discovered'):
                 self.show_discovered_locations()
-                input('Press Enter to continue...')
                 continue
             if action.startswith('lookup'):
                 parts = action.split(maxsplit=2)
@@ -769,7 +781,9 @@ class Game:
                     self.perform_lookup(parts[1], parts[2])
                 else:
                     print('Usage: lookup <encounter|item|location> <name>')
-                input('Press Enter to continue...')
+                continue
+            if action in ('help', 'commands'):
+                print('Commands: w/a/s/d, use <item>, trade <item>, items <player>, discovered, lookup encounter <name>, lookup item <name>, lookup location <name>')
                 continue
             if action.startswith('trade'):
                 parts = action.split(maxsplit=1)
