@@ -533,6 +533,24 @@ class Game:
                     description=row['Description'],
                     effect_text=row['Effect']
                 )
+                # Attach scripted effects when available
+                mapping = {
+                    'mirror of broken memories': {'immediate': mirror_of_broken_memories},
+                    'the whispering wound': {'immediate': whispering_wound, 'revisit': whispering_wound_revisit},
+                    'the crooked bell': {'immediate': crooked_bell_first, 'revisit': crooked_bell_revisit},
+                    'the hungering gate': {'immediate': hungering_gate_first, 'revisit': hungering_gate_revisit},
+                    'the nameless grave': {'immediate': nameless_grave_first, 'revisit': nameless_grave_revisit},
+                    'shiverglass lake': {'immediate': shiverglass_lake_first, 'revisit': shiverglass_lake_revisit},
+                    'the bleeding window': {'immediate': bleeding_window_first, 'revisit': bleeding_window_revisit},
+                    'the laughing statue': {'immediate': laughing_statue},
+                    'echo well': {'immediate': echo_well},
+                    'beneath the clockface': {'immediate': beneath_clockface},
+                }
+                key = card.name.lower()
+                if key in mapping:
+                    info = mapping[key]
+                    card.immediate = info.get('immediate')
+                    card.revisit = info.get('revisit')
                 deck.append(card)
                 self.encounter_lookup[card.name.lower()] = card
         random.shuffle(deck)
@@ -601,6 +619,17 @@ class Game:
             reg = self.item_registry.get(name.lower())
             if reg:
                 player.add_item(Item(reg.name, reg.description, effect_text=reg.effect_text))
+        # Reveal tile instructions
+        reveal_adjacent = re.search(r'reveal (?:a|one|1) (?:nearby|adjacent) tile', lower)
+        if reveal_adjacent:
+            self.reveal_adjacent_tiles(player)
+        else:
+            m = re.search(r'reveal (\d+) tile', lower)
+            if m:
+                count = int(m.group(1))
+                self.reveal_random_tiles(count)
+            elif 'reveal a tile' in lower or 'reveal 1 tile' in lower:
+                self.reveal_random_tiles(1)
         if 'lose 1 item' in lower or 'discard one item' in lower:
             if player.inventory:
                 lost = player.inventory.pop(0)
@@ -868,6 +897,33 @@ class Game:
             print_location_text(tile.location)
         if tile.encounter:
             print_encounter_text(tile.encounter)
+
+    def reveal_adjacent_tiles(self, player: Player, count: int = 1):
+        """Reveal up to 'count' unrevealed tiles adjacent to the player."""
+        for _ in range(count):
+            options = []
+            for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                nx, ny = player.x + dx, player.y + dy
+                if self.board.in_bounds(nx, ny):
+                    tile = self.board.tile_at(nx, ny)
+                    if not tile.revealed:
+                        options.append((nx, ny))
+            if not options:
+                return
+            x, y = random.choice(options)
+            self.reveal_tile(x, y)
+
+    def reveal_random_tiles(self, count: int = 1):
+        """Reveal up to 'count' random unrevealed tiles anywhere."""
+        coords = [
+            (x, y)
+            for x in range(self.board.size)
+            for y in range(self.board.size)
+            if not self.board.tile_at(x, y).revealed
+        ]
+        random.shuffle(coords)
+        for x, y in coords[:count]:
+            self.reveal_tile(x, y)
 
     def trade(self, from_player: Player, to_player: Player, item_name: str):
         if from_player.x != to_player.x or from_player.y != to_player.y:
