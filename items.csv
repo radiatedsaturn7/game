@@ -1,6 +1,6 @@
 ID,Name,Description,Effect
 1,Glass Memory,"A broken shard that reflects who you were, not who you are.",Restore 1 Sanity at Mirror of Broken Memories.
-2,Eternal Candle,Burns in defiance of darkness. Comforts the soul.,Restores 1 Morality when revisiting Candle That Would Not Die.
+2,Eternal Candle,Burns in defiance of darkness. Comforts the soul.,Restores 1 Hope when revisiting Candle That Would Not Die.
 3,Bone Charm,Strung together from something that used to laugh.,Negates negative effects at Laughing Statue.
 4,Memory Tome,Pages filled with words you didn’t write but remember anyway.,Grants +1 Sanity when at Dead Library.
 5,Muted Stone,"Warm and silent, like holding someone’s last word.",Prevents sanity loss at Whispering Wound.
@@ -8,7 +8,7 @@ ID,Name,Description,Effect
 7,Rib Key,Opens doors made of bone and bad intentions.,Can be used once to unlock a sealed location.
 8,Echo Stone,Whispers what lies beneath the next tile.,Reveal adjacent tile.
 9,Vein Map,Pulses when near secrets.,Move two tiles instead of one on next turn.
-10,Crown of Loss,It fits perfectly. You lose yourself a little more.,"+1 Morality, -1 Sanity when worn."
+10,Crown of Loss,It fits perfectly. You lose yourself a little more.,"+1 Hope, -1 Sanity when worn."
 11,Withered Apple,Tastes like regret. Heals like forgiveness.,Restore 1 Health.
 12,Paper Tongue,Translates feelings into warnings.,Predict one tile’s effect before stepping.
 13,Whisper Link,A psychic tether to someone who still matters.,Pull Cait one tile closer.
@@ -20,15 +20,15 @@ ID,Name,Description,Effect
 19,Mourning Veil,Softens the impact of loss.,+1 Sanity once per session.
 20,Face of Another,They won’t know it’s you. You might forget too.,Bypass one encounter.
 21,Regret Seed,Can grow back what you destroyed.,Revive one destroyed item.
-22,Rusty Band,A broken promise looped in iron.,Reduce Morality penalty by 1.
+22,Rusty Band,A broken promise looped in iron.,Reduce Hope penalty by 1.
 23,Echo Thread,Tangles with forgotten speech.,Speak through one locked door.
 24,Oracle Wick,Burns fate for truth.,Cancel one encounter effect.
 26,Bone Lantern,Its flame flickers with whispers of death.,Sense death tiles nearby.
 27,Husk Mask,A disguise woven from emptiness.,Hide tile effects from view.
-28,Halo Fragment,A shard of fallen grace.,+1 Morality but lose 1 Health every third turn.
+28,Halo Fragment,A shard of fallen grace.,+1 Hope but lose 1 Health every third turn.
 29,Saltword Scroll,Ink crusted with salt and secrets.,Used to inscribe protective runes.
-30,Wax Crown,Soft wax shaped into regality.,+1 Morality, -1 Sanity when worn.
+30,Wax Crown,Soft wax shaped into regality.,+1 Hope, -1 Sanity when worn.
 31,Veil of Remorse,A shroud heavy with regrets.,Prevents shared sanity loss at Watcher's Gallows.
-32,Rusted Band,A broken promise looped in iron.,Reduce Morality penalty by 1.
-25,Splintered Mask,Lies better than you ever could.,+1 Morality when entering performance-themed room.
+32,Rusted Band,A broken promise looped in iron.,Reduce Hope penalty by 1.
+25,Splintered Mask,Lies better than you ever could.,+1 Hope when entering performance-themed room.
 
