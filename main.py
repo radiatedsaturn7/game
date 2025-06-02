@@ -3,7 +3,7 @@ import csv
 import re
 import os
 from dataclasses import dataclass, field
-from typing import List, Callable, Optional, Iterable, Dict
+from typing import List, Callable, Optional, Iterable, Dict, Tuple
 import sys
 from io import StringIO
 
@@ -116,6 +116,8 @@ class Player:
     morality: int = 6
     sanity: int = 6
     inventory: List[Item] = field(default_factory=list)
+    skip_turns: int = 0
+    skip_rewards: List[Tuple[int, int, int]] = field(default_factory=list)
 
     def apply_effect(self, health=0, morality=0, sanity=0, item: Optional[Item]=None):
         self.health = max(0, min(10, self.health + health))
@@ -137,6 +139,11 @@ class Player:
 
     def has_item(self, item_name: str) -> bool:
         return any(it.name.lower() == item_name.lower() for it in self.inventory)
+
+    def schedule_skip(self, health: int = 0, morality: int = 0, sanity: int = 0):
+        """Mark that the player will skip their next turn and gain rewards."""
+        self.skip_turns += 1
+        self.skip_rewards.append((health, morality, sanity))
 
     def use_item(self, game: 'Game', item_name: str, location: str):
         if item_name.lower() not in game.item_registry:
@@ -319,6 +326,10 @@ def bleeding_window_revisit(game: 'Game', player: Player):
         player.apply_effect(sanity=1, morality=-1)
     elif choice == 'm':
         player.apply_effect(morality=1, sanity=-1)
+
+def maw_of_sleep(game: 'Game', player: Player):
+    """Player must skip their next turn to gain restoration."""
+    player.schedule_skip(health=1, sanity=1)
 
 # ----- Final Gate encounter effects -----
 def abyssal_laugh(game: 'Game', players: Iterable[Player]):
@@ -545,12 +556,20 @@ class Game:
                     'the laughing statue': {'immediate': laughing_statue},
                     'echo well': {'immediate': echo_well},
                     'beneath the clockface': {'immediate': beneath_clockface},
+                    'the maw of sleep': {'immediate': maw_of_sleep},
                 }
                 key = card.name.lower()
                 if key in mapping:
                     info = mapping[key]
                     card.immediate = info.get('immediate')
                     card.revisit = info.get('revisit')
+                if card.name.lower() == 'the maw of sleep':
+                    eff = card.effect_text
+                    def maw_wrapper(g, p, text=eff):
+                        print(f"Effect: {text}")
+                        maw_of_sleep(g, p)
+                    card.immediate = maw_wrapper
+                    card.effect_text = ''
                 deck.append(card)
                 self.encounter_lookup[card.name.lower()] = card
         random.shuffle(deck)
@@ -969,6 +988,26 @@ class Game:
 
 
     def player_turn(self, player: Player, can_move: bool = True) -> bool:
+        if player.skip_turns > 0:
+            player.skip_turns -= 1
+            reward = (0, 0, 0)
+            if player.skip_rewards:
+                reward = player.skip_rewards.pop(0)
+                player.apply_effect(health=reward[0], morality=reward[1], sanity=reward[2])
+            parts = []
+            if any(reward):
+                if reward[0]:
+                    parts.append(f"+{reward[0]} Health")
+                if reward[1]:
+                    parts.append(f"+{reward[1]} Morality")
+                if reward[2]:
+                    parts.append(f"+{reward[2]} Sanity")
+                gain_text = ' (' + ', '.join(parts) + ')'
+            else:
+                gain_text = ''
+            self.last_action_summary = f"{player.name} skips a turn{gain_text}."
+            input('Press Enter to continue...')
+            return False
         while True:
             action = self.render_screen(player)
             if action.startswith('items'):
