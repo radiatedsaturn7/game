@@ -2,25 +2,25 @@ ID,Name,Description,Effect
 1,The Fractured Vestibule,This is where it begins—or ends again. The walls remember your name.,Starting location for Rob and Cait.
 2,The Shifting Gallery,Portraits rearrange when you blink. Each face resembles someone you failed.,Reveals an adjacent tile each visit.
 3,The Drowned Room,Water up to your knees. Something colder clings to your ankles.,"Lose 1 Health on entry, +1 Sanity on exit."
-4,The Clockwork Fissure,Gears buried in stone tick out the seconds you’ve lost.,+1 Morality if you stay a full turn.
+4,The Clockwork Fissure,Gears buried in stone tick out the seconds you’ve lost.,+1 Hope if you stay a full turn.
 5,The Maw of Sleep,Even your thoughts feel heavy here. Time slows to a crawl.,Skip a turn to gain +2 Sanity.
 6,The Static Hall,Buzzing walls echo secrets you've never told anyone.,"Gain 1 random item, lose 1 Sanity."
 7,The Hollow Spine,"A corridor of vertebrae, and you're the marrow.",+1 Health if you leave an item behind.
-8,The Stained Bell Tower,Each ring peels skin from time’s body.,Randomly affects either Morality or Sanity.
-9,The Eclipsed Chapel,The light here doesn’t shine—it watches.,+1 Morality if visited with Cait.
+8,The Stained Bell Tower,Each ring peels skin from time’s body.,Randomly affects either Hope or Sanity.
+9,The Eclipsed Chapel,The light here doesn’t shine—it watches.,+1 Hope if visited with Cait.
 10,The Ember Basin,Ash falls like snow. Your lungs remember a fire that never happened.,"+1 Health, -1 Sanity."
-11,The Choir Trench,Every step echoes a hymn sung backward.,-1 Morality if you hum.
+11,The Choir Trench,Every step echoes a hymn sung backward.,-1 Hope if you hum.
 12,The Bone Parlor,Furniture carved from memory. It creaks in your mother’s voice.,+1 Sanity if alone.
 13,The Silted Orchard,"Fruit grows in the dirt, not the branches.",Trade 1 item for +1 Health.
 14,The Gallery of Unmade Things,Each sculpture screams when looked at directly.,"-1 Sanity, gain rare item."
-15,The Buried Atrium,Dust and rot frame what once was joy.,+1 Morality if you rest here.
+15,The Buried Atrium,Dust and rot frame what once was joy.,+1 Hope if you rest here.
 16,The Haunting Fold,The ceiling lowers when you're silent. And rises when you lie.,-1 Sanity if no dialogue spoken.
 17,The Shatterpond,Reflections show you leaving. Alone.,Only one player can recover here (+1 Sanity).
 18,The Archive of Screams,Scrolls roll themselves shut when you listen too closely.,Gain item: Deaf Candle.
-19,The Threshing Frame,It grinds memory into meaning.,"Choose: +1 Sanity or +1 Morality, lose 1 Health."
+19,The Threshing Frame,It grinds memory into meaning.,"Choose: +1 Sanity or +1 Hope, lose 1 Health."
 20,The Flayed Sanctum,Walls peeled to nerve endings. They scream when touched.,-1 Health every turn spent.
-21,The Chamber of Guilt,An endless room lined with mirrors that only reflect the past.,-1 Morality if Cait is absent.
-22,The Hung Staircase,Each step is a choice you didn’t make. Each creak is a consequence.,+1 Morality if Rob and Cait are both present.
+21,The Chamber of Guilt,An endless room lined with mirrors that only reflect the past.,-1 Hope if Cait is absent.
+22,The Hung Staircase,Each step is a choice you didn’t make. Each creak is a consequence.,+1 Hope if Rob and Cait are both present.
 23,The Lantern Field,Glowing orbs float like memories trying to leave.,Gain 1 revealed tile of your choice.
 24,The Shrike's Gallery,Hooks hang from the ceiling. They twitch when you speak.,-1 Sanity if you used an item this turn.
-25,The Final Gate,"It doesn’t open. It consumes. But maybe, just maybe, it lets go.",Exit card. Only available when both Rob and Cait are present with 3+ Morality and Sanity.
+25,The Final Gate,"It doesn’t open. It consumes. But maybe, just maybe, it lets go.",Exit card. Only available when both Rob and Cait are present with 3+ Hope and Sanity.
