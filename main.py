@@ -1262,6 +1262,7 @@ class Game:
         # Reveal tile instructions
         reveal_adjacent = re.search(r'reveal (?:a|one|1) (?:nearby|adjacent) tile', lower)
         if reveal_adjacent:
+            print('A nearby tile is revealed...')
             self.reveal_adjacent_tiles(player)
         else:
             m = re.search(r'reveal (\d+) tile', lower)
@@ -1387,6 +1388,9 @@ class Game:
         right = self.format_stats(self.players[1])
         buffer: List[str] = []
 
+        # Horizontal bar
+        buffer.append('-' * width)
+
         # Narrative summary block
         if self.last_action_summary:
             buffer.append(self.last_action_summary)
@@ -1394,6 +1398,7 @@ class Game:
             buffer.append(self.last_action_description.rstrip())
         if self.last_action_summary or self.last_action_description:
             buffer.append('')
+        buffer.append('-' * width)
 
         # Player stats stacked for readability
         buffer.append(left.ljust(width))
@@ -1662,7 +1667,6 @@ class Game:
                         self.perform_lookup('auto', query)
                 else:
                     print('Usage: lookup <name>')
-                input('Press Enter to continue...')
                 continue
             if action in ('help', 'commands'):
                 print('Commands: w/a/s/d, rest, use, trade, pass, end, items <player>, discovered, lookup <name>')
@@ -1684,7 +1688,6 @@ class Game:
                 if item_name:
                     self.trade(player, other, item_name)
                     self.last_action_summary = f"{player.name} gave {item_name} to {other.name}."
-                input('Press Enter to continue...')
                 continue
             if action.startswith('use'):
                 parts = action.split(maxsplit=1)
@@ -1697,18 +1700,15 @@ class Game:
                     name = tile.location.name if tile.location else ''
                     player.use_item(self, item_name, name)
                     self.last_action_summary = f"{player.name} used {item_name}."
-                input('Press Enter to continue...')
                 continue
             if action == 'rest':
                 player.apply_effect(self, sanity=1)
                 self.modify_hope(-1)
                 self.last_action_summary = f"{player.name} rested."
-                input('Press Enter to continue...')
                 return self.hope == 0
             if action == 'end':
                 if not can_move:
                     print('You cannot end during a pass. Type "pass" to return.')
-                    input('Press Enter to continue...')
                     continue
                 self.last_action_summary = f"{player.name} ended their turn."
                 return False
@@ -1716,26 +1716,21 @@ class Game:
             if action in moves:
                 if not can_move:
                     print('You cannot move right now.')
-                    input('Press Enter to continue...')
                     continue
                 dx, dy = moves[action]
                 if self.no_reunite:
                     other = self.players[1] if player == self.players[0] else self.players[0]
                     if other.x == player.x + dx and other.y == player.y + dy:
                         print('A force keeps you apart for now.')
-                        input('Press Enter to continue...')
                         continue
                 if self.board.move_player(player, dx, dy):
                     dir_word = {'w': 'up', 'a': 'left', 's': 'down', 'd': 'right'}[action]
                     game_over, summary = self.handle_tile(player, dir_word)
                     self.last_action_summary = summary
-                    input('Press Enter to continue...')
                     return game_over
                 self.last_action_summary = f"{player.name} cannot move that way."
-                input('Press Enter to continue...')
                 return False
             print('Invalid action.')
-            input('Press Enter to continue...')
             continue
 
     def play(self):
