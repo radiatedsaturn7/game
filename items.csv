@@ -31,3 +31,21 @@ ID,Name,Description,Effect
 31,Veil of Remorse,A shroud heavy with regrets.,+1 Sanity
 32,Rusted Band,A broken promise looped in iron.,+1 Hope
 25,Splintered Mask,Lies better than you ever could.,+1 Hope when entering performance-themed room.
+33,Shard of What Might've Been,A fragment showing impossible paths.,Add +1 to one future roll
+34,Salted Trauma Chips,Crispy therapy in a bag.,Heal 1 Sanity
+35,Frayed Neural Wire,Sparks with unstable comfort.,Negate next Sanity loss
+36,Glimmer of What Could Be,A brief vision of success.,Auto-succeed one encounter
+37,Stamp of Legitimacy,Paperwork's ultimate weapon.,Auto-pass bureaucratic tile
+38,Distraction Device,Beeps with trivial allure.,Skip 1 encounter
+39,Ashes of Ambition,Cold remnants of old dreams.,Skip 1 encounter
+40,Core of Something Real,A solid piece of undeniable truth.,Prevent any loss once
+41,Echo of Closure,A whispered apology that finally lands.,Heal 2 Sanity once
+42,Blank Tag,Space for a name you'll choose later.,Skip 1 encounter entirely
+43,Memory Token,A keepsake of what might have been.,Re-roll any die once
+44,Rusty Override Key,Turns the gears of fate reluctantly.,Swap a revealed tile with a new one
+45,Offline Token,Cuts the cord to the digital abyss.,Cancel one digital tile effect
+46,Comfort Snack,A small morsel that soothes the nerves.,+1 Sanity
+47,Rusty Refusal Bolt,A corroded fastener etched with "No".,Auto-fail one encounter intentionally
+48,Exit Sketch,Chalk lines forming a questionable doorway.,Teleport to any revealed tile
+49,Ashen Archive,Notes on every past failure, now fuel.,Auto-succeed next encounter
+50,Burden Token,A weight you carry for someone else.,Shield an ally from one loss
