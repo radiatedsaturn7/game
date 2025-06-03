@@ -113,20 +113,33 @@ class Player:
     x: int = 0
     y: int = 0
     health: int = 10
-    hope: int = 6
-    sanity: int = 6
+    hope: int = 10
+    sanity: int = 10
     inventory: List[Item] = field(default_factory=list)
+    max_items: int = 2
 
-    def apply_effect(self, health=0, hope=0, sanity=0, item: Optional[Item]=None):
+    def apply_effect(
+        self,
+        game: 'Game',
+        health: int = 0,
+        hope: int = 0,
+        sanity: int = 0,
+        item: Optional[Item] = None,
+    ):
         self.health = max(0, min(10, self.health + health))
-        self.hope = max(0, min(10, self.hope + hope))
-        self.sanity = max(0, min(10, self.sanity + sanity))
+        if hope:
+            game.modify_hope(hope)
+        self.sanity = max(0, min(12, self.sanity + sanity))
         if item:
-            self.inventory.append(item)
+            self.add_item(item)
 
     def add_item(self, item: Item):
+        if len(self.inventory) >= self.max_items:
+            print(f"{self.name} cannot carry more items.")
+            return False
         self.inventory.append(item)
         print_item_gain(item)
+        return True
 
     def remove_item(self, item_name: str) -> bool:
         for i, it in enumerate(self.inventory):
@@ -213,31 +226,31 @@ class FinalGateCard:
                 game.apply_effect_text(self.effect_text, p)
 
 def mirror_of_broken_memories(game: 'Game', player: Player):
-    player.apply_effect(sanity=-1)
+    player.apply_effect(game, sanity=-1)
 
 def whispering_wound(game: 'Game', player: Player):
-    player.apply_effect(hope=-1)
+    player.apply_effect(game, hope=-1)
 
 def whispering_wound_revisit(game: 'Game', player: Player):
     if player.has_item('Muted Stone'):
         print('Your Muted Stone absorbs the whispers.')
     else:
-        player.apply_effect(sanity=-1)
+        player.apply_effect(game, sanity=-1)
 
 def laughing_statue(game: 'Game', player: Player):
-    player.apply_effect(sanity=1)
+    player.apply_effect(game, sanity=1)
 
 def echo_well(game: 'Game', player: Player):
-    player.apply_effect(hope=1)
+    player.apply_effect(game, hope=1)
 
 def beneath_clockface(game: 'Game', player: Player):
-    player.apply_effect(sanity=-1)
+    player.apply_effect(game, sanity=-1)
 
 def revisit_minus_sanity(game: 'Game', player: Player):
-    player.apply_effect(sanity=-1)
+    player.apply_effect(game, sanity=-1)
 
 def revisit_plus_hope(game: 'Game', player: Player):
-    player.apply_effect(hope=1)
+    player.apply_effect(game, hope=1)
 
 # --- New Encounter Effects ---
 def crooked_bell_first(game: 'Game', player: Player):
@@ -246,13 +259,13 @@ def crooked_bell_first(game: 'Game', player: Player):
         if drop == 'y':
             lost = player.inventory.pop(0)
             print(f'You drop {lost.name}.')
-            player.apply_effect(hope=1)
+            player.apply_effect(game, hope=1)
             return
-    player.apply_effect(sanity=-1)
+    player.apply_effect(game, sanity=-1)
 
 def crooked_bell_revisit(game: 'Game', player: Player):
     if not player.inventory:
-        player.apply_effect(sanity=1)
+        player.apply_effect(game, sanity=1)
 
 def hungering_gate_first(game: 'Game', player: Player):
     if player.inventory:
@@ -261,7 +274,7 @@ def hungering_gate_first(game: 'Game', player: Player):
             lost = player.inventory.pop(0)
             print(f'The Gate devours {lost.name}.')
             return
-    player.apply_effect(health=-2)
+    player.apply_effect(game, health=-2)
 
 def hungering_gate_revisit(game: 'Game', player: Player):
     if player.health < 10:
@@ -271,10 +284,10 @@ def hungering_gate_revisit(game: 'Game', player: Player):
             print(f'The Gate spits out {item.name}.')
 
 def nameless_grave_first(game: 'Game', player: Player):
-    player.apply_effect(hope=1, sanity=-1)
+    player.apply_effect(game, hope=1, sanity=-1)
 
 def nameless_grave_revisit(game: 'Game', player: Player):
-    player.apply_effect(health=1, hope=-1)
+    player.apply_effect(game, health=1, hope=-1)
 
 def shiverglass_lake_first(game: 'Game', player: Player):
     choices = [game.draw_item(), game.draw_item()]
@@ -306,7 +319,7 @@ def shiverglass_lake_revisit(game: 'Game', player: Player):
             print(f"Item '{item_name}' not found in your world.")
 
 def bleeding_window_first(game: 'Game', player: Player):
-    player.apply_effect(sanity=-1)
+    player.apply_effect(game, sanity=-1)
     stone = next((i for i in game.item_deck if i.name == 'Muted Stone'), None)
     if stone:
         game.item_deck.remove(stone)
@@ -316,9 +329,9 @@ def bleeding_window_first(game: 'Game', player: Player):
 def bleeding_window_revisit(game: 'Game', player: Player):
     choice = input('Trade Sanity for Hope (s) or Hope for Sanity (m)? ').strip().lower()
     if choice == 's':
-        player.apply_effect(sanity=1, hope=-1)
+        player.apply_effect(game, sanity=1, hope=-1)
     elif choice == 'm':
-        player.apply_effect(hope=1, sanity=-1)
+        player.apply_effect(game, hope=1, sanity=-1)
 
 # ----- Final Gate encounter effects -----
 def abyssal_laugh(game: 'Game', players: Iterable[Player]):
@@ -326,10 +339,10 @@ def abyssal_laugh(game: 'Game', players: Iterable[Player]):
     for p in players:
         roll = roll_d6()
         if roll <= 3:
-            p.apply_effect(sanity=-1)
+            p.apply_effect(game, sanity=-1)
             print(f'{p.name} loses 1 Sanity.')
         else:
-            p.apply_effect(sanity=1)
+            p.apply_effect(game, sanity=1)
             print(f'{p.name} steels themselves and gains 1 Sanity.')
 
 
@@ -337,15 +350,15 @@ def weighing_sins(game: 'Game', players: Iterable[Player]):
     for p in players:
         choice = input(f'{p.name}: lose 2 Health (h) or 1 Hope (m)? ').strip().lower()
         if choice == 'h':
-            p.apply_effect(health=-2)
+            p.apply_effect(game, health=-2)
         else:
-            p.apply_effect(hope=-1)
+            p.apply_effect(game, hope=-1)
 
 
 def glimpse_of_light(game: 'Game', players: Iterable[Player]):
     print('A warm light cuts through the gloom, if only for a moment.')
     for p in players:
-        p.apply_effect(sanity=1, hope=1)
+        p.apply_effect(game, sanity=1, hope=1)
 
 # ----- Item Use Effects -----
 def use_echo_stone(game: 'Game', player: Player, location: str) -> bool:
@@ -490,15 +503,16 @@ class Board:
         return lines
 
 class Game:
-    def __init__(self):
+    def __init__(self, hope: int = 10):
         self.encounter_lookup: Dict[str, EncounterCard] = {}
         self.item_registry: Dict[str, Item] = {}
         self.location_lookup: Dict[str, Dict[str, str]] = {}
         self.board = Board()
         self.players = [
-            Player('Rob', 'R'),
-            Player('Cait', 'C')
+            Player('Robtergeist', 'R'),
+            Player('Cait Vex', 'C')
         ]
+        self.hope = max(0, min(12, hope))
         self.last_action_summary: str = 'Welcome to the Abyss.'
         self.last_action_description: str = ''
         self.load_locations()
@@ -512,12 +526,19 @@ class Game:
         start_x, start_y = self.board.start_pos
         for p in self.players:
             p.x, p.y = start_x, start_y
+            p.hope = self.hope
 
         for p in self.players:
             tile = self.board.tile_at(p.x, p.y)
             tile.revealed = True
             if tile.location and f"[{p.x},{p.y}] - {tile.location.name} (Location)" not in self.discovered_log:
                 self.discovered_log.append(f"[{p.x},{p.y}] - {tile.location.name} (Location)")
+
+    def modify_hope(self, amount: int):
+        """Adjust shared Hope and sync with players."""
+        self.hope = max(0, min(12, self.hope + amount))
+        for p in self.players:
+            p.hope = self.hope
 
     def load_locations(self):
         with open('locations.csv', newline='') as f:
@@ -554,6 +575,12 @@ class Game:
                 deck.append(card)
                 self.encounter_lookup[card.name.lower()] = card
         random.shuffle(deck)
+        final_card = EncounterCard(
+            name='Final Threshold',
+            description='The gateway to freedom—or oblivion.',
+        )
+        insert_at = max(0, len(deck) - random.randint(3, 5))
+        deck.insert(insert_at, final_card)
         return deck
 
     def create_item_deck(self) -> List[Item]:
@@ -605,11 +632,11 @@ class Game:
             val = int(match[0])
             attr = match[1]
             if attr == 'health':
-                player.apply_effect(health=val)
+                player.apply_effect(self, health=val)
             elif attr == 'sanity':
-                player.apply_effect(sanity=val)
+                player.apply_effect(self, sanity=val)
             elif attr == 'hope':
-                player.apply_effect(hope=val)
+                player.apply_effect(self, hope=val)
         for match in re.findall(r'gain(?: item)?[: ]+([^,(.]+)', lower):
             name = re.sub(r'\(.*?\)', '', match).strip()
             name = re.sub(r'\b(?:a|an|the)\b\s*', '', name, flags=re.I)
@@ -643,10 +670,32 @@ class Game:
             print(f'[{card.name}] {card.description}')
             card.apply(self, self.players)
             for p in self.players:
-                if p.health <= 0 or p.sanity <= 0 or p.hope <= 0:
+                if p.health <= 0 or p.sanity <= 0 or self.hope <= 0:
                     print(f'{p.name} could not withstand the final trial...')
                     return True
         print('You have overcome the final trials and escape the Abyss!')
+        return True
+
+    def run_final_threshold(self) -> bool:
+        print('You stand at the Final Threshold.')
+        choice = input('Sacrifice one player to let the other escape? (y/n) ').strip().lower()
+        if choice == 'y':
+            names = '/'.join(p.name for p in self.players)
+            victim = input(f'Who will be sacrificed? ({names}) ').strip().lower()
+            for p in self.players:
+                if p.name.lower().startswith(victim):
+                    print(f'{p.name} is lost to the Abyss. The other escapes!')
+                    return True
+        success = True
+        for p in self.players:
+            roll = roll_d6()
+            print(f'{p.name} rolls {roll}')
+            if roll < 5:
+                success = False
+        if success:
+            print('Both players escape together!')
+        else:
+            print('The Abyss claims you both...')
         return True
 
     def generate_summary(
@@ -714,8 +763,7 @@ class Game:
         if not items:
             items = 'None'
         return (
-            f"{player.name} – Health: {player.health} | "
-            f"Sanity: {player.sanity} | Hope: {player.hope} | "
+            f"{player.name} – Sanity: {player.sanity} | "
             f"Items: [{items}]"
         )
 
@@ -738,6 +786,7 @@ class Game:
         # Player stats stacked for readability
         buffer.append(left.ljust(width))
         buffer.append(right.ljust(width))
+        buffer.append(f"Hope: {self.hope}".ljust(width))
         buffer.append('')
 
         # Game board
@@ -745,7 +794,7 @@ class Game:
         buffer.append('')
 
         # Command options
-        buffer.append('Commands: w/a/s/d, use, trade, pass, end, items <player>, discovered, lookup <name>')
+        buffer.append('Commands: w/a/s/d, rest, use, trade, pass, end, items <player>, discovered, lookup <name>')
         buffer.append('')
 
         # Prompt
@@ -823,8 +872,9 @@ class Game:
                 entry = f"[{player.x},{player.y}] - {tile.location.name} (Location)"
                 if entry not in self.discovered_log:
                     self.discovered_log.append(entry)
+            self.modify_hope(-1)
 
-        before = (player.health, player.sanity, player.hope)
+        before = (player.health, player.sanity, self.hope)
         before_items = [it.name for it in player.inventory]
 
         enc_first = False
@@ -840,7 +890,7 @@ class Game:
             self.check_item_triggers(player, tile)
         self.last_action_description = cap.getvalue().strip()
 
-        after = (player.health, player.sanity, player.hope)
+        after = (player.health, player.sanity, self.hope)
         after_items = [it.name for it in player.inventory]
 
         stat_changes = []
@@ -864,12 +914,16 @@ class Game:
         location_name = tile.location.name if tile.location else ''
         summary = self.generate_summary(player, direction, encounter_name, enc_first, location_name, stat_changes, item_changes)
 
+        if encounter_name == 'Final Threshold' and enc_first:
+            game_over = self.run_final_threshold()
+            return game_over, summary
+
         if tile.location and tile.location.name == 'Final Gate':
-            if all(p.x == player.x and p.y == player.y and p.sanity >= 3 and p.hope >= 3 for p in self.players):
+            if all(p.x == player.x and p.y == player.y and p.sanity >= 3 for p in self.players) and self.hope >= 3:
                 game_over = self.run_final_gate()
                 return game_over, summary
 
-        if player.health == 0 or player.sanity == 0 or player.hope == 0:
+        if player.health == 0 or player.sanity == 0 or self.hope == 0:
             print(f"{player.name} has fallen in the Abyss...")
             return True, summary
         return False, summary
@@ -938,7 +992,7 @@ class Game:
                 names.append(tile.encounter.name.lower())
             if any(any(k in n for k in keywords) for n in names):
                 print('The Splintered Mask hums with forgotten applause.')
-                player.apply_effect(hope=1)
+                player.apply_effect(game, hope=1)
 
     def trade(self, from_player: Player, to_player: Player, item_name: str):
         if from_player.x != to_player.x or from_player.y != to_player.y:
@@ -999,7 +1053,7 @@ class Game:
                 input('Press Enter to continue...')
                 continue
             if action in ('help', 'commands'):
-                print('Commands: w/a/s/d, use, trade, pass, end, items <player>, discovered, lookup <name>')
+                print('Commands: w/a/s/d, rest, use, trade, pass, end, items <player>, discovered, lookup <name>')
                 continue
             if action == 'pass':
                 if not can_move:
@@ -1033,6 +1087,12 @@ class Game:
                     self.last_action_summary = f"{player.name} used {item_name}."
                 input('Press Enter to continue...')
                 continue
+            if action == 'rest':
+                player.apply_effect(self, sanity=1)
+                self.modify_hope(-1)
+                self.last_action_summary = f"{player.name} rested."
+                input('Press Enter to continue...')
+                return self.hope == 0
             if action == 'end':
                 if not can_move:
                     print('You cannot end during a pass. Type "pass" to return.')
