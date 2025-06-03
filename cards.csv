@@ -1,48 +1,48 @@
 ID,Name,Description,Effect
-1,Mirror of Broken Memories,"You see yourself. Not now, not then. A version that never existed—but almost did. The mirror grins before you do.","-2 Sanity, +1 Hope if you take Glass Memory"
-2,The Whispering Wound,"The floor splits. Voices rise—not from below, but from inside.",Lose 1 Hope OR discard one item
-3,The Dead Library,Books breathe. Paper bleeds. Someone has bookmarked your pain.,"Gain Memory Tome, choose +2 Sanity or reveal 2 tiles"
-4,The Crooked Bell,It tolls once when you lie. It tolls again when you forget.,"+1 Hope if you discard an item; else, -1 Sanity"
+1,Mirror of Broken Memories,"You see yourself. Not now, not then. A version that never existed—but almost did. The mirror grins before you do.","+1 Hope, gain item: Glass Memory"
+2,The Whispering Wound,"The floor splits. Voices rise—not from below, but from inside.","-1 Hope"
+3,The Dead Library,Books breathe. Paper bleeds. Someone has bookmarked your pain.,"Gain item: Memory Tome, +2 Sanity, reveal 2 tiles"
+4,The Crooked Bell,It tolls once when you lie. It tolls again when you forget.,
 5,Shiverglass Lake,The water reflects everything but the present.,"Draw 2 items, pick 1"
-6,The Nameless Grave,The marker’s blank. But you feel grief anyway.,"+1 Hope, -1 Sanity"
-7,The Bleeding Window,"A crying thing peers out, mouthing your name in reverse.","-1 Sanity, gain Muted Stone"
-8,The Laughing Statue,Teeth that belong to no face. Eyes that blink after you leave.,"Roll d6: (1–2) -2 Sanity, (3–4) nothing, (5–6) gain Bone Charm"
-9,Hall of Familiar Eyes,You recognize them all. Even the ones that never existed.,If both players present: +1 Hope each. Alone: -1 Hope
-10,The Hungering Gate,A door with no hinges. Only hunger.,Lose 1 item or 2 Health
-11,The Candle That Would Not Die,The flame burns memory instead of wax.,"+1 Sanity, 50% chance to gain Eternal Candle"
-12,Beneath the Clockface,The second hand runs backwards. Your age peels off in layers.,"Skip next turn, gain +1 Hope, +1 Health"
-13,The Mouth in the Wall,It doesn’t speak. It chews. And it’s chewing your name.,"-1 Sanity, gain Echo Stone"
-14,The Rusted Oracle,Its prophecies cost teeth.,"Lose 1 Health, gain a tile’s effect without entering"
+6,The Nameless Grave,The marker’s blank. But you feel grief anyway.,
+7,The Bleeding Window,"A crying thing peers out, mouthing your name in reverse.",
+8,The Laughing Statue,Teeth that belong to no face. Eyes that blink after you leave.,"+1 Sanity"
+9,Hall of Familiar Eyes,You recognize them all. Even the ones that never existed.,"-1 Hope"
+10,The Hungering Gate,A door with no hinges. Only hunger.,
+11,The Candle That Would Not Die,The flame burns memory instead of wax.,"+1 Sanity"
+12,Beneath the Clockface,The second hand runs backwards. Your age peels off in layers.,"+1 Hope, +1 Health"
+13,The Mouth in the Wall,It doesn’t speak. It chews. And it’s chewing your name.,"-1 Sanity, gain item: Echo Stone"
+14,The Rusted Oracle,Its prophecies cost teeth.,"-1 Health, reveal 1 tile"
 15,The Siren’s Silence,No sound. But your ears bleed trying to hear what isn’t there.,"-1 Sanity, +1 Hope"
-16,The Loom of Regret,Threads stretch from your fingers to others long dead.,Trade 1 item with Cait (even if not on same tile)
+16,The Loom of Regret,Threads stretch from your fingers to others long dead.,"Lose 1 item, +1 Hope"
 17,The Cracked Throne,Once sat upon by something that still watches.,"Gain Crown of Loss (+1 Hope, -1 Sanity)"
 18,Forgotten Orchard,Fruit rots on the branch. It smells like your childhood bedroom.,Gain Withered Apple (+1 Health)
 19,The Well of Names,It calls out your name. Then hers. Then names you didn’t know mattered.,Gain Paper Tongue (lets you speak to one tile ahead)
-20,The Puppeteer’s Nest,Strings twitch. Fingers snap. Something unseen controls.,Swap positions with Cait
-21,The Weightless Choice,Two doors. One opens to you. One to me. Neither opens unless the other is shut.,"One player gets +2 Hope, other loses 1 Sanity (must agree)"
+20,The Puppeteer’s Nest,Strings twitch. Fingers snap. Something unseen controls.,"-1 Sanity"
+21,The Weightless Choice,Two doors. One opens to you. One to me. Neither opens unless the other is shut.,"+2 Hope"
 22,The Drowned Choir,"Voices rise in harmony, but not with yours. Your name is out of tune.","-1 Hope, gain item: Choral Thread"
-23,The Bone Orchard,The trees here don't grow leaves—they grow ribs.,Gain item: Rib Key. Use to open special locked encounter
+23,The Bone Orchard,The trees here don't grow leaves—they grow ribs.,"Gain item: Rib Key"
 24,Echoes in Wax,Melted figures whisper your own confessions back to you.,"-1 Sanity, reveal 1 nearby tile"
-25,Chamber of Knotted Veins,Pulses throb from the walls. You feel them match your heartbeat.,Gain item: Vein Map. Lets you move twice next turn.
+25,Chamber of Knotted Veins,Pulses throb from the walls. You feel them match your heartbeat.,"Gain item: Vein Map"
 26,The Pale Rehearsal,"They practiced dying here, over and over again. Now it's your turn.","Lose 1 Health, gain 1 Hope"
-27,Corridor of Apologies,The walls beg forgiveness for something they didn’t do.,+1 Hope if you give up an item
+27,Corridor of Apologies,The walls beg forgiveness for something they didn’t do.,"Lose 1 item, +1 Hope"
 28,The Leeching Root,It grows toward warmth. Toward guilt. And now toward you.,"-1 Sanity, +1 Health"
 29,The Hollow Feast,A banquet of memory. You’re not hungry. It feeds anyway.,"Lose 1 item, +2 Hope"
-30,The Womb of Iron,It doesn't birth things. It absorbs them.,"Lose 1 item permanently, gain 1 random item"
-31,The Paper Cathedral,A church made of books and broken promises.,+1 Sanity if holding Memory Tome
-32,The Gasping Gate,"It breathes in regret, exhales denial.",Lose 1 Hope to reveal the Final Gate’s location
+30,The Womb of Iron,It doesn't birth things. It absorbs them.,"Lose 1 item"
+31,The Paper Cathedral,A church made of books and broken promises.,"+1 Sanity"
+32,The Gasping Gate,"It breathes in regret, exhales denial.","-1 Hope, reveal 1 tile"
 33,Teeth in the Floor,You stepped too hard. It bites back.,-2 Health
-34,The Clockmaker’s Gallows,You hear the ticking stop. Time is watching.,"Skip a turn, then gain +1 Sanity"
-35,Gallery of Self-Doubt,"Every painting is of you, flinching.","-1 Hope, +1 Sanity if Cait is present"
+34,The Clockmaker’s Gallows,You hear the ticking stop. Time is watching.,"+1 Sanity"
+35,Gallery of Self-Doubt,"Every painting is of you, flinching.","-1 Hope, +1 Sanity"
 36,The Mourning Closet,It reeks of old loss and recent breath.,Gain item: Mourning Veil (+1 Sanity if held)
 37,The Blood-Slick Mirror,Reflections bleed truths you didn’t say.,"-1 Sanity, +1 Hope"
 38,The Hollow Host,It welcomes you with arms full of nothing.,"+1 Health, lose 1 Hope"
 39,The Smiling Husk,It wears your skin like a promise.,"-1 Sanity, gain item: Husk Mask (disguise tile effects)"
-40,The Weeping Ledger,It knows what you owe. And it's still calculating.,"Lose 1 Health, gain 1 Hope, +1 item next encounter"
+40,The Weeping Ledger,It knows what you owe. And it's still calculating.,"-1 Health, +1 Hope"
 41,The Glass Colossus,A shattered giant weeps molten glass tears into your hands.,"-1 Health, gain item: Tearshard (use to reveal any tile)"
-42,The Skeletal Pianist,It plays without fingers. The song is your pulse.,+1 Sanity if you skip your next move
+42,The Skeletal Pianist,It plays without fingers. The song is your pulse.,"+1 Sanity"
 43,Cathedral of Static,A loud silence crackles through ancient tech ruins.,"-1 Sanity, gain item: Signal Crown (resist next encounter effect)"
-44,Tower of the Forgotten Signal,A beacon blinks out a message you almost understand.,Reveal 3 tiles in a line from your current position
+44,Tower of the Forgotten Signal,A beacon blinks out a message you almost understand.,"Reveal 3 tiles"
 45,The Chain That Whispers,It wraps around you like a question you’re afraid to ask.,"Lose 1 Hope, gain item: Whisper Link (lets you pull Cait one tile)"
 46,The Lantern Maw,It lights the way by consuming what you love.,"Lose an item, gain +1 Health and +1 Sanity"
 47,Dagger in the Cradle,A lullaby drips from the blade. You know the words.,"-1 Hope, gain item: Singing Blade (+1 attack if combat added later)"
@@ -50,32 +50,32 @@ ID,Name,Description,Effect
 49,Archive of Misremembered Promises,You find a vow written in your own handwriting.,"+1 Sanity, -1 Hope"
 50,The Salting Tree,Its branches grow from old wounds. They reach for yours.,"-1 Health, gain item: Saltroot Bandage (+2 Health on use)"
 51,The Bone Lantern,It lights only things that have died.,Gain item: Bone Lantern (lets you sense death tiles nearby)
-52,The Stillbirth Clock,Its hands move backwards. One just twitched.,"-1 Hope, skip next Cait turn"
-53,The Limbo Hearth,It burns with warmth that doesn’t reach the skin.,+1 Sanity if below 3 Hope
-54,Altar of Echoed Sins,Your crimes are written here. In someone else’s blood.,"-1 Sanity, +1 Hope if you give up an item"
+52,The Stillbirth Clock,Its hands move backwards. One just twitched.,"-1 Hope"
+53,The Limbo Hearth,It burns with warmth that doesn’t reach the skin.,"+1 Sanity"
+54,Altar of Echoed Sins,Your crimes are written here. In someone else’s blood.,"-1 Sanity, +1 Hope"
 55,The Salt-Tongued Prophet,They scream truths you’re not ready to hear.,"-1 Sanity, reveal 1 tile, gain item: Saltword Scroll"
 56,The Tarnished Halo,Once sacred. Now it just feels heavy.,"Gain item: Halo Fragment (+1 Hope, but lose 1 Health every third turn if held)"
-57,The Cradle of Static,It rocks an invisible child. The crying won’t stop.,-1 Sanity every visit unless holding Eternal Candle
-58,The Maw of Sleep,You feel the yawn crawl up your spine.,Skip your next action to restore +1 Health and +1 Sanity
-59,The Windowless House,It has walls. No doors. Yet you are inside.,"Roll a d6: (1-3) lose 1 Health, (4-6) gain 1 random item"
-60,The Hung Verdict,The sentence was passed. The guilt remains.,"-1 Hope. If Cait is present, both lose 1 Sanity unless holding Veil of Remorse"
+57,The Cradle of Static,It rocks an invisible child. The crying won’t stop.,"-1 Sanity"
+58,The Maw of Sleep,You feel the yawn crawl up your spine.,"+1 Health, +1 Sanity"
+59,The Windowless House,It has walls. No doors. Yet you are inside.,"-1 Health"
+60,The Hung Verdict,The sentence was passed. The guilt remains.,"-1 Hope"
 61,The Corridor of Crooked Steps,Each step is a question. Each answer twists your ankle.,"-1 Health, +1 Hope"
 62,The Screaming Frame,A portrait that only shows you what you were before the guilt.,"-1 Sanity, gain item: Painted Memory"
 63,The Casket of Kindness,It holds every favor you never returned.,"+1 Hope, lose 1 item if inventory not empty"
-64,The Sleeping Choir,They dream of the day you join them.,Skip a turn to gain +2 Sanity
+64,The Sleeping Choir,They dream of the day you join them.,"+2 Sanity"
 65,Throne of Melted Faces,They weep wax. They smile anyway.,"Gain item: Wax Crown (+1 Hope, -1 Sanity when worn)"
-66,The Hungry Cot,The cradle rocks. The teeth beneath it do too.,"-1 Health, +1 Hope if you drop an item"
+66,The Hungry Cot,The cradle rocks. The teeth beneath it do too.,"-1 Health, +1 Hope"
 67,The Vine of Apologies,It wraps tighter with every sorry you didn’t mean.,"-1 Hope, +1 Sanity"
 68,The Bleeding Mask,It fits perfectly. Too perfectly.,"-1 Sanity, gain item: Face of Another"
-69,The Watcher’s Gallows,Something unseen judges every move you make.,-1 Hope if Cait is not present
+69,The Watcher’s Gallows,Something unseen judges every move you make.,"-1 Hope"
 70,The Garden of Apologies,The flowers wilt when you speak.,Gain item: Regret Seed (revive one destroyed item)
 71,The Gutless Choir,They sing only from memory. And now they want yours.,"-1 Sanity, reveal a nearby tile"
-72,The Lullaby Tomb,It hums a lullaby you recognize but can’t place.,+1 Hope if you do nothing this turn
+72,The Lullaby Tomb,It hums a lullaby you recognize but can’t place.,"+1 Hope"
 73,The Rotting Marriage,Vows echo through the hollow rings.,"-1 Hope, gain item: Rusted Band"
 74,The Freezing Prayer,You mouth words you don’t understand. Your breath crystallizes.,"-1 Health, +1 Sanity"
 75,The Nameless Choir,They sing of everyone but you.,"-1 Hope, gain item: Echo Thread"
 76,The Shattered Stage,No one claps. You bow anyway.,"Gain item: Splintered Mask, +1 Hope"
-77,The Puppeted Pilgrim,It marches forever toward nowhere.,-1 Sanity unless you mimic Cait’s last move
+77,The Puppeted Pilgrim,It marches forever toward nowhere.,"-1 Sanity"
 78,The Candle-Melt Oracle,Drips fall like fate. Burn or be buried.,"-1 Health, gain item: Oracle Wick (once per game, cancel 1 effect)"
-79,The Path of Remembered Crimes,Each step recalls a different mistake.,-1 Hope every other turn while standing here
-80,The Machine That Regrets,"It ticks, whirs, then sighs. You feel it too.",Choose to reset one revealed tile. Lose 1 Sanity.
+79,The Path of Remembered Crimes,Each step recalls a different mistake.,"-1 Hope"
+80,The Machine That Regrets,"It ticks, whirs, then sighs. You feel it too.","-1 Sanity"
