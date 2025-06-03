@@ -1,34 +1,34 @@
 ID,Name,Description,Effect
-1,Mirror of Broken Memories,"You see yourself. Not now, not then. A version that never existed—but almost did. The mirror grins before you do.","+1 Hope, gain item: Glass Memory"
-2,The Whispering Wound,"The floor splits. Voices rise—not from below, but from inside.","-1 Hope"
-3,The Dead Library,Books breathe. Paper bleeds. Someone has bookmarked your pain.,"Gain item: Memory Tome, +2 Sanity, reveal 2 tiles"
-4,The Crooked Bell,It tolls once when you lie. It tolls again when you forget.,
-5,Shiverglass Lake,The water reflects everything but the present.,"Draw 2 items, pick 1"
-6,The Nameless Grave,The marker’s blank. But you feel grief anyway.,
-7,The Bleeding Window,"A crying thing peers out, mouthing your name in reverse.",
-8,The Laughing Statue,Teeth that belong to no face. Eyes that blink after you leave.,"+1 Sanity"
-9,Hall of Familiar Eyes,You recognize them all. Even the ones that never existed.,"-1 Hope"
-10,The Hungering Gate,A door with no hinges. Only hunger.,
-11,The Candle That Would Not Die,The flame burns memory instead of wax.,"+1 Sanity"
-12,Beneath the Clockface,The second hand runs backwards. Your age peels off in layers.,"+1 Hope, +1 Health"
-13,The Mouth in the Wall,It doesn’t speak. It chews. And it’s chewing your name.,"-1 Sanity, gain item: Echo Stone"
-14,The Rusted Oracle,Its prophecies cost teeth.,"-1 Health, reveal 1 tile"
-15,The Siren’s Silence,No sound. But your ears bleed trying to hear what isn’t there.,"-1 Sanity, +1 Hope"
-16,The Loom of Regret,Threads stretch from your fingers to others long dead.,"Lose 1 item, +1 Hope"
-17,The Cracked Throne,Once sat upon by something that still watches.,"Gain Crown of Loss (+1 Hope, -1 Sanity)"
-18,Forgotten Orchard,Fruit rots on the branch. It smells like your childhood bedroom.,Gain Withered Apple (+1 Health)
-19,The Well of Names,It calls out your name. Then hers. Then names you didn’t know mattered.,Gain Paper Tongue (lets you speak to one tile ahead)
-20,The Puppeteer’s Nest,Strings twitch. Fingers snap. Something unseen controls.,"-1 Sanity"
-21,The Weightless Choice,Two doors. One opens to you. One to me. Neither opens unless the other is shut.,"+2 Hope"
-22,The Drowned Choir,"Voices rise in harmony, but not with yours. Your name is out of tune.","-1 Hope, gain item: Choral Thread"
-23,The Bone Orchard,The trees here don't grow leaves—they grow ribs.,"Gain item: Rib Key"
-24,Echoes in Wax,Melted figures whisper your own confessions back to you.,"-1 Sanity, reveal 1 nearby tile"
-25,Chamber of Knotted Veins,Pulses throb from the walls. You feel them match your heartbeat.,"Gain item: Vein Map"
-26,The Pale Rehearsal,"They practiced dying here, over and over again. Now it's your turn.","Lose 1 Health, gain 1 Hope"
-27,Corridor of Apologies,The walls beg forgiveness for something they didn’t do.,"Lose 1 item, +1 Hope"
-28,The Leeching Root,It grows toward warmth. Toward guilt. And now toward you.,"-1 Sanity, +1 Health"
-29,The Hollow Feast,A banquet of memory. You’re not hungry. It feeds anyway.,"Lose 1 item, +2 Hope"
-30,The Womb of Iron,It doesn't birth things. It absorbs them.,"Lose 1 item"
+1,Mirror of Versions,"You see a better version of yourself—standing taller, smiling more, untouched by failure. It mouths the words, 'You could’ve been me.'",
+2,The Vending Machine of Moral Compromise,"Glowing buttons read: 'Sell your soul.' 'Get chips.' 'Lie to yourself.' The machine hums: 'It’s not that deep.'",
+3,The Whispering Socket,"A glowing port pulses with green light. You swear it knows your passwords. It whispers: 'Let us in. It won’t hurt… much.'",
+4,The Pit of Almosts,"A half-finished bridge spans a pit full of regrets and missed chances. A whisper says, 'You almost made it.'",
+5,Hall of Unfinished Goodbyes,"Letters float mid-air, written in your own hand but never sent. One drifts toward you, blank on the outside. Inside? Maybe closure.",
+6,Bureaucratic Maw,"Paperwork looms like teeth. A voice demands, 'Submit Form 7B: Acknowledgment of Cosmic Meaninglessness.'",
+7,The Data Swamp,"Misinformation sloshes at your knees. Floating tweets and dying memes screech for attention. A sign reads: 'Ignore Reality, Gain Likes.'",
+8,The Final Threshold,"A black door hums with power. Your name is etched above it—twice. The void speaks: 'One walks. One stays.'",
+9,The Flickering Exit,"A doorway pulses like static. Behind it, you see peace. Or maybe a loading screen. A screen above it loops the phrase: 'This Might Be Real.'",
+10,The Crawlspace of Unfinished Projects,"You find journals half-filled, paintings half-painted, code half-documented. They all whisper: 'You were going to finish us…'",
+11,The Mouth of the Machine,"A twisted bulkhead pulses and opens like a jaw. Inside: screens, wires, teeth. A voice says, 'Submit input: yourself.'",
+12,The Library of Lost Causes,"Endless shelves filled with books no one finished. Every spine has your name on it.",
+13,The Looping Corridor,"You walk forward and re-enter from behind yourself. You walk again. And again. And again.",
+14,The Apology Room,"The walls whisper every 'I’m sorry' you’ve ever wanted. It should help. It doesn’t.",
+15,The Room You Forgot,"You’ve definitely been here before. The wallpaper is bleeding. The door behind you vanishes.",
+16,The Plaza of Forgotten Names,"A fountain full of name tags bubbles beside a sign: 'Rebrand Yourself.' Your name flickers on and off your chest.",
+17,The Graveyard of Yesterdays,"You step past versions of yourself buried in shallow graves. Some look fresher than others.",
+18,The Elevator That Only Goes Down,"There’s a button for 'Lobby (Not Real),' 'Worse,' and 'Rock Bottom.' Ding.",
+19,The Silent Ward,"A hospital wing. Empty beds. No machines. No encounter text plays. No choices appear. Just quiet.",
+20,The Hall of Digital Ghosts,"You see your old usernames float past, distorted. Messages from forgotten forums blink in unread grief.",
+21,Fork in the Real,"The path splits. Left is light. Right is shadow. Straight ahead? Doesn’t exist—yet.",
+22,The Snackless Breakroom,"There's a coffee machine, a sad microwave, and nothing in the fridge. You open the cabinet. It smells like betrayal.",
+23,The Discarded Room,"This room was meant for someone else. Their name is scratched out. Yours is written over it—sloppily.",
+24,The Applause Trap,"A spotlight snaps on. The room claps. A voice says, 'You did it.' You didn't.",
+25,The Compromise Engine,"Giant gears spin around a question: 'How much of yourself are you willing to give to keep going?'",
+26,The Void Restroom,"The stalls whisper. The toilet bowl stares. The hand dryer growls, 'Leave cleaner than you came.'",
+27,The Room with No Door,"You enter. You look back. The door is gone.",
+28,The Archive of Everything That Didn’t Work,"Every failed attempt, every unfinished effort—filed, sorted, and alphabetized by emotion.",
+29,The Hall of Inherited Guilt,"These aren’t your regrets—but you carry them anyway. Your father’s echo. Your mother’s weight. Someone else’s war.",
+30,The Flickering Choir,"Voices you recognize—some alive, some dead—start singing in perfect dissonance. You hear your name in every note.",
 31,The Paper Cathedral,A church made of books and broken promises.,"+1 Sanity"
 32,The Gasping Gate,"It breathes in regret, exhales denial.","-1 Hope, reveal 1 tile"
 33,Teeth in the Floor,You stepped too hard. It bites back.,-2 Health
