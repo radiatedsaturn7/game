@@ -89,6 +89,66 @@ def print_item_gain(item: 'Item'):
         print(f"Effect: {item.effect_text}")
 
 
+def choose_numbered(option1: tuple[str, List[str]], option2: tuple[str, List[str]]) -> str:
+    """Present two numbered options with bullet details and return the choice."""
+    print("**Choose an option:**")
+    print()
+    print(f"**1)** {option1[0]}")
+    for line in option1[1]:
+        print(f"• {line}")
+    print()
+    print(f"**2)** {option2[0]}")
+    for line in option2[1]:
+        print(f"• {line}")
+    print()
+    return input('Choose 1 or 2: ').strip()
+
+
+def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
+    """Generic encounter using choice data from the card."""
+    def build_lines(title: str, effect: str, roll: str, success: str, failure: str) -> List[str]:
+        lines: List[str] = []
+        if roll:
+            lines.append('Roll **1d6**.')
+            if success:
+                lines.append(f"On **{roll}**, {success}.")
+            if failure:
+                lines.append(f"Otherwise, {failure}.")
+        elif effect:
+            lines.append(effect)
+        return lines
+
+    opt1_lines = build_lines(card.choice1, card.choice1_effect, card.choice1_roll, card.choice1_success, card.choice1_failure)
+    opt2_lines = build_lines(card.choice2, card.choice2_effect, card.choice2_roll, card.choice2_success, card.choice2_failure)
+
+    choice = choose_numbered((card.choice1 or 'Option 1', opt1_lines), (card.choice2 or 'Option 2', opt2_lines))
+    def handle(effect: str, roll: str, success: str, failure: str):
+        if effect:
+            game.apply_effect_text(effect, player)
+        if roll:
+            roll_val = player.roll_d6()
+            cond = roll.strip()
+            success_flag = False
+            if cond.startswith('>='):
+                target = int(cond[2:])
+                success_flag = roll_val >= target
+            elif cond.startswith('<='):
+                target = int(cond[2:])
+                success_flag = roll_val <= target
+            else:
+                target = int(cond)
+                success_flag = roll_val == target
+            if success_flag:
+                game.apply_effect_text(success, player)
+            else:
+                game.apply_effect_text(failure, player)
+
+    if choice == '1':
+        handle(card.choice1_effect, card.choice1_roll, card.choice1_success, card.choice1_failure)
+    else:
+        handle(card.choice2_effect, card.choice2_roll, card.choice2_success, card.choice2_failure)
+
+
 @dataclass
 class Item:
     name: str
@@ -204,6 +264,16 @@ class EncounterCard:
     name: str
     description: str
     effect_text: str = ''
+    choice1: str = ''
+    choice1_effect: str = ''
+    choice1_roll: str = ''
+    choice1_success: str = ''
+    choice1_failure: str = ''
+    choice2: str = ''
+    choice2_effect: str = ''
+    choice2_roll: str = ''
+    choice2_success: str = ''
+    choice2_failure: str = ''
     immediate: Optional[Callable[['Game', Player], None]] = None
     revisit: Optional[Callable[['Game', Player], None]] = None
 
@@ -391,8 +461,24 @@ def bleeding_window_revisit(game: 'Game', player: Player):
         player.apply_effect(game, hope=1, sanity=-1)
 
 def mirror_of_versions(game: 'Game', player: Player):
-    choice = input('Confront them (c) or smash the mirror (s)? ').strip().lower()
-    if choice.startswith('s'):
+    choice = choose_numbered(
+        (
+            'Confront them',
+            [
+                'Roll **1d6**.',
+                'On a **6**, gain **+2 Sanity**.',
+                'Otherwise, lose **-1 Sanity**.',
+            ],
+        ),
+        (
+            'Smash the mirror',
+            [
+                'Lose **-1 Hope**.',
+                "Gain **Shard of What Might've Been** — adds **+1 to one future roll**.",
+            ],
+        ),
+    )
+    if choice == '2':
         player.apply_effect(game, hope=-1)
         shard = game.item_registry.get("shard of what might've been")
         if shard:
@@ -405,9 +491,25 @@ def mirror_of_versions(game: 'Game', player: Player):
             player.apply_effect(game, sanity=-1)
 
 def vending_machine(game: 'Game', player: Player):
-    choice = input('Use the machine (u) or kick it (k)? ').strip().lower()
     chips = game.item_registry.get('salted trauma chips')
-    if choice.startswith('k'):
+    choice = choose_numbered(
+        (
+            'Use the machine',
+            [
+                'Lose **-1 Sanity**.',
+                'Gain Salted Trauma Chips if available.',
+            ],
+        ),
+        (
+            'Kick it',
+            [
+                'Roll **1d6**.',
+                'On **4+**, gain **+1 Sanity** and Salted Trauma Chips.',
+                'Otherwise, lose **-2 Hope**.',
+            ],
+        ),
+    )
+    if choice == '2':
         roll = player.roll_d6()
         if roll >= 4:
             player.apply_effect(game, sanity=1)
@@ -422,9 +524,25 @@ def vending_machine(game: 'Game', player: Player):
             player.add_item(Item(chips.name, chips.description, effect_text=chips.effect_text, use_effect=chips.use_effect))
 
 def whispering_socket(game: 'Game', player: Player):
-    choice = input('Plug in (p) or rip it out (r)? ').strip().lower()
     wire = game.item_registry.get('frayed neural wire')
-    if choice.startswith('p'):
+    choice = choose_numbered(
+        (
+            'Plug in',
+            [
+                'Roll **1d6**.',
+                'On **6**, gain **+2 Hope**.',
+                'Otherwise, lose **-1 Sanity**.',
+            ],
+        ),
+        (
+            'Rip it out',
+            [
+                'Lose **-1 Hope**.',
+                'Gain **Frayed Neural Wire**.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll == 6:
             player.apply_effect(game, hope=2)
@@ -436,9 +554,24 @@ def whispering_socket(game: 'Game', player: Player):
             player.add_item(Item(wire.name, wire.description, effect_text=wire.effect_text, use_effect=wire.use_effect))
 
 def pit_of_almosts(game: 'Game', player: Player):
-    choice = input('Cross the pit (c) or take the long way (l)? ').strip().lower()
     glim = game.item_registry.get('glimmer of what could be')
-    if choice.startswith('c'):
+    choice = choose_numbered(
+        (
+            'Cross the pit',
+            [
+                'Roll **1d6**.',
+                'On **5+**, gain **Glimmer of What Could Be**.',
+                'Otherwise, lose **-2 Sanity**.',
+            ],
+        ),
+        (
+            'Take the long way',
+            [
+                'Lose **-1 Hope**.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll >= 5:
             if glim:
@@ -449,8 +582,23 @@ def pit_of_almosts(game: 'Game', player: Player):
         game.modify_hope(-1)
 
 def unfinished_goodbyes(game: 'Game', player: Player):
-    choice = input('Open the letter (o) or walk away (w)? ').strip().lower()
-    if choice.startswith('o'):
+    choice = choose_numbered(
+        (
+            'Open the letter',
+            [
+                'Roll **1d6**.',
+                'On **5+**, gain **+1 Hope**.',
+                'Otherwise, lose **-2 Sanity**.',
+            ],
+        ),
+        (
+            'Walk away',
+            [
+                'Lose **-1 Hope**.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll >= 5:
             player.apply_effect(game, hope=1)
@@ -460,9 +608,25 @@ def unfinished_goodbyes(game: 'Game', player: Player):
         game.modify_hope(-1)
 
 def bureaucratic_maw(game: 'Game', player: Player):
-    choice = input('Fill it out (f) or burn it (b)? ').strip().lower()
     stamp = game.item_registry.get('stamp of legitimacy')
-    if choice.startswith('f'):
+    choice = choose_numbered(
+        (
+            'Fill it out',
+            [
+                'Lose **-1 Hope**.',
+                'Gain **Stamp of Legitimacy**.',
+            ],
+        ),
+        (
+            'Burn it',
+            [
+                'Roll **1d6**.',
+                'On **4+**, gain **+1 Sanity**.',
+                'Otherwise, lose **-2 Hope**.',
+            ],
+        ),
+    )
+    if choice == '1':
         player.apply_effect(game, hope=-1)
         if stamp:
             player.add_item(Item(stamp.name, stamp.description, effect_text=stamp.effect_text, use_effect=stamp.use_effect))
@@ -474,9 +638,25 @@ def bureaucratic_maw(game: 'Game', player: Player):
             game.modify_hope(-2)
 
 def data_swamp(game: 'Game', player: Player):
-    choice = input('Scroll endlessly (s) or pull the plug (p)? ').strip().lower()
     device = game.item_registry.get('distraction device')
-    if choice.startswith('s'):
+    choice = choose_numbered(
+        (
+            'Scroll endlessly',
+            [
+                'Lose **-1 Sanity**.',
+                'Gain Distraction Device if available.',
+            ],
+        ),
+        (
+            'Pull the plug',
+            [
+                'Roll **1d6**.',
+                'On **4+**, gain **+2 Hope**.',
+                'Otherwise, lose **-1 Sanity** and **-1 Hope**.',
+            ],
+        ),
+    )
+    if choice == '1':
         player.apply_effect(game, sanity=-1)
         if device:
             player.add_item(Item(device.name, device.description, effect_text=device.effect_text, use_effect=device.use_effect))
@@ -489,9 +669,25 @@ def data_swamp(game: 'Game', player: Player):
             game.modify_hope(-1)
 
 def flickering_exit_first(game: 'Game', player: Player):
-    choice = input('Open it (o) or ignore it (i)? ').strip().lower()
     card = game.encounter_lookup.get('the flickering exit')
-    if choice.startswith('o'):
+    choice = choose_numbered(
+        (
+            'Open it',
+            [
+                'Roll **1d6**.',
+                '6: gain **+2 Hope** and pull the other player here.',
+                '3-5: lose **-1 Sanity**.',
+                '1-2: lose **-2 Sanity** and **-1 Hope**.',
+            ],
+        ),
+        (
+            'Ignore it',
+            [
+                'Gain **+1 Sanity**.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll == 6:
             player.apply_effect(game, hope=2)
@@ -511,23 +707,54 @@ def flickering_exit_first(game: 'Game', player: Player):
             card.revisit = lambda g, p: print('The exit flickers but will not open again.')
 
 def crawlspace_unfinished(game: 'Game', player: Player):
-    choice = input('Finish one (f) or burn it all (b)? ').strip().lower()
     ashes = game.item_registry.get('ashes of ambition')
-    if choice.startswith('b'):
-        player.apply_effect(game, hope=-1)
-        if ashes:
-            player.add_item(Item(ashes.name, ashes.description, effect_text=ashes.effect_text, use_effect=ashes.use_effect))
-    else:
+    choice = choose_numbered(
+        (
+            'Finish one',
+            [
+                'Roll **1d6**.',
+                'On **5+**, gain **+1 Sanity**.',
+                'Otherwise, lose **-2 Sanity**.',
+            ],
+        ),
+        (
+            'Burn it all',
+            [
+                'Lose **-1 Hope**.',
+                'Gain **Ashes of Ambition**.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll >= 5:
             player.apply_effect(game, sanity=1)
         else:
             player.apply_effect(game, sanity=-2)
+    else:
+        player.apply_effect(game, hope=-1)
+        if ashes:
+            player.add_item(Item(ashes.name, ashes.description, effect_text=ashes.effect_text, use_effect=ashes.use_effect))
 
 def mouth_of_machine(game: 'Game', player: Player):
-    choice = input('Enter (e) or walk away (w)? ').strip().lower()
     core = game.item_registry.get('core of something real')
-    if choice.startswith('e'):
+    choice = choose_numbered(
+        (
+            'Enter',
+            [
+                'Roll **1d6**.',
+                'On **5+**, gain **Core of Something Real**.',
+                'Otherwise, lose **-2 Sanity**.',
+            ],
+        ),
+        (
+            'Walk away',
+            [
+                'Lose **-1 Hope** and gain **+1 Sanity**.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll >= 5:
             if core:
@@ -538,8 +765,23 @@ def mouth_of_machine(game: 'Game', player: Player):
         player.apply_effect(game, hope=-1, sanity=1)
 
 def library_lost_causes(game: 'Game', player: Player):
-    choice = input('Open a book (o) or leave them be (l)? ').strip().lower()
-    if choice.startswith('o'):
+    choice = choose_numbered(
+        (
+            'Open a book',
+            [
+                'Roll **1d6**.',
+                'On **6**, gain **+2 Sanity**.',
+                'Otherwise, lose **-1 Sanity**.',
+            ],
+        ),
+        (
+            'Leave them be',
+            [
+                'No effect.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll == 6:
             player.apply_effect(game, sanity=2)
@@ -547,8 +789,23 @@ def library_lost_causes(game: 'Game', player: Player):
             player.apply_effect(game, sanity=-1)
 
 def looping_corridor(game: 'Game', player: Player):
-    choice = input('Break the loop (b) or let it ride (l)? ').strip().lower()
-    if choice.startswith('b'):
+    choice = choose_numbered(
+        (
+            'Break the loop',
+            [
+                'Lose **-2 Hope** and escape the loop.',
+            ],
+        ),
+        (
+            'Let it ride',
+            [
+                'Roll **1d6**.',
+                'On **4+**, gain **+1 Hope**.',
+                'Otherwise, lose **-1 Sanity**.',
+            ],
+        ),
+    )
+    if choice == '1':
         game.modify_hope(-2)
         print('You break free from the endless walk.')
     else:
@@ -559,9 +816,25 @@ def looping_corridor(game: 'Game', player: Player):
             player.apply_effect(game, sanity=-1)
 
 def apology_room(game: 'Game', player: Player):
-    choice = input('Listen closely (l) or yell back (y)? ').strip().lower()
     echo = game.item_registry.get('echo of closure')
-    if choice.startswith('l'):
+    choice = choose_numbered(
+        (
+            'Listen closely',
+            [
+                'Lose **-1 Sanity**.',
+                'Gain **Echo of Closure**.',
+            ],
+        ),
+        (
+            'Yell back',
+            [
+                'Roll **1d6**.',
+                'On **5+**, gain **+1 Sanity**.',
+                'Otherwise, nothing happens.',
+            ],
+        ),
+    )
+    if choice == '1':
         player.apply_effect(game, sanity=-1)
         if echo:
             player.add_item(Item(echo.name, echo.description, effect_text=echo.effect_text, use_effect=echo.use_effect))
@@ -572,8 +845,23 @@ def apology_room(game: 'Game', player: Player):
 
 def room_you_forgot(game: 'Game', player: Player):
     card = game.encounter_lookup.get('the room you forgot')
-    choice = input('Try to remember (r) or ignore it (i)? ').strip().lower()
-    if choice.startswith('r'):
+    choice = choose_numbered(
+        (
+            'Try to remember',
+            [
+                'Roll **1d6**.',
+                'On **6**, gain **+1 Hope**.',
+                'Otherwise, lose **-1 Sanity**.',
+            ],
+        ),
+        (
+            'Ignore it',
+            [
+                'If encountered again, lose **-1 Hope**.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll == 6:
             player.apply_effect(game, hope=1)
@@ -596,9 +884,25 @@ def plaza_forgotten_names(game: 'Game', player: Player):
         player.apply_effect(game, sanity=1)
 
 def graveyard_yesterdays(game: 'Game', player: Player):
-    choice = input('Mourn one (m) or bury one (b)? ').strip().lower()
     token = game.item_registry.get('memory token')
-    if choice.startswith('m'):
+    choice = choose_numbered(
+        (
+            'Mourn one',
+            [
+                'Lose **-1 Hope**.',
+                'Gain **Memory Token**.',
+            ],
+        ),
+        (
+            'Bury one',
+            [
+                'Roll **1d6**.',
+                'On **5+**, gain **+1 Sanity**.',
+                'Otherwise, lose **-1 Sanity**.',
+            ],
+        ),
+    )
+    if choice == '1':
         player.apply_effect(game, hope=-1)
         if token:
             player.add_item(Item(token.name, token.description, effect_text=token.effect_text, use_effect=token.use_effect))
@@ -610,9 +914,25 @@ def graveyard_yesterdays(game: 'Game', player: Player):
             player.apply_effect(game, sanity=-1)
 
 def elevator_down(game: 'Game', player: Player):
-    choice = input('Ride it (r) or take the stairs (s)? ').strip().lower()
     key = game.item_registry.get('rusty override key')
-    if choice.startswith('r'):
+    choice = choose_numbered(
+        (
+            'Ride it',
+            [
+                'Roll **1d6**.',
+                'On **6**, gain **+2 Sanity**.',
+                'Otherwise, lose **-1 Sanity** and **-1 Hope**.',
+            ],
+        ),
+        (
+            'Take the stairs',
+            [
+                'Lose **-1 Sanity**.',
+                'Gain **Rusty Override Key** if available.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll == 6:
             player.apply_effect(game, sanity=2)
@@ -633,9 +953,25 @@ def silent_ward(game: 'Game', player: Player):
         player.double_next = True
 
 def hall_digital_ghosts(game: 'Game', player: Player):
-    choice = input('Read messages (r) or log off (l)? ').strip().lower()
     token = game.item_registry.get('offline token')
-    if choice.startswith('r'):
+    choice = choose_numbered(
+        (
+            'Read messages',
+            [
+                'Roll **1d6**.',
+                'On **5+**, gain **+1 Hope**.',
+                'Otherwise, lose **-2 Sanity**.',
+            ],
+        ),
+        (
+            'Log off',
+            [
+                'Lose **-1 Hope**.',
+                'Gain **Offline Token** if available.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll >= 5:
             player.apply_effect(game, hope=1)
@@ -656,9 +992,24 @@ def fork_in_the_real(game: 'Game', player: Player):
         game.modify_hope(-1)
 
 def snackless_breakroom(game: 'Game', player: Player):
-    choice = input('Check the fridge (c) or walk away (w)? ').strip().lower()
     snack = game.item_registry.get('comfort snack')
-    if choice.startswith('c'):
+    choice = choose_numbered(
+        (
+            'Check the fridge',
+            [
+                'Roll **1d6**.',
+                'On **6**, gain **Comfort Snack**.',
+                'Otherwise, lose **-1 Sanity**.',
+            ],
+        ),
+        (
+            'Walk away',
+            [
+                'Gain **+1 Hope**.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll == 6 and snack:
             player.add_item(Item(snack.name, snack.description, effect_text=snack.effect_text, use_effect=snack.use_effect))
@@ -668,8 +1019,23 @@ def snackless_breakroom(game: 'Game', player: Player):
         game.modify_hope(1)
 
 def discarded_room(game: 'Game', player: Player):
-    choice = input('Claim it (c) or reject it (r)? ').strip().lower()
-    if choice.startswith('c'):
+    choice = choose_numbered(
+        (
+            'Claim it',
+            [
+                'Gain **+1 Sanity** and suffer **-1 to next roll**.',
+            ],
+        ),
+        (
+            'Reject it',
+            [
+                'Roll **1d6**.',
+                'On **5+**, nothing happens.',
+                'Otherwise, lose **-1 Sanity**.',
+            ],
+        ),
+    )
+    if choice == '1':
         player.apply_effect(game, sanity=1)
         player.roll_bonus -= 1
     else:
@@ -697,8 +1063,23 @@ def compromise_engine(game: 'Game', player: Player):
             player.add_item(Item(bolt.name, bolt.description, effect_text=bolt.effect_text, use_effect=bolt.use_effect))
 
 def void_restroom(game: 'Game', player: Player):
-    choice = input('Use the stall (s) or hold it (h)? ').strip().lower()
-    if choice.startswith('s'):
+    choice = choose_numbered(
+        (
+            'Use the stall',
+            [
+                'Roll **1d6**.',
+                'On **4+**, gain **+1 Sanity**.',
+                'Otherwise, lose **-1 Hope**.',
+            ],
+        ),
+        (
+            'Hold it',
+            [
+                'Lose **-1 Sanity**.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll >= 4:
             player.apply_effect(game, sanity=1)
@@ -708,9 +1089,25 @@ def void_restroom(game: 'Game', player: Player):
         player.apply_effect(game, sanity=-1)
 
 def room_no_door(game: 'Game', player: Player):
-    choice = input('Wait (w) or panic (p)? ').strip().lower()
     sketch = game.item_registry.get('exit sketch')
-    if choice.startswith('w'):
+    choice = choose_numbered(
+        (
+            'Wait',
+            [
+                'Lose **-1 Hope**.',
+                'Gain **Exit Sketch** if available.',
+            ],
+        ),
+        (
+            'Panic',
+            [
+                'Roll **1d6**.',
+                'On **5+**, gain **+1 Hope**.',
+                'Otherwise, lose **-2 Sanity**.',
+            ],
+        ),
+    )
+    if choice == '1':
         game.modify_hope(-1)
         if sketch:
             player.add_item(Item(sketch.name, sketch.description, effect_text=sketch.effect_text, use_effect=sketch.use_effect))
@@ -722,9 +1119,25 @@ def room_no_door(game: 'Game', player: Player):
             player.apply_effect(game, sanity=-2)
 
 def archive_everything(game: 'Game', player: Player):
-    choice = input('Browse the stacks (b) or burn it all (f)? ').strip().lower()
     ash = game.item_registry.get('ashen archive')
-    if choice.startswith('b'):
+    choice = choose_numbered(
+        (
+            'Browse the stacks',
+            [
+                'Roll **1d6**.',
+                'On **5+**, gain **+1 Sanity**.',
+                'Otherwise, lose **-1 Sanity**.',
+            ],
+        ),
+        (
+            'Burn it all',
+            [
+                'Lose **-2 Hope**.',
+                'Gain **Ashen Archive** if available.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll >= 5:
             player.apply_effect(game, sanity=1)
@@ -736,9 +1149,25 @@ def archive_everything(game: 'Game', player: Player):
             player.add_item(Item(ash.name, ash.description, effect_text=ash.effect_text, use_effect=ash.use_effect))
 
 def inherited_guilt(game: 'Game', player: Player):
-    choice = input('Shoulder it (s) or refuse (r)? ').strip().lower()
     token = game.item_registry.get('burden token')
-    if choice.startswith('s'):
+    choice = choose_numbered(
+        (
+            'Shoulder it',
+            [
+                'Lose **-2 Sanity**.',
+                'Gain **Burden Token**.',
+            ],
+        ),
+        (
+            'Refuse',
+            [
+                'Roll **1d6**.',
+                'On **1-3**, lose **-1 Hope**.',
+                'Otherwise, nothing happens.',
+            ],
+        ),
+    )
+    if choice == '1':
         player.apply_effect(game, sanity=-2)
         if token:
             player.add_item(Item(token.name, token.description, effect_text=token.effect_text, use_effect=token.use_effect))
@@ -748,8 +1177,23 @@ def inherited_guilt(game: 'Game', player: Player):
             game.modify_hope(-1)
 
 def flickering_choir(game: 'Game', player: Player):
-    choice = input('Sing back (s) or cover ears (c)? ').strip().lower()
-    if choice.startswith('s'):
+    choice = choose_numbered(
+        (
+            'Sing back',
+            [
+                'Roll **1d6**.',
+                'On **6**, gain **+2 Sanity**.',
+                'Otherwise, lose **-1 Sanity**.',
+            ],
+        ),
+        (
+            'Cover ears',
+            [
+                'Lose **-1 Hope** and gain **+1 Sanity**.',
+            ],
+        ),
+    )
+    if choice == '1':
         roll = player.roll_d6()
         if roll == 6:
             player.apply_effect(game, sanity=2)
@@ -1100,39 +1544,27 @@ class Game:
                 card = EncounterCard(
                     name=row['Name'],
                     description=row['Description'],
-                    effect_text=row['Effect']
+                    effect_text=row['Effect'],
+                    choice1=row.get('Choice1', ''),
+                    choice1_effect=row.get('Choice1Effect', ''),
+                    choice1_roll=row.get('Choice1Roll', ''),
+                    choice1_success=row.get('Choice1Success', ''),
+                    choice1_failure=row.get('Choice1Failure', ''),
+                    choice2=row.get('Choice2', ''),
+                    choice2_effect=row.get('Choice2Effect', ''),
+                    choice2_roll=row.get('Choice2Roll', ''),
+                    choice2_success=row.get('Choice2Success', ''),
+                    choice2_failure=row.get('Choice2Failure', '')
                 )
                 # Attach scripted effects when available
                 mapping = {
-                    'mirror of versions': {'immediate': mirror_of_versions},
-                    'the vending machine of moral compromise': {'immediate': vending_machine},
-                    'the whispering socket': {'immediate': whispering_socket},
-                    'the pit of almosts': {'immediate': pit_of_almosts},
-                    'hall of unfinished goodbyes': {'immediate': unfinished_goodbyes},
-                    'bureaucratic maw': {'immediate': bureaucratic_maw},
-                    'the data swamp': {'immediate': data_swamp},
                     'the flickering exit': {'immediate': flickering_exit_first},
-                    'the crawlspace of unfinished projects': {'immediate': crawlspace_unfinished},
-                    'the mouth of the machine': {'immediate': mouth_of_machine},
-                    'the library of lost causes': {'immediate': library_lost_causes},
-                    'the looping corridor': {'immediate': looping_corridor},
-                    'the apology room': {'immediate': apology_room},
                     'the room you forgot': {'immediate': room_you_forgot},
                     'the plaza of forgotten names': {'immediate': plaza_forgotten_names},
-                    'the graveyard of yesterdays': {'immediate': graveyard_yesterdays},
-                    'the elevator that only goes down': {'immediate': elevator_down},
                     'the silent ward': {'immediate': silent_ward},
-                    'the hall of digital ghosts': {'immediate': hall_digital_ghosts},
                     'fork in the real': {'immediate': fork_in_the_real},
-                    'the snackless breakroom': {'immediate': snackless_breakroom},
                     'the discarded room': {'immediate': discarded_room},
-                    'the applause trap': {'immediate': applause_trap},
                     'the compromise engine': {'immediate': compromise_engine},
-                    'the void restroom': {'immediate': void_restroom},
-                    'the room with no door': {'immediate': room_no_door},
-                    'the archive of everything that didn’t work': {'immediate': archive_everything},
-                    'the hall of inherited guilt': {'immediate': inherited_guilt},
-                    'the flickering choir': {'immediate': flickering_choir},
                     'mirror of broken memories': {'immediate': mirror_of_broken_memories},
                     'the whispering wound': {'immediate': whispering_wound, 'revisit': whispering_wound_revisit},
                     'the crooked bell': {'immediate': crooked_bell_first, 'revisit': crooked_bell_revisit},
@@ -1149,6 +1581,8 @@ class Game:
                     info = mapping[key]
                     card.immediate = info.get('immediate')
                     card.revisit = info.get('revisit')
+                if not card.immediate and (card.choice1 or card.choice2):
+                    card.immediate = lambda g, p, c=card: data_encounter(c, g, p)
                 deck.append(card)
                 self.encounter_lookup[card.name.lower()] = card
         random.shuffle(deck)
@@ -1235,6 +1669,14 @@ class Game:
         if not self.deck:
             return EncounterCard('Empty Expanse', 'Nothing happens here.', lambda g, p: None)
         return self.deck.pop()
+
+    def process_card(self, name: str, player: Player, first_time: bool = True):
+        """Lookup an encounter by name and resolve it."""
+        card = self.encounter_lookup.get(name.lower())
+        if not card:
+            print(f"Encounter '{name}' not found.")
+            return
+        card.apply(self, player, first_time)
 
     def apply_effect_text(self, text: str, player: Player):
         if not text:
