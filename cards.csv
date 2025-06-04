@@ -1,6 +1,6 @@
-ID,Name,Description,Effect
-1,Mirror of Versions,"You see a better version of yourself—standing taller, smiling more, untouched by failure. It mouths the words, 'You could’ve been me.'",
-2,The Vending Machine of Moral Compromise,"Glowing buttons read: 'Sell your soul.' 'Get chips.' 'Lie to yourself.' The machine hums: 'It’s not that deep.'",
+ID,Name,Description,Effect,Choice1,Choice1Effect,Choice1Roll,Choice1Success,Choice1Failure,Choice2,Choice2Effect,Choice2Roll,Choice2Success,Choice2Failure
+1,Mirror of Versions,"You see a better version of yourself—standing taller, smiling more, untouched by failure. It mouths the words, 'You could’ve been me.'",,Confront them,,6,+2 Sanity,-1 Sanity,Smash the mirror,-1 Hope; gain item: Shard of What Might've Been,,,
+2,The Vending Machine of Moral Compromise,"Glowing buttons read: 'Sell your soul.' 'Get chips.' 'Lie to yourself.' The machine hums: 'It’s not that deep.'",,Use the machine,-1 Sanity; gain item: Salted Trauma Chips,,,,Kick it,,>=4,+1 Sanity; gain item: Salted Trauma Chips,-2 Hope
 3,The Whispering Socket,"A glowing port pulses with green light. You swear it knows your passwords. It whispers: 'Let us in. It won’t hurt… much.'",
 4,The Pit of Almosts,"A half-finished bridge spans a pit full of regrets and missed chances. A whisper says, 'You almost made it.'",
 5,Hall of Unfinished Goodbyes,"Letters float mid-air, written in your own hand but never sent. One drifts toward you, blank on the outside. Inside? Maybe closure.",
