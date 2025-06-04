@@ -1,0 +1,152 @@
+[
+  {
+    "ID": "1",
+    "Name": "Glass Memory",
+    "Description": "A broken shard that reflects who you were, not who you are.",
+    "Effect": "+1 Sanity"
+  },
+  {
+    "ID": "2",
+    "Name": "Eternal Candle",
+    "Description": "Burns in defiance of darkness. Comforts the soul.",
+    "Effect": "+1 Hope"
+  },
+  {
+    "ID": "3",
+    "Name": "Bone Charm",
+    "Description": "Strung together from something that used to laugh.",
+    "Effect": "+1 Hope"
+  },
+  {
+    "ID": "4",
+    "Name": "Memory Tome",
+    "Description": "Pages filled with words you didn\u2019t write but remember anyway.",
+    "Effect": "+1 Sanity"
+  },
+  {
+    "ID": "5",
+    "Name": "Muted Stone",
+    "Description": "Warm and silent, like holding someone\u2019s last word.",
+    "Effect": "Prevents sanity loss at Whispering Wound."
+  },
+  {
+    "ID": "6",
+    "Name": "Choral Thread",
+    "Description": "A delicate thread vibrating with half-remembered songs.",
+    "Effect": "Reveals a tile if used while resting."
+  },
+  {
+    "ID": "7",
+    "Name": "Rib Key",
+    "Description": "Opens doors made of bone and bad intentions.",
+    "Effect": "Reveal 1 tile"
+  },
+  {
+    "ID": "8",
+    "Name": "Echo Stone",
+    "Description": "Whispers what lies beneath the next tile.",
+    "Effect": "Reveal adjacent tile."
+  },
+  {
+    "ID": "9",
+    "Name": "Vein Map",
+    "Description": "Pulses when near secrets.",
+    "Effect": "Reveal 1 tile"
+  },
+  {
+    "ID": "10",
+    "Name": "Crown of Loss",
+    "Description": "It fits perfectly. You lose yourself a little more.",
+    "Effect": "+1 Hope, -1 Sanity when worn."
+  },
+  {
+    "ID": "11",
+    "Name": "Withered Apple",
+    "Description": "Tastes like regret. Heals like forgiveness.",
+    "Effect": "Restore 1 Health."
+  },
+  {
+    "ID": "12",
+    "Name": "Paper Tongue",
+    "Description": "Translates feelings into warnings.",
+    "Effect": "Reveal 1 tile"
+  },
+  {
+    "ID": "13",
+    "Name": "Whisper Link",
+    "Description": "A psychic tether to someone who still matters.",
+    "Effect": "+1 Hope"
+  },
+  {
+    "ID": "14",
+    "Name": "Singing Blade",
+    "Description": "Hums lullabies when blood touches it.",
+    "Effect": "+1 Hope"
+  },
+  {
+    "ID": "15",
+    "Name": "Saltroot Bandage",
+    "Description": "Stings. Then soothes.",
+    "Effect": "+2 Health on use."
+  },
+  {
+    "ID": "16",
+    "Name": "Signal Crown",
+    "Description": "Worn by those who still listen.",
+    "Effect": "+1 Hope"
+  },
+  {
+    "ID": "17",
+    "Name": "Tearshard",
+    "Description": "Molten glass cooled by your shame.",
+    "Effect": "Reveal any tile once."
+  },
+  {
+    "ID": "18",
+    "Name": "Painted Memory",
+    "Description": "Stares back with your eyes.",
+    "Effect": "+1 Sanity"
+  },
+  {
+    "ID": "19",
+    "Name": "Mourning Veil",
+    "Description": "Softens the impact of loss.",
+    "Effect": "+1 Sanity once per session."
+  },
+  {
+    "ID": "20",
+    "Name": "Face of Another",
+    "Description": "They won\u2019t know it\u2019s you. You might forget too.",
+    "Effect": "+1 Hope"
+  },
+  {
+    "ID": "21",
+    "Name": "Regret Seed",
+    "Description": "Can grow back what you destroyed.",
+    "Effect": "+1 Hope"
+  },
+  {
+    "ID": "22",
+    "Name": "Rusty Band",
+    "Description": "A broken promise looped in iron.",
+    "Effect": "+1 Hope"
+  },
+  {
+    "ID": "23",
+    "Name": "Echo Thread",
+    "Description": "Tangles with forgotten speech.",
+    "Effect": "+1 Hope"
+  },
+  {
+    "ID": "24",
+    "Name": "Oracle Wick",
+    "Description": "Burns fate for truth.",
+    "Effect": "+1 Hope"
+  },
+  {
+    "ID": "25",
+    "Name": "Splintered Mask",
+    "Description": "Lies better than you ever could.",
+    "Effect": "+1 Hope when entering performance-themed room."
+  }
+]
