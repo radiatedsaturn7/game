@@ -1,0 +1,89 @@
+import sys, os; sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+import json
+import unittest
+from unittest.mock import patch
+import random
+import main
+
+# Ensure this test passes for all cards before submitting a pull request.
+
+class DummyInput:
+    def __call__(self, prompt=''):
+        return '1'
+
+dummy_input = DummyInput()
+
+class CardTests(unittest.TestCase):
+    def setUp(self):
+        random.seed(0)
+
+    def _new_game(self):
+        return main.Game()
+
+    def test_encounter_cards(self):
+        for name in json_names('cards.json'):
+            for roll in (6, 0):
+                game = self._new_game()
+                player = game.players[0]
+                card = game.encounter_lookup[name.lower()]
+                with patch('builtins.input', dummy_input), \
+                     patch.object(player, 'roll_d6', return_value=roll):
+                    card.apply(game, player, True)
+
+    def test_location_cards(self):
+        game = self._new_game()
+        player = game.players[0]
+        for row in game.location_lookup.values():
+            loc = main.LocationCard(row['Name'], row['Description'], row['Effect'])
+            with patch('builtins.input', dummy_input):
+                loc.apply(game, player)
+
+    def test_item_cards(self):
+        game = self._new_game()
+        player = game.players[0]
+        for item in game.item_registry.values():
+            with patch('builtins.input', dummy_input):
+                item.apply(game, player, '')
+
+    def test_final_encounters(self):
+        game = self._new_game()
+        for card in game.final_deck:
+            with patch('builtins.input', dummy_input):
+                card.apply(game, game.players)
+
+    def test_loss_conditions(self):
+        # Health zero
+        game = self._new_game()
+        player = game.players[0]
+        player.health = 0
+        with patch('builtins.input', dummy_input):
+            over, _ = game.handle_tile(player, 'down')
+        self.assertTrue(over)
+
+        # Sanity zero
+        game = self._new_game()
+        player = game.players[0]
+        player.sanity = 0
+        with patch('builtins.input', dummy_input):
+            over, _ = game.handle_tile(player, 'down')
+        self.assertTrue(over)
+
+        # Hope zero
+        game = self._new_game()
+        player = game.players[0]
+        game.hope = 0
+        for p in game.players:
+            p.hope = 0
+        with patch('builtins.input', dummy_input):
+            over, _ = game.handle_tile(player, 'down')
+        self.assertTrue(over)
+
+
+def json_names(filename):
+    import json
+    with open(filename) as f:
+        data = json.load(f)
+    return [row['Name'] for row in data]
+
+if __name__ == '__main__':
+    unittest.main()
