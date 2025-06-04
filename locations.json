@@ -1,0 +1,152 @@
+[
+  {
+    "ID": "1",
+    "Name": "The Fractured Vestibule",
+    "Description": "This is where it begins\u2014or ends again. The walls remember your name.",
+    "Effect": "Starting location for Rob and Cait."
+  },
+  {
+    "ID": "2",
+    "Name": "The Shifting Gallery",
+    "Description": "Portraits rearrange when you blink. Each face resembles someone you failed.",
+    "Effect": "Reveals an adjacent tile each visit."
+  },
+  {
+    "ID": "3",
+    "Name": "The Drowned Room",
+    "Description": "Water up to your knees. Something colder clings to your ankles.",
+    "Effect": "Lose 1 Health on entry, +1 Sanity on exit."
+  },
+  {
+    "ID": "4",
+    "Name": "The Clockwork Fissure",
+    "Description": "Gears buried in stone tick out the seconds you\u2019ve lost.",
+    "Effect": "+1 Hope if you stay a full turn."
+  },
+  {
+    "ID": "5",
+    "Name": "The Maw of Sleep",
+    "Description": "Even your thoughts feel heavy here. Time slows to a crawl.",
+    "Effect": "Skip a turn to gain +2 Sanity."
+  },
+  {
+    "ID": "6",
+    "Name": "The Static Hall",
+    "Description": "Buzzing walls echo secrets you've never told anyone.",
+    "Effect": "Gain 1 random item, lose 1 Sanity."
+  },
+  {
+    "ID": "7",
+    "Name": "The Hollow Spine",
+    "Description": "A corridor of vertebrae, and you're the marrow.",
+    "Effect": "+1 Health if you leave an item behind."
+  },
+  {
+    "ID": "8",
+    "Name": "The Stained Bell Tower",
+    "Description": "Each ring peels skin from time\u2019s body.",
+    "Effect": "Randomly affects either Hope or Sanity."
+  },
+  {
+    "ID": "9",
+    "Name": "The Eclipsed Chapel",
+    "Description": "The light here doesn\u2019t shine\u2014it watches.",
+    "Effect": "+1 Hope if visited with Cait."
+  },
+  {
+    "ID": "10",
+    "Name": "The Ember Basin",
+    "Description": "Ash falls like snow. Your lungs remember a fire that never happened.",
+    "Effect": "+1 Health, -1 Sanity."
+  },
+  {
+    "ID": "11",
+    "Name": "The Choir Trench",
+    "Description": "Every step echoes a hymn sung backward.",
+    "Effect": "-1 Hope if you hum."
+  },
+  {
+    "ID": "12",
+    "Name": "The Bone Parlor",
+    "Description": "Furniture carved from memory. It creaks in your mother\u2019s voice.",
+    "Effect": "+1 Sanity if alone."
+  },
+  {
+    "ID": "13",
+    "Name": "The Silted Orchard",
+    "Description": "Fruit grows in the dirt, not the branches.",
+    "Effect": "Trade 1 item for +1 Health."
+  },
+  {
+    "ID": "14",
+    "Name": "The Gallery of Unmade Things",
+    "Description": "Each sculpture screams when looked at directly.",
+    "Effect": "-1 Sanity, gain rare item."
+  },
+  {
+    "ID": "15",
+    "Name": "The Buried Atrium",
+    "Description": "Dust and rot frame what once was joy.",
+    "Effect": "+1 Hope if you rest here."
+  },
+  {
+    "ID": "16",
+    "Name": "The Haunting Fold",
+    "Description": "The ceiling lowers when you're silent. And rises when you lie.",
+    "Effect": "-1 Sanity if no dialogue spoken."
+  },
+  {
+    "ID": "17",
+    "Name": "The Shatterpond",
+    "Description": "Reflections show you leaving. Alone.",
+    "Effect": "Only one player can recover here (+1 Sanity)."
+  },
+  {
+    "ID": "18",
+    "Name": "The Archive of Screams",
+    "Description": "Scrolls roll themselves shut when you listen too closely.",
+    "Effect": "Gain item: Deaf Candle."
+  },
+  {
+    "ID": "19",
+    "Name": "The Threshing Frame",
+    "Description": "It grinds memory into meaning.",
+    "Effect": "Choose: +1 Sanity or +1 Hope, lose 1 Health."
+  },
+  {
+    "ID": "20",
+    "Name": "The Flayed Sanctum",
+    "Description": "Walls peeled to nerve endings. They scream when touched.",
+    "Effect": "-1 Health every turn spent."
+  },
+  {
+    "ID": "21",
+    "Name": "The Chamber of Guilt",
+    "Description": "An endless room lined with mirrors that only reflect the past.",
+    "Effect": "-1 Hope if Cait is absent."
+  },
+  {
+    "ID": "22",
+    "Name": "The Hung Staircase",
+    "Description": "Each step is a choice you didn\u2019t make. Each creak is a consequence.",
+    "Effect": "+1 Hope if Rob and Cait are both present."
+  },
+  {
+    "ID": "23",
+    "Name": "The Lantern Field",
+    "Description": "Glowing orbs float like memories trying to leave.",
+    "Effect": "Gain 1 revealed tile of your choice."
+  },
+  {
+    "ID": "24",
+    "Name": "The Shrike's Gallery",
+    "Description": "Hooks hang from the ceiling. They twitch when you speak.",
+    "Effect": "-1 Sanity if you used an item this turn."
+  },
+  {
+    "ID": "25",
+    "Name": "The Final Gate",
+    "Description": "It doesn\u2019t open. It consumes. But maybe, just maybe, it lets go.",
+    "Effect": "Exit card. Only available when both Rob and Cait are present with 3+ Hope and Sanity."
+  }
+]

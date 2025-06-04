@@ -1,5 +1,5 @@
 import random
-import csv
+import json
 import re
 import os
 from dataclasses import dataclass, field
@@ -105,48 +105,76 @@ def choose_numbered(option1: tuple[str, List[str]], option2: tuple[str, List[str
 
 
 def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
-    """Generic encounter using choice data from the card."""
-    def build_lines(title: str, effect: str, roll: str, success: str, failure: str) -> List[str]:
+    """Generic encounter using structured choice data from the card."""
+
+    def format_effect(eff: Dict[str, object]) -> str:
+        parts: List[str] = []
+        text = eff.get('Description', '')
+        if text:
+            parts.append(text)
+        for key in ('Health', 'Sanity', 'Hope'):
+            if key in eff:
+                val = eff[key]
+                sign = '+' if val >= 0 else ''
+                parts.append(f"{sign}{val} {key}")
+        item = eff.get('Item')
+        if item:
+            action = 'Gain' if eff.get('ItemAddOrRemove', 'add') != 'remove' else 'Lose'
+            parts.append(f"{action} {item}")
+        return '; '.join(parts)
+
+    def build_lines(choice: Dict[str, object]) -> List[str]:
         lines: List[str] = []
-        if roll:
+        roll = choice.get('RollSuccess', 0)
+        success = choice.get('Success', {})
+        failure = choice.get('Failure', {})
+        if roll and isinstance(roll, int) and roll > 0:
             lines.append('Roll **1d6**.')
             if success:
-                lines.append(f"On **{roll}**, {success}.")
+                lines.append(f"On **{roll}+**, {format_effect(success)}.")
             if failure:
-                lines.append(f"Otherwise, {failure}.")
-        elif effect:
-            lines.append(effect)
+                lines.append(f"Otherwise, {format_effect(failure)}.")
+        else:
+            if success:
+                lines.append(format_effect(success))
         return lines
 
-    opt1_lines = build_lines(card.choice1, card.choice1_effect, card.choice1_roll, card.choice1_success, card.choice1_failure)
-    opt2_lines = build_lines(card.choice2, card.choice2_effect, card.choice2_roll, card.choice2_success, card.choice2_failure)
+    options: List[tuple[str, List[str]]] = []
+    for idx, ch in enumerate(card.choices, 1):
+        options.append((ch.get('Text', f'Option {idx}'), build_lines(ch)))
 
-    choice = choose_numbered((card.choice1 or 'Option 1', opt1_lines), (card.choice2 or 'Option 2', opt2_lines))
-    def handle(effect: str, roll: str, success: str, failure: str):
-        if effect:
-            game.apply_effect_text(effect, player)
-        if roll:
-            roll_val = player.roll_d6()
-            cond = roll.strip()
-            success_flag = False
-            if cond.startswith('>='):
-                target = int(cond[2:])
-                success_flag = roll_val >= target
-            elif cond.startswith('<='):
-                target = int(cond[2:])
-                success_flag = roll_val <= target
-            else:
-                target = int(cond)
-                success_flag = roll_val == target
-            if success_flag:
-                game.apply_effect_text(success, player)
-            else:
-                game.apply_effect_text(failure, player)
+    if not options:
+        return
 
-    if choice == '1':
-        handle(card.choice1_effect, card.choice1_roll, card.choice1_success, card.choice1_failure)
+    if len(options) == 1:
+        choice_idx = 0
+        # display single option for confirmation
+        title, lines = options[0]
+        print(f"**{title}**")
+        for line in lines:
+            print(f"• {line}")
+        confirm = input('Proceed? (y/n) ').strip().lower()
+        if not confirm.startswith('y'):
+            return
     else:
-        handle(card.choice2_effect, card.choice2_roll, card.choice2_success, card.choice2_failure)
+        prompts = [(title, lines) for title, lines in options[:2]]
+        choice = choose_numbered(prompts[0], prompts[1])
+        choice_idx = 0 if choice == '1' else 1
+
+    chosen = card.choices[choice_idx]
+
+    roll = chosen.get('RollSuccess', 0)
+    success = chosen.get('Success', {})
+    failure = chosen.get('Failure', {})
+
+    if roll and isinstance(roll, int) and roll > 0:
+        roll_val = player.roll_d6()
+        if roll_val >= roll:
+            game.apply_effect_dict(success, player)
+        else:
+            game.apply_effect_dict(failure, player)
+    else:
+        game.apply_effect_dict(success, player)
 
 
 @dataclass
@@ -263,17 +291,8 @@ class Player:
 class EncounterCard:
     name: str
     description: str
-    effect_text: str = ''
-    choice1: str = ''
-    choice1_effect: str = ''
-    choice1_roll: str = ''
-    choice1_success: str = ''
-    choice1_failure: str = ''
-    choice2: str = ''
-    choice2_effect: str = ''
-    choice2_roll: str = ''
-    choice2_success: str = ''
-    choice2_failure: str = ''
+    effect: Dict[str, object] = field(default_factory=dict)
+    choices: List[Dict[str, object]] = field(default_factory=list)
     immediate: Optional[Callable[['Game', Player], None]] = None
     revisit: Optional[Callable[['Game', Player], None]] = None
 
@@ -304,8 +323,8 @@ class EncounterCard:
             for _ in range(times):
                 if self.immediate:
                     self.immediate(game, player)
-                if self.effect_text:
-                    game.apply_effect_text(self.effect_text, player)
+                if self.effect:
+                    game.apply_effect_dict(self.effect, player)
             self.triggered = True
         else:
             if self.revisit:
@@ -1410,8 +1429,8 @@ class Board:
         self.size = size
         self.grid = [[Tile() for _ in range(size)] for _ in range(size)]
         # load location data
-        with open('locations.csv', newline='') as f:
-            locs = {row['Name']: row for row in csv.DictReader(f)}
+        with open('locations.json') as f:
+            locs = {row['Name']: row for row in json.load(f)}
 
         start = locs.get('The Fractured Vestibule', {'Description': 'Start'})
         gate = locs.get('The Final Gate', {'Description': 'Exit'})
@@ -1533,28 +1552,19 @@ class Game:
             p.hope = self.hope
 
     def load_locations(self):
-        with open('locations.csv', newline='') as f:
-            for row in csv.DictReader(f):
+        with open('locations.json') as f:
+            for row in json.load(f):
                 self.location_lookup[row['Name'].lower()] = row
 
     def create_deck(self) -> List[EncounterCard]:
         deck: List[EncounterCard] = []
-        with open('cards.csv', newline='') as f:
-            for row in csv.DictReader(f):
+        with open('cards.json') as f:
+            for row in json.load(f):
                 card = EncounterCard(
                     name=row['Name'],
                     description=row['Description'],
-                    effect_text=row['Effect'],
-                    choice1=row.get('Choice1', ''),
-                    choice1_effect=row.get('Choice1Effect', ''),
-                    choice1_roll=row.get('Choice1Roll', ''),
-                    choice1_success=row.get('Choice1Success', ''),
-                    choice1_failure=row.get('Choice1Failure', ''),
-                    choice2=row.get('Choice2', ''),
-                    choice2_effect=row.get('Choice2Effect', ''),
-                    choice2_roll=row.get('Choice2Roll', ''),
-                    choice2_success=row.get('Choice2Success', ''),
-                    choice2_failure=row.get('Choice2Failure', '')
+                    effect=row.get('Effect', {}),
+                    choices=row.get('Choices', [])
                 )
                 # Attach scripted effects when available
                 mapping = {
@@ -1581,7 +1591,7 @@ class Game:
                     info = mapping[key]
                     card.immediate = info.get('immediate')
                     card.revisit = info.get('revisit')
-                if not card.immediate and (card.choice1 or card.choice2):
+                if not card.immediate and card.choices:
                     card.immediate = lambda g, p, c=card: data_encounter(c, g, p)
                 deck.append(card)
                 self.encounter_lookup[card.name.lower()] = card
@@ -1596,8 +1606,8 @@ class Game:
 
     def create_item_deck(self) -> List[Item]:
         items: List[Item] = []
-        with open('items.csv', newline='') as f:
-            for row in csv.DictReader(f):
+        with open('items.json') as f:
+            for row in json.load(f):
                 item = Item(row['Name'], row['Description'], effect_text=row['Effect'])
                 # Assign special use effects by item name
                 if item.name == 'Echo Stone':
@@ -1648,8 +1658,8 @@ class Game:
 
     def create_final_deck(self) -> List[FinalGateCard]:
         deck: List[FinalGateCard] = []
-        with open('final_encounters.csv', newline='') as f:
-            for row in csv.DictReader(f):
+        with open('final_encounters.json') as f:
+            for row in json.load(f):
                 deck.append(
                     FinalGateCard(
                         name=row['Name'],
@@ -1667,7 +1677,7 @@ class Game:
 
     def draw_encounter(self) -> EncounterCard:
         if not self.deck:
-            return EncounterCard('Empty Expanse', 'Nothing happens here.', lambda g, p: None)
+            return EncounterCard('Empty Expanse', 'Nothing happens here.', immediate=lambda g, p: None)
         return self.deck.pop()
 
     def process_card(self, name: str, player: Player, first_time: bool = True):
@@ -1717,6 +1727,39 @@ class Game:
             if player.inventory:
                 lost = player.inventory.pop(0)
                 print(f'{player.name} loses {lost.name}')
+
+    def apply_effect_dict(self, effect: Dict[str, object], player: Player):
+        if not effect:
+            return
+        desc = effect.get('Description', '')
+        if desc:
+            print(desc)
+        player.apply_effect(
+            self,
+            health=effect.get('Health', 0),
+            hope=effect.get('Hope', 0),
+            sanity=effect.get('Sanity', 0),
+        )
+        item = effect.get('Item')
+        if item:
+            reg = self.item_registry.get(item.lower())
+            if reg:
+                if effect.get('ItemAddOrRemove', 'add') == 'remove':
+                    player.remove_item(reg.name)
+                else:
+                    player.add_item(Item(reg.name, reg.description, effect_text=reg.effect_text, use_effect=reg.use_effect))
+
+    def format_effect_short(self, effect: Dict[str, object]) -> str:
+        parts: List[str] = []
+        for key in ('Health', 'Sanity', 'Hope'):
+            if key in effect:
+                val = effect[key]
+                sign = '+' if val >= 0 else ''
+                parts.append(f"{sign}{val} {key}")
+        if 'Item' in effect:
+            action = 'Gain' if effect.get('ItemAddOrRemove', 'add') != 'remove' else 'Lose'
+            parts.append(f"{action} {effect['Item']}")
+        return '; '.join(parts)
 
     def run_final_gate(self) -> bool:
         random.shuffle(self.final_deck)
@@ -1807,8 +1850,10 @@ class Game:
                     if tile.encounter:
                         enc = tile.encounter
                         line = f"[{x},{y}] - {enc.name}: {enc.description}"
-                        if enc.effect_text:
-                            line += f" | Effect: {enc.effect_text}"
+                        if enc.effect:
+                            eff = self.format_effect_short(enc.effect)
+                            if eff:
+                                line += f" | Effect: {eff}"
                         print(line)
         if not found:
             print('None yet.')
@@ -1888,8 +1933,10 @@ class Game:
             if card:
                 print(color(f"\U0001F4DC ENCOUNTER: {card.name}", 'bold'))
                 print(card.description)
-                if card.effect_text:
-                    print(f"Effect: {card.effect_text}")
+                if card.effect:
+                    eff = self.format_effect_short(card.effect)
+                    if eff:
+                        print(f"Effect: {eff}")
                 return
         elif category == 'location':
             loc = self.location_lookup.get(key)
