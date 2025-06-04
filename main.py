@@ -1670,6 +1670,14 @@ class Game:
             return EncounterCard('Empty Expanse', 'Nothing happens here.', lambda g, p: None)
         return self.deck.pop()
 
+    def process_card(self, name: str, player: Player, first_time: bool = True):
+        """Lookup an encounter by name and resolve it."""
+        card = self.encounter_lookup.get(name.lower())
+        if not card:
+            print(f"Encounter '{name}' not found.")
+            return
+        card.apply(self, player, first_time)
+
     def apply_effect_text(self, text: str, player: Player):
         if not text:
             return
