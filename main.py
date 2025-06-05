@@ -109,8 +109,11 @@ def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
 
     def format_effect(eff: Dict[str, object]) -> str:
         parts: List[str] = []
+        # Only include the description when no explicit values are present to
+        # avoid duplicated text like "-2 Sanity; -2 Sanity".
+        explicit = any(k in eff for k in ('Health', 'Sanity', 'Hope', 'Item'))
         text = eff.get('Description', '')
-        if text:
+        if text and not explicit:
             parts.append(text)
         for key in ('Health', 'Sanity', 'Hope'):
             if key in eff:
@@ -121,6 +124,9 @@ def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
         if item:
             action = 'Gain' if eff.get('ItemAddOrRemove', 'add') != 'remove' else 'Lose'
             parts.append(f"{action} {item}")
+        # If no explicit data was included, fall back to the description
+        if not parts and text:
+            parts.append(text)
         return '; '.join(parts)
 
     def build_lines(choice: Dict[str, object]) -> List[str]:
@@ -141,7 +147,11 @@ def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
 
     options: List[tuple[str, List[str]]] = []
     for idx, ch in enumerate(card.choices, 1):
-        options.append((ch.get('Text', f'Option {idx}'), build_lines(ch)))
+        text = ch.get('Text', '').strip()
+        if not text:
+            # Skip entries with no text to avoid confusing blank options
+            continue
+        options.append((text, build_lines(ch)))
 
     if not options:
         return
