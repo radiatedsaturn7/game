@@ -1,152 +1,645 @@
 [
   {
-    "ID": "1",
+    "ID": 1,
     "Name": "Glass Memory",
     "Description": "A broken shard that reflects who you were, not who you are.",
-    "Effect": "+1 Sanity"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Sanity",
+          "Sanity": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "2",
+    "ID": 2,
     "Name": "Eternal Candle",
     "Description": "Burns in defiance of darkness. Comforts the soul.",
-    "Effect": "+1 Hope"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "3",
+    "ID": 3,
     "Name": "Bone Charm",
     "Description": "Strung together from something that used to laugh.",
-    "Effect": "+1 Hope"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "4",
+    "ID": 4,
     "Name": "Memory Tome",
     "Description": "Pages filled with words you didn\u2019t write but remember anyway.",
-    "Effect": "+1 Sanity"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Sanity",
+          "Sanity": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "5",
+    "ID": 5,
     "Name": "Muted Stone",
     "Description": "Warm and silent, like holding someone\u2019s last word.",
-    "Effect": "Prevents sanity loss at Whispering Wound."
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "Prevents sanity loss at Whispering Wound."
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "6",
+    "ID": 6,
     "Name": "Choral Thread",
     "Description": "A delicate thread vibrating with half-remembered songs.",
-    "Effect": "Reveals a tile if used while resting."
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "Reveals a tile if used while resting."
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "7",
+    "ID": 7,
     "Name": "Rib Key",
     "Description": "Opens doors made of bone and bad intentions.",
-    "Effect": "Reveal 1 tile"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "Reveal 1 tile"
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "8",
+    "ID": 8,
     "Name": "Echo Stone",
     "Description": "Whispers what lies beneath the next tile.",
-    "Effect": "Reveal adjacent tile."
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "Reveal adjacent tile."
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "9",
+    "ID": 9,
     "Name": "Vein Map",
     "Description": "Pulses when near secrets.",
-    "Effect": "Reveal 1 tile"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "Reveal 1 tile"
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "10",
+    "ID": 10,
     "Name": "Crown of Loss",
     "Description": "It fits perfectly. You lose yourself a little more.",
-    "Effect": "+1 Hope, -1 Sanity when worn."
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope, -1 Sanity when worn.",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "11",
+    "ID": 11,
     "Name": "Withered Apple",
     "Description": "Tastes like regret. Heals like forgiveness.",
-    "Effect": "Restore 1 Health."
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "Restore 1 Health.",
+          "Health": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "12",
+    "ID": 12,
     "Name": "Paper Tongue",
     "Description": "Translates feelings into warnings.",
-    "Effect": "Reveal 1 tile"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "Reveal 1 tile"
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "13",
+    "ID": 13,
     "Name": "Whisper Link",
     "Description": "A psychic tether to someone who still matters.",
-    "Effect": "+1 Hope"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "14",
+    "ID": 14,
     "Name": "Singing Blade",
     "Description": "Hums lullabies when blood touches it.",
-    "Effect": "+1 Hope"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "15",
+    "ID": 15,
     "Name": "Saltroot Bandage",
     "Description": "Stings. Then soothes.",
-    "Effect": "+2 Health on use."
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+2 Health on use.",
+          "Health": 2
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "16",
+    "ID": 16,
     "Name": "Signal Crown",
     "Description": "Worn by those who still listen.",
-    "Effect": "+1 Hope"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "17",
+    "ID": 17,
     "Name": "Tearshard",
     "Description": "Molten glass cooled by your shame.",
-    "Effect": "Reveal any tile once."
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "Reveal any tile once."
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "18",
+    "ID": 18,
     "Name": "Painted Memory",
     "Description": "Stares back with your eyes.",
-    "Effect": "+1 Sanity"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Sanity",
+          "Sanity": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "19",
+    "ID": 19,
     "Name": "Mourning Veil",
     "Description": "Softens the impact of loss.",
-    "Effect": "+1 Sanity once per session."
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Sanity once per session.",
+          "Sanity": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "20",
+    "ID": 20,
     "Name": "Face of Another",
     "Description": "They won\u2019t know it\u2019s you. You might forget too.",
-    "Effect": "+1 Hope"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "21",
+    "ID": 21,
     "Name": "Regret Seed",
     "Description": "Can grow back what you destroyed.",
-    "Effect": "+1 Hope"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "22",
+    "ID": 22,
     "Name": "Rusty Band",
     "Description": "A broken promise looped in iron.",
-    "Effect": "+1 Hope"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "23",
+    "ID": 23,
     "Name": "Echo Thread",
     "Description": "Tangles with forgotten speech.",
-    "Effect": "+1 Hope"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "24",
+    "ID": 24,
     "Name": "Oracle Wick",
     "Description": "Burns fate for truth.",
-    "Effect": "+1 Hope"
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   },
   {
-    "ID": "25",
+    "ID": 25,
     "Name": "Splintered Mask",
     "Description": "Lies better than you ever could.",
-    "Effect": "+1 Hope when entering performance-themed room."
+    "Choices": [
+      {
+        "Text": "Face it",
+        "RollSuccess": 4,
+        "Success": {
+          "Description": "+1 Hope when entering performance-themed room.",
+          "Hope": 1
+        },
+        "Failure": {
+          "Description": "-2 Health",
+          "Health": -2
+        }
+      },
+      {
+        "Text": "Withdraw",
+        "Success": {
+          "Description": "-1 Hope",
+          "Hope": -1
+        }
+      }
+    ]
   }
 ]
