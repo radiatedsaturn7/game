@@ -187,6 +187,84 @@ def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
         game.apply_effect_dict(success, player)
 
 
+def final_data_encounter(card: 'FinalGateCard', game: 'Game', players: Iterable['Player']):
+    """Group encounter for Final Gate cards using structured choice data."""
+
+    def format_effect(eff: Dict[str, object]) -> str:
+        parts: List[str] = []
+        explicit = any(k in eff for k in ('Health', 'Sanity', 'Hope', 'Item'))
+        text = eff.get('Description', '')
+        if text and not explicit:
+            parts.append(text)
+        for key in ('Health', 'Sanity', 'Hope'):
+            if key in eff:
+                val = eff[key]
+                sign = '+' if val >= 0 else ''
+                parts.append(f"{sign}{val} {key}")
+        item = eff.get('Item')
+        if item:
+            action = 'Gain' if eff.get('ItemAddOrRemove', 'add') != 'remove' else 'Lose'
+            parts.append(f"{action} {item}")
+        if not parts and text:
+            parts.append(text)
+        return '; '.join(parts)
+
+    def build_lines(choice: Dict[str, object]) -> List[str]:
+        lines: List[str] = []
+        roll = choice.get('RollSuccess', 0)
+        success = choice.get('Success', {})
+        failure = choice.get('Failure', {})
+        if roll and isinstance(roll, int) and roll > 0:
+            lines.append('Roll **1d6**.')
+            if success:
+                lines.append(f"On **{roll}+**, {format_effect(success)}.")
+            if failure:
+                lines.append(f"Otherwise, {format_effect(failure)}.")
+        else:
+            if success:
+                lines.append(format_effect(success))
+        return lines
+
+    options: List[tuple[str, List[str]]] = []
+    for ch in card.choices:
+        text = ch.get('Text', '').strip()
+        if not text:
+            continue
+        options.append((text, build_lines(ch)))
+
+    if not options:
+        return
+
+    if len(options) == 1:
+        choice_idx = 0
+        title, lines = options[0]
+        print(f"**{title}**")
+        for line in lines:
+            print(f"• {line}")
+        confirm = input('Proceed? (y/n) ').strip().lower()
+        if not confirm.startswith('y'):
+            return
+    else:
+        prompts = [(title, lines) for title, lines in options[:2]]
+        choice = choose_numbered(prompts[0], prompts[1])
+        choice_idx = 0 if choice == '1' else 1
+
+    chosen = card.choices[choice_idx]
+    roll = chosen.get('RollSuccess', 0)
+    success = chosen.get('Success', {})
+    failure = chosen.get('Failure', {})
+
+    for player in players:
+        if roll and isinstance(roll, int) and roll > 0:
+            roll_val = player.roll_d6()
+            if roll_val >= roll:
+                game.apply_effect_dict(success, player)
+            else:
+                game.apply_effect_dict(failure, player)
+        else:
+            game.apply_effect_dict(success, player)
+
+
 @dataclass
 class Item:
     name: str
@@ -371,6 +449,7 @@ class FinalGateCard:
     """Cards used during the Final Gate sequence."""
     name: str
     description: str
+    choices: List[Dict[str, object]] = field(default_factory=list)
     effect: Optional[Callable[['Game', Iterable[Player]], None]] = None
     effect_text: str = ''
 
@@ -380,6 +459,8 @@ class FinalGateCard:
         if self.effect_text:
             for p in players:
                 game.apply_effect_text(self.effect_text, p)
+        if self.choices:
+            final_data_encounter(self, game, players)
 
 def mirror_of_broken_memories(game: 'Game', player: Player):
     player.apply_effect(game, sanity=-1)
@@ -1674,7 +1755,8 @@ class Game:
                     FinalGateCard(
                         name=row['Name'],
                         description=row['Description'],
-                        effect_text=row['Effect']
+                        choices=row.get('Choices', []),
+                        effect_text=row.get('Effect', '')
                     )
                 )
         random.shuffle(deck)
