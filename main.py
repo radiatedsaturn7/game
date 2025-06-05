@@ -89,8 +89,19 @@ def print_item_gain(item: 'Item'):
         print(f"Effect: {item.effect_text}")
 
 
-def choose_numbered(option1: tuple[str, List[str]], option2: tuple[str, List[str]]) -> str:
-    """Present two numbered options with bullet details and return the choice."""
+def choose_numbered(
+        
+    option1: tuple[str, List[str]],
+    option2: tuple[str, List[str]],
+    game: Optional['Game'] = None,
+    player: Optional['Player'] = None,
+) -> str:
+    """Present two numbered options with bullet details and return the choice.
+
+    The prompt also accepts ``lookup <name>`` to view card or item details and
+    ``use <item>`` to activate an item before deciding when a ``game`` and
+    ``player`` are provided.
+    """
     print("**Choose an option:**")
     print()
     print(f"**1)** {option1[0]}")
@@ -101,7 +112,23 @@ def choose_numbered(option1: tuple[str, List[str]], option2: tuple[str, List[str
     for line in option2[1]:
         print(f"• {line}")
     print()
-    return input('Choose 1 or 2: ').strip()
+    while True:
+        resp = input('Choose 1 or 2: ').strip().lower()
+        if resp in ('1', '2'):
+            return resp
+        if resp.startswith('lookup') and game:
+            query = resp[len('lookup'):].strip()
+            if query:
+                game.perform_lookup('auto', query)
+            continue
+        if resp.startswith('use') and game and player:
+            item_name = resp[len('use'):].strip()
+            if item_name:
+                tile = game.board.tile_at(player.x, player.y)
+                location = tile.location.name if tile.location else ''
+                player.use_item(game, item_name, location)
+            continue
+        print("Invalid input. Type '1' or '2', or use 'lookup <name>' or 'use <item>'")
 
 
 def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
@@ -168,7 +195,7 @@ def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
             return
     else:
         prompts = [(title, lines) for title, lines in options[:2]]
-        choice = choose_numbered(prompts[0], prompts[1])
+        choice = choose_numbered(prompts[0], prompts[1], game, player)
         choice_idx = 0 if choice == '1' else 1
 
     chosen = card.choices[choice_idx]
@@ -246,7 +273,8 @@ def final_data_encounter(card: 'FinalGateCard', game: 'Game', players: Iterable[
             return
     else:
         prompts = [(title, lines) for title, lines in options[:2]]
-        choice = choose_numbered(prompts[0], prompts[1])
+        first_player = next(iter(players))
+        choice = choose_numbered(prompts[0], prompts[1], game, first_player)
         choice_idx = 0 if choice == '1' else 1
 
     chosen = card.choices[choice_idx]
@@ -587,6 +615,8 @@ def mirror_of_versions(game: 'Game', player: Player):
                 "Gain **Shard of What Might've Been** — adds **+1 to one future roll**.",
             ],
         ),
+        game,
+        player,
     )
     if choice == '2':
         player.apply_effect(game, hope=-1)
@@ -618,6 +648,8 @@ def vending_machine(game: 'Game', player: Player):
                 'Otherwise, lose **-2 Hope**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '2':
         roll = player.roll_d6()
@@ -651,6 +683,8 @@ def whispering_socket(game: 'Game', player: Player):
                 'Gain **Frayed Neural Wire**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -680,6 +714,8 @@ def pit_of_almosts(game: 'Game', player: Player):
                 'Lose **-1 Hope**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -707,6 +743,8 @@ def unfinished_goodbyes(game: 'Game', player: Player):
                 'Lose **-1 Hope**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -735,6 +773,8 @@ def bureaucratic_maw(game: 'Game', player: Player):
                 'Otherwise, lose **-2 Hope**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         player.apply_effect(game, hope=-1)
@@ -765,6 +805,8 @@ def data_swamp(game: 'Game', player: Player):
                 'Otherwise, lose **-1 Sanity** and **-1 Hope**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         player.apply_effect(game, sanity=-1)
@@ -796,6 +838,8 @@ def flickering_exit_first(game: 'Game', player: Player):
                 'Gain **+1 Sanity**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -834,6 +878,8 @@ def crawlspace_unfinished(game: 'Game', player: Player):
                 'Gain **Ashes of Ambition**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -863,6 +909,8 @@ def mouth_of_machine(game: 'Game', player: Player):
                 'Lose **-1 Hope** and gain **+1 Sanity**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -890,6 +938,8 @@ def library_lost_causes(game: 'Game', player: Player):
                 'No effect.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -914,6 +964,8 @@ def looping_corridor(game: 'Game', player: Player):
                 'Otherwise, lose **-1 Sanity**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         game.modify_hope(-2)
@@ -943,6 +995,8 @@ def apology_room(game: 'Game', player: Player):
                 'Otherwise, nothing happens.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         player.apply_effect(game, sanity=-1)
@@ -970,6 +1024,8 @@ def room_you_forgot(game: 'Game', player: Player):
                 'If encountered again, lose **-1 Hope**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -1011,6 +1067,8 @@ def graveyard_yesterdays(game: 'Game', player: Player):
                 'Otherwise, lose **-1 Sanity**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         player.apply_effect(game, hope=-1)
@@ -1041,6 +1099,8 @@ def elevator_down(game: 'Game', player: Player):
                 'Gain **Rusty Override Key** if available.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -1080,6 +1140,8 @@ def hall_digital_ghosts(game: 'Game', player: Player):
                 'Gain **Offline Token** if available.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -1118,6 +1180,8 @@ def snackless_breakroom(game: 'Game', player: Player):
                 'Gain **+1 Hope**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -1144,6 +1208,8 @@ def discarded_room(game: 'Game', player: Player):
                 'Otherwise, lose **-1 Sanity**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         player.apply_effect(game, sanity=1)
@@ -1188,6 +1254,8 @@ def void_restroom(game: 'Game', player: Player):
                 'Lose **-1 Sanity**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -1216,6 +1284,8 @@ def room_no_door(game: 'Game', player: Player):
                 'Otherwise, lose **-2 Sanity**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         game.modify_hope(-1)
@@ -1246,6 +1316,8 @@ def archive_everything(game: 'Game', player: Player):
                 'Gain **Ashen Archive** if available.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
@@ -1276,6 +1348,8 @@ def inherited_guilt(game: 'Game', player: Player):
                 'Otherwise, nothing happens.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         player.apply_effect(game, sanity=-2)
@@ -1302,6 +1376,8 @@ def flickering_choir(game: 'Game', player: Player):
                 'Lose **-1 Hope** and gain **+1 Sanity**.',
             ],
         ),
+        game,
+        player,
     )
     if choice == '1':
         roll = player.roll_d6()
