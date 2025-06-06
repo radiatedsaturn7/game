@@ -646,6 +646,146 @@ class CardTests(unittest.TestCase):
             card.apply(game, player, True)
         self.assertEqual(player.sanity, 9)
 
+    def test_room_no_door_wait(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the room with no door']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Exit Sketch'))
+        self.assertEqual(game.hope, 9)
+
+    def test_room_no_door_panic_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the room with no door']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=5):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 11)
+
+    def test_room_no_door_panic_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the room with no door']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=3):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 8)
+
+    def test_archive_browse_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the archive of everything that didn\u2019t work']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=5):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 11)
+
+    def test_archive_browse_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the archive of everything that didn\u2019t work']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 9)
+
+    def test_archive_burn_it_all(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the archive of everything that didn\u2019t work']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 8)
+        self.assertTrue(player.has_item('Ashen Archive'))
+
+    def test_inherited_guilt_shoulder_it(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the hall of inherited guilt']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 8)
+        self.assertTrue(player.has_item('Burden Token'))
+
+    def test_inherited_guilt_refuse_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the hall of inherited guilt']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=5):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 10)
+
+    def test_inherited_guilt_refuse_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the hall of inherited guilt']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 9)
+
+    def test_flickering_choir_sing_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the flickering choir']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=6):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 12)
+
+    def test_flickering_choir_sing_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the flickering choir']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=3):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 9)
+
+    def test_flickering_choir_cover_ears(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the flickering choir']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 9)
+        self.assertEqual(player.sanity, 11)
+
+    def test_paper_cathedral_effect(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the paper cathedral']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 11)
+
+    def test_gasping_gate_effect(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the gasping gate']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 9)
+
+    def test_teeth_in_the_floor_effect(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['teeth in the floor']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertEqual(player.health, 8)
+
+    def test_clockmakers_gallows_effect(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup["the clockmaker\u2019s gallows"]
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 11)
+
     def test_lookup_discarded_room_effect(self):
         game = self._new_game()
         with main.CaptureBuffer() as cap:
@@ -675,6 +815,54 @@ class CardTests(unittest.TestCase):
         with main.CaptureBuffer() as cap:
             game.perform_lookup('auto', 'the elevator that only goes down')
         self.assertIn('ride: roll 1d6', cap.getvalue().lower())
+
+    def test_lookup_room_no_door_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the room with no door')
+        self.assertIn('wait: -1 hope', cap.getvalue().lower())
+
+    def test_lookup_archive_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the archive of everything that didn\u2019t work')
+        self.assertIn('browse: roll 1d6', cap.getvalue().lower())
+
+    def test_lookup_inherited_guilt_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the hall of inherited guilt')
+        self.assertIn('shoulder it: -2 sanity', cap.getvalue().lower())
+
+    def test_lookup_flickering_choir_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the flickering choir')
+        self.assertIn('sing back: roll 1d6', cap.getvalue().lower())
+
+    def test_lookup_paper_cathedral_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the paper cathedral')
+        self.assertIn('+1 sanity', cap.getvalue().lower())
+
+    def test_lookup_gasping_gate_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the gasping gate')
+        self.assertIn('-1 hope', cap.getvalue().lower())
+
+    def test_lookup_teeth_in_the_floor_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'teeth in the floor')
+        self.assertIn('-2 health', cap.getvalue().lower())
+
+    def test_lookup_clockmakers_gallows_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the clockmaker\u2019s gallows')
+        self.assertIn('+1 sanity', cap.getvalue().lower())
 
     def test_description_parses_missing_stats(self):
         game = self._new_game()

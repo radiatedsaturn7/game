@@ -1405,6 +1405,10 @@ class Game:
                     'the laughing statue': {'immediate': laughing_statue},
                     'echo well': {'immediate': echo_well},
                     'beneath the clockface': {'immediate': beneath_clockface},
+                    'the room with no door': {'immediate': room_no_door},
+                    'the archive of everything that didn\u2019t work': {'immediate': archive_everything},
+                    'the hall of inherited guilt': {'immediate': inherited_guilt},
+                    'the flickering choir': {'immediate': flickering_choir},
                 }
                 effect_texts = {
                     'fork in the real': 'Split: +1 Hope and cannot share a tile until changed; burn: -1 Hope',
@@ -1420,6 +1424,14 @@ class Game:
                     'the graveyard of yesterdays': 'Mourn: -1 Hope and gain Memory Token; Bury: roll 1d6 (5+: +1 Sanity, else -1 Sanity)',
                     'the elevator that only goes down': 'Ride: roll 1d6 (6:+2 Sanity, else -1 Sanity and -1 Hope); Stairs: -1 Sanity, gain Rusty Override Key',
                     'the void restroom': 'Use the stall: roll 1d6 (4+: +1 Sanity, else -1 Hope); Hold it: -1 Sanity',
+                    'the room with no door': 'Wait: -1 Hope and gain Exit Sketch; Panic: roll 1d6 (5+: +1 Hope, else -2 Sanity)',
+                    'the archive of everything that didn\u2019t work': 'Browse: roll 1d6 (5+: +1 Sanity, else -1 Sanity); Burn: -2 Hope and gain Ashen Archive',
+                    'the hall of inherited guilt': 'Shoulder it: -2 Sanity and gain Burden Token; Refuse: roll 1d6 (1-3:-1 Hope)',
+                    'the flickering choir': 'Sing back: roll 1d6 (6:+2 Sanity, else -1 Sanity); Cover ears: -1 Hope, +1 Sanity',
+                    'the paper cathedral': '+1 Sanity',
+                    'the gasping gate': '-1 Hope; reveal 1 tile',
+                    'teeth in the floor': '-2 Health',
+                    'the clockmaker\u2019s gallows': '+1 Sanity',
                 }
                 key = card.name.lower()
                 if key in mapping:

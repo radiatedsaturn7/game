@@ -28,14 +28,14 @@
 - [x] Review card: The Applause Trap
 - [x] Review card: The Compromise Engine
 - [x] Review card: The Void Restroom
-- [ ] Review card: The Room with No Door
-- [ ] Review card: The Archive of Everything That Didn’t Work
-- [ ] Review card: The Hall of Inherited Guilt
-- [ ] Review card: The Flickering Choir
-- [ ] Review card: The Paper Cathedral
-- [ ] Review card: The Gasping Gate
-- [ ] Review card: Teeth in the Floor
-- [ ] Review card: The Clockmaker’s Gallows
+- [x] Review card: The Room with No Door
+- [x] Review card: The Archive of Everything That Didn’t Work
+- [x] Review card: The Hall of Inherited Guilt
+- [x] Review card: The Flickering Choir
+- [x] Review card: The Paper Cathedral
+- [x] Review card: The Gasping Gate
+- [x] Review card: Teeth in the Floor
+- [x] Review card: The Clockmaker’s Gallows
 - [ ] Review card: Gallery of Self-Doubt
 - [ ] Review card: The Mourning Closet
 - [ ] Review card: The Blood-Slick Mirror
