@@ -190,8 +190,23 @@ def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
         print(f"**{title}**")
         for line in lines:
             print(f"• {line}")
-        confirm = input('Proceed? (y/n) ').strip().lower()
-        if not confirm.startswith('y'):
+        while True:
+            confirm = input('Proceed? (y/n) ').strip().lower()
+            if confirm and (confirm[0] in ('y', '1')):
+                break
+            if confirm.startswith('lookup') and game:
+                query = confirm[len('lookup'):].strip()
+                if query:
+                    game.perform_lookup('auto', query)
+                continue
+            if confirm.startswith('use') and game and player:
+                item_name = confirm[len('use'):].strip()
+                if item_name:
+                    tile = game.board.tile_at(player.x, player.y)
+                    location = tile.location.name if tile.location else ''
+                    player.use_item(game, item_name, location)
+                continue
+            # treat any other input as declining the option
             return
     else:
         prompts = [(title, lines) for title, lines in options[:2]]
@@ -268,8 +283,26 @@ def final_data_encounter(card: 'FinalGateCard', game: 'Game', players: Iterable[
         print(f"**{title}**")
         for line in lines:
             print(f"• {line}")
-        confirm = input('Proceed? (y/n) ').strip().lower()
-        if not confirm.startswith('y'):
+        while True:
+            confirm = input('Proceed? (y/n) ').strip().lower()
+            if confirm and (confirm[0] in ('y', '1')):
+                break
+            if confirm.startswith('lookup'):
+                query = confirm[len('lookup'):].strip()
+                if query:
+                    game.perform_lookup('auto', query)
+                continue
+            if confirm.startswith('use'):
+                item_name = confirm[len('use'):].strip()
+                if item_name:
+                    location = ''
+                    if players:
+                        first = next(iter(players))
+                        tile = game.board.tile_at(first.x, first.y)
+                        location = tile.location.name if tile.location else ''
+                        first.use_item(game, item_name, location)
+                continue
+            # treat any other input as declining the option
             return
     else:
         prompts = [(title, lines) for title, lines in options[:2]]

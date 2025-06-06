@@ -78,6 +78,14 @@ class CardTests(unittest.TestCase):
             over, _ = game.handle_tile(player, 'down')
         self.assertTrue(over)
 
+    def test_single_choice_item_gain(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the apology room']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Echo of Closure'))
+
 
 def json_names(filename):
     import json
