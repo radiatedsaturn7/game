@@ -796,7 +796,8 @@
     "Description": "Every painting is of you, flinching.",
     "Effect": {
       "Description": "-1 Hope, +1 Sanity",
-      "Hope": -1
+      "Hope": -1,
+      "Sanity": 1
     }
   },
   {
@@ -816,7 +817,8 @@
     "Description": "Reflections bleed truths you didn\u2019t say.",
     "Effect": {
       "Description": "-1 Sanity, +1 Hope",
-      "Sanity": -1
+      "Sanity": -1,
+      "Hope": 1
     }
   },
   {
@@ -825,7 +827,8 @@
     "Description": "It welcomes you with arms full of nothing.",
     "Effect": {
       "Description": "+1 Health, lose 1 Hope",
-      "Health": 1
+      "Health": 1,
+      "Hope": -1
     }
   },
   {
