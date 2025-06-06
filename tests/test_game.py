@@ -86,6 +86,18 @@ class CardTests(unittest.TestCase):
             card.apply(game, player, True)
         self.assertTrue(player.has_item('Echo of Closure'))
 
+    def test_lookup_with_space_during_move(self):
+        game = self._new_game()
+        player = game.players[0]
+        actions = iter(['look up salted trauma chips', 'end'])
+
+        def fake_input(prompt=''):
+            return next(actions)
+
+        with patch('builtins.input', fake_input), patch('os.system', lambda *_: None), main.CaptureBuffer() as cap:
+            game.player_turn(player)
+        self.assertIn('ITEM: Salted Trauma Chips', cap.getvalue())
+
 
 def json_names(filename):
     import json

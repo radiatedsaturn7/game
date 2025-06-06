@@ -89,8 +89,36 @@ def print_item_gain(item: 'Item'):
         print(f"Effect: {item.effect_text}")
 
 
+def confirm_prompt(
+    prompt: str,
+    game: Optional['Game'] = None,
+    player: Optional['Player'] = None,
+) -> bool:
+    """Prompt the user for yes/no while allowing lookups and item use."""
+    while True:
+        resp = input(prompt).strip().lower()
+        if resp and resp[0] in ('y', '1'):
+            return True
+        if (resp.startswith('lookup') or resp.startswith('look up')) and game:
+            if resp.startswith('lookup'):
+                query = resp[len('lookup'):].strip()
+            else:
+                query = resp[len('look up'):].strip()
+            if query:
+                game.perform_lookup('auto', query)
+            continue
+        if resp.startswith('use') and game and player:
+            item_name = resp[len('use'):].strip()
+            if item_name:
+                tile = game.board.tile_at(player.x, player.y)
+                location = tile.location.name if tile.location else ''
+                player.use_item(game, item_name, location)
+            continue
+        return False
+
+
 def choose_numbered(
-        
+
     option1: tuple[str, List[str]],
     option2: tuple[str, List[str]],
     game: Optional['Game'] = None,
@@ -116,8 +144,11 @@ def choose_numbered(
         resp = input('Choose 1 or 2: ').strip().lower()
         if resp in ('1', '2'):
             return resp
-        if resp.startswith('lookup') and game:
-            query = resp[len('lookup'):].strip()
+        if (resp.startswith('lookup') or resp.startswith('look up')) and game:
+            if resp.startswith('lookup'):
+                query = resp[len('lookup'):].strip()
+            else:
+                query = resp[len('look up'):].strip()
             if query:
                 game.perform_lookup('auto', query)
             continue
@@ -190,23 +221,7 @@ def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
         print(f"**{title}**")
         for line in lines:
             print(f"• {line}")
-        while True:
-            confirm = input('Proceed? (y/n) ').strip().lower()
-            if confirm and (confirm[0] in ('y', '1')):
-                break
-            if confirm.startswith('lookup') and game:
-                query = confirm[len('lookup'):].strip()
-                if query:
-                    game.perform_lookup('auto', query)
-                continue
-            if confirm.startswith('use') and game and player:
-                item_name = confirm[len('use'):].strip()
-                if item_name:
-                    tile = game.board.tile_at(player.x, player.y)
-                    location = tile.location.name if tile.location else ''
-                    player.use_item(game, item_name, location)
-                continue
-            # treat any other input as declining the option
+        if not confirm_prompt('Proceed? (y/n) ', game, player):
             return
     else:
         prompts = [(title, lines) for title, lines in options[:2]]
@@ -283,26 +298,8 @@ def final_data_encounter(card: 'FinalGateCard', game: 'Game', players: Iterable[
         print(f"**{title}**")
         for line in lines:
             print(f"• {line}")
-        while True:
-            confirm = input('Proceed? (y/n) ').strip().lower()
-            if confirm and (confirm[0] in ('y', '1')):
-                break
-            if confirm.startswith('lookup'):
-                query = confirm[len('lookup'):].strip()
-                if query:
-                    game.perform_lookup('auto', query)
-                continue
-            if confirm.startswith('use'):
-                item_name = confirm[len('use'):].strip()
-                if item_name:
-                    location = ''
-                    if players:
-                        first = next(iter(players))
-                        tile = game.board.tile_at(first.x, first.y)
-                        location = tile.location.name if tile.location else ''
-                        first.use_item(game, item_name, location)
-                continue
-            # treat any other input as declining the option
+        first = next(iter(players)) if players else None
+        if not confirm_prompt('Proceed? (y/n) ', game, first):
             return
     else:
         prompts = [(title, lines) for title, lines in options[:2]]
@@ -553,8 +550,7 @@ def revisit_plus_hope(game: 'Game', player: Player):
 # --- New Encounter Effects ---
 def crooked_bell_first(game: 'Game', player: Player):
     if player.inventory:
-        drop = input('Drop an item to gain 1 Hope? (y/n) ').strip().lower()
-        if drop == 'y':
+        if confirm_prompt('Drop an item to gain 1 Hope? (y/n) ', game, player):
             lost = player.inventory.pop(0)
             print(f'You drop {lost.name}.')
             player.apply_effect(game, hope=1)
@@ -567,8 +563,7 @@ def crooked_bell_revisit(game: 'Game', player: Player):
 
 def hungering_gate_first(game: 'Game', player: Player):
     if player.inventory:
-        feed = input('Feed an item to the Gate? (y/n) ').strip().lower()
-        if feed == 'y':
+        if confirm_prompt('Feed an item to the Gate? (y/n) ', game, player):
             lost = player.inventory.pop(0)
             print(f'The Gate devours {lost.name}.')
             return
@@ -1978,8 +1973,7 @@ class Game:
 
     def run_final_threshold(self) -> bool:
         print('You stand at the Final Threshold.')
-        choice = input('Sacrifice one player to let the other escape? (y/n) ').strip().lower()
-        if choice == 'y':
+        if confirm_prompt('Sacrifice one player to let the other escape? (y/n) ', self):
             names = '/'.join(p.name for p in self.players)
             victim = input(f'Who will be sacrificed? ({names}) ').strip().lower()
             for p in self.players:
@@ -2347,13 +2341,16 @@ class Game:
             if action.startswith('discovered'):
                 self.show_discovered_locations()
                 continue
-            if action.startswith('lookup'):
+            if action.startswith('lookup') or action.startswith('look up'):
                 parts = action.split(maxsplit=2)
                 if len(parts) >= 2:
                     if len(parts) >= 3 and parts[1] in ('encounter', 'item', 'location', 'card'):
                         self.perform_lookup(parts[1], parts[2])
                     else:
-                        query = action[len('lookup'):].strip()
+                        if action.startswith('lookup'):
+                            query = action[len('lookup'):].strip()
+                        else:
+                            query = action[len('look up'):].strip()
                         self.perform_lookup('auto', query)
                 else:
                     print('Usage: lookup <name>')
