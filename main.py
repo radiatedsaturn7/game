@@ -1971,6 +1971,24 @@ class Game:
                     player.remove_item(reg.name)
                 else:
                     player.add_item(Item(reg.name, reg.description, effect_text=reg.effect_text, use_effect=reg.use_effect))
+        # Parse additional instructions from the description
+        if desc:
+            lower = desc.lower()
+            reveal_adjacent = re.search(r'reveal (?:a|one|1) (?:nearby|adjacent) tile', lower)
+            if reveal_adjacent:
+                print('A nearby tile is revealed...')
+                self.reveal_adjacent_tiles(player)
+            else:
+                m = re.search(r'reveal (\d+) tile', lower)
+                if m:
+                    count = int(m.group(1))
+                    self.reveal_random_tiles(count)
+                elif 'reveal a tile' in lower or 'reveal 1 tile' in lower:
+                    self.reveal_random_tiles(1)
+            if 'lose 1 item' in lower or 'discard one item' in lower:
+                if player.inventory:
+                    lost = player.inventory.pop(0)
+                    print(f'{player.name} loses {lost.name}')
 
     def format_effect_short(self, effect: Dict[str, object]) -> str:
         parts: List[str] = []
