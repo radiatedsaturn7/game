@@ -360,6 +360,7 @@ class Player:
     double_next: bool = False
     cancel_digital_next: bool = False
     cancel_next_effect: bool = False
+    recently_lost_item: Optional[Item] = None
 
     def apply_effect(
         self,
@@ -403,10 +404,25 @@ class Player:
         print_item_gain(item)
         return True
 
+    def lose_item(self, index: int = 0) -> Optional[Item]:
+        if not self.inventory:
+            return None
+        if self.loss_shield:
+            print('The Core of Something Real glows, preventing your losses.')
+            self.loss_shield = False
+            return None
+        lost = self.inventory.pop(index)
+        self.recently_lost_item = lost
+        return lost
+
     def remove_item(self, item_name: str) -> bool:
         for i, it in enumerate(self.inventory):
             if it.name.lower() == item_name.lower():
-                del self.inventory[i]
+                if self.loss_shield:
+                    print('The Core of Something Real glows, preventing your losses.')
+                    self.loss_shield = False
+                    return False
+                self.recently_lost_item = self.inventory.pop(i)
                 return True
         return False
 
@@ -557,8 +573,9 @@ def revisit_plus_hope(game: 'Game', player: Player):
 def crooked_bell_first(game: 'Game', player: Player):
     if player.inventory:
         if confirm_prompt('Drop an item to gain 1 Hope? (y/n) ', game, player):
-            lost = player.inventory.pop(0)
-            print(f'You drop {lost.name}.')
+            lost = player.lose_item()
+            if lost:
+                print(f'You drop {lost.name}.')
             player.apply_effect(game, hope=1)
             return
     player.apply_effect(game, sanity=-1)
@@ -570,8 +587,9 @@ def crooked_bell_revisit(game: 'Game', player: Player):
 def hungering_gate_first(game: 'Game', player: Player):
     if player.inventory:
         if confirm_prompt('Feed an item to the Gate? (y/n) ', game, player):
-            lost = player.inventory.pop(0)
-            print(f'The Gate devours {lost.name}.')
+            lost = player.lose_item()
+            if lost:
+                print(f'The Gate devours {lost.name}.')
             return
     player.apply_effect(game, health=-2)
 
@@ -1531,8 +1549,14 @@ def use_ashes(game: 'Game', player: Player, location: str) -> bool:
     return True
 
 def use_core(game: 'Game', player: Player, location: str) -> bool:
-    player.loss_shield = True
-    print('Reality solidifies around you, guarding against loss.')
+    if player.recently_lost_item:
+        item = player.recently_lost_item
+        player.recently_lost_item = None
+        player.add_item(item)
+        print(f'Reality rewinds, restoring your {item.name}.')
+    else:
+        player.loss_shield = True
+        print('Reality solidifies around you, guarding against loss.')
     return True
 
 def use_echo_closure(game: 'Game', player: Player, location: str) -> bool:
@@ -1944,8 +1968,9 @@ class Game:
                 self.reveal_random_tiles(1)
         if 'lose 1 item' in lower or 'discard one item' in lower:
             if player.inventory:
-                lost = player.inventory.pop(0)
-                print(f'{player.name} loses {lost.name}')
+                lost = player.lose_item()
+                if lost:
+                    print(f'{player.name} loses {lost.name}')
 
     def apply_effect_dict(self, effect: Dict[str, object], player: Player):
         if not effect:
@@ -1968,7 +1993,11 @@ class Game:
             reg = self.item_registry.get(item.lower())
             if reg:
                 if effect.get('ItemAddOrRemove', 'add') == 'remove':
-                    player.remove_item(reg.name)
+                    removed = player.remove_item(reg.name)
+                    if removed:
+                        print(f'{player.name} loses {reg.name}')
+                    else:
+                        print(f'The Core of Something Real protects your {reg.name}.')
                 else:
                     player.add_item(Item(reg.name, reg.description, effect_text=reg.effect_text, use_effect=reg.use_effect))
         # Parse additional instructions from the description
@@ -1987,8 +2016,9 @@ class Game:
                     self.reveal_random_tiles(1)
             if 'lose 1 item' in lower or 'discard one item' in lower:
                 if player.inventory:
-                    lost = player.inventory.pop(0)
-                    print(f'{player.name} loses {lost.name}')
+                    lost = player.lose_item()
+                    if lost:
+                        print(f'{player.name} loses {lost.name}')
 
     def format_effect_short(self, effect: Dict[str, object]) -> str:
         parts: List[str] = []

@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 import random
 import main
+from main import Item
 
 # Ensure this test passes for all cards before submitting a pull request.
 
@@ -106,6 +107,20 @@ class CardTests(unittest.TestCase):
         player.use_item(game, 'oracle wick', '')
         game.apply_effect_dict({'Description': 'hit', 'Health': -2}, player)
         self.assertEqual(player.health, 10)
+
+    def test_core_recovers_lost_item(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the casket of kindness']
+        core = game.item_registry['core of something real']
+        tag = game.item_registry['blank tag']
+        player.add_item(Item(tag.name, tag.description, effect_text=tag.effect_text, use_effect=tag.use_effect))
+        player.add_item(Item(core.name, core.description, effect_text=core.effect_text, use_effect=core.use_effect))
+        card.apply(game, player, True)
+        self.assertFalse(player.has_item('Blank Tag'))
+        player.use_item(game, 'core of something real', '')
+        self.assertTrue(player.has_item('Blank Tag'))
+        self.assertFalse(player.has_item('Core of Something Real'))
 
     def test_lookup_immediate_effect(self):
         game = self._new_game()
