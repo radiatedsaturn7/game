@@ -108,6 +108,26 @@ class CardTests(unittest.TestCase):
         game.apply_effect_dict({'Description': 'hit', 'Health': -2}, player)
         self.assertEqual(player.health, 10)
 
+    def test_wax_crown_added_and_toggle(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['throne of melted faces']
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Wax Crown'))
+        start_hope = player.hope
+        start_sanity = player.sanity
+        player.use_item(game, 'wax crown', '')
+        self.assertTrue(player.wearing_wax_crown)
+        self.assertEqual(player.hope, start_hope + 1)
+        self.assertEqual(player.sanity, start_sanity - 1)
+        self.assertTrue(player.has_item('Wax Crown'))
+        player.use_item(game, 'wax crown', '')
+        self.assertFalse(player.wearing_wax_crown)
+        self.assertEqual(player.hope, start_hope)
+        self.assertEqual(player.sanity, start_sanity)
+        self.assertTrue(player.has_item('Wax Crown'))
+
     def test_core_recovers_lost_item(self):
         game = self._new_game()
         player = game.players[0]

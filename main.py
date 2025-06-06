@@ -333,12 +333,14 @@ class Item:
     def __str__(self) -> str:
         return self.name
 
-    def apply(self, game: 'Game', player: 'Player', location: str):
+    def apply(self, game: 'Game', player: 'Player', location: str) -> bool:
+        """Apply the item's effect and return True if it should be consumed."""
         if self.use_effect:
-            if self.use_effect(game, player, location):
-                return
+            result = self.use_effect(game, player, location)
+            return bool(result)
         if self.effect_text:
             game.apply_effect_text(self.effect_text, player)
+        return True
 
 @dataclass
 class Player:
@@ -360,6 +362,7 @@ class Player:
     double_next: bool = False
     cancel_digital_next: bool = False
     cancel_next_effect: bool = False
+    wearing_wax_crown: bool = False
     recently_lost_item: Optional[Item] = None
 
     def apply_effect(
@@ -435,8 +438,9 @@ class Player:
             return
         for i, it in enumerate(self.inventory):
             if it.name.lower() == item_name.lower():
-                it.apply(game, self, location)
-                del self.inventory[i]
+                consume = it.apply(game, self, location)
+                if consume:
+                    del self.inventory[i]
                 return
         print(f"{self.name} does not have {item_name}.")
 
@@ -1611,6 +1615,17 @@ def use_refusal_bolt(game: 'Game', player: Player, location: str) -> bool:
     print('You load the bolt, ready to purposely fail the next encounter.')
     return True
 
+def use_wax_crown(game: 'Game', player: Player, location: str) -> bool:
+    if player.wearing_wax_crown:
+        player.wearing_wax_crown = False
+        print('You remove the Wax Crown.')
+        player.apply_effect(game, hope=-1, sanity=1)
+    else:
+        player.wearing_wax_crown = True
+        print('You place the Wax Crown upon your head.')
+        player.apply_effect(game, hope=1, sanity=-1)
+    return False
+
 def use_oracle_wick(game: 'Game', player: Player, location: str) -> bool:
     player.cancel_next_effect = True
     print('The wick ignites, ready to nullify the next effect.')
@@ -1856,6 +1871,8 @@ class Game:
                     item.use_effect = use_chips
                 if item.name == 'Frayed Neural Wire':
                     item.use_effect = use_neural_wire
+                if item.name == 'Wax Crown':
+                    item.use_effect = use_wax_crown
                 if item.name == 'Oracle Wick':
                     item.use_effect = use_oracle_wick
                 if item.name == 'Glimmer of What Could Be':
@@ -2002,7 +2019,11 @@ class Game:
         )
         item = effect.get('Item')
         if item:
-            reg = self.item_registry.get(item.lower())
+            lookup = item.lower()
+            reg = self.item_registry.get(lookup)
+            if not reg:
+                base = re.split(r'[,(]', item)[0].strip().lower()
+                reg = self.item_registry.get(base)
             if reg:
                 if effect.get('ItemAddOrRemove', 'add') == 'remove':
                     removed = player.remove_item(reg.name)
