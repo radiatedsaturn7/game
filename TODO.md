@@ -36,10 +36,10 @@
 - [x] Review card: The Gasping Gate
 - [x] Review card: Teeth in the Floor
 - [x] Review card: The Clockmaker’s Gallows
-- [ ] Review card: Gallery of Self-Doubt
-- [ ] Review card: The Mourning Closet
-- [ ] Review card: The Blood-Slick Mirror
-- [ ] Review card: The Hollow Host
+- [x] Review card: Gallery of Self-Doubt
+- [x] Review card: The Mourning Closet
+- [x] Review card: The Blood-Slick Mirror
+- [x] Review card: The Hollow Host
 - [ ] Review card: The Smiling Husk
 - [ ] Review card: The Weeping Ledger
 - [ ] Review card: The Glass Colossus
