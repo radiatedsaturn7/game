@@ -1980,13 +1980,25 @@ class Game:
             player.cancel_next_effect = False
             return
         desc = effect.get('Description', '')
+        health = effect.get('Health', 0)
+        hope = effect.get('Hope', 0)
+        sanity = effect.get('Sanity', 0)
         if desc:
             print(desc)
+            lower = desc.lower()
+            for val, attr in re.findall(r'([+-]?\d+)\s*(health|sanity|hope)', lower):
+                n = int(val)
+                if attr == 'health' and 'Health' not in effect:
+                    health += n
+                elif attr == 'sanity' and 'Sanity' not in effect:
+                    sanity += n
+                elif attr == 'hope' and 'Hope' not in effect:
+                    hope += n
         player.apply_effect(
             self,
-            health=effect.get('Health', 0),
-            hope=effect.get('Hope', 0),
-            sanity=effect.get('Sanity', 0),
+            health=health,
+            hope=hope,
+            sanity=sanity,
         )
         item = effect.get('Item')
         if item:

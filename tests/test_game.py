@@ -134,6 +134,14 @@ class CardTests(unittest.TestCase):
             game.perform_lookup('auto', 'the silent ward')
         self.assertIn('wait: -1 hope', cap.getvalue().lower())
 
+    def test_description_parses_missing_stats(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the corridor of crooked steps']
+        card.apply(game, player, True)
+        self.assertEqual(game.hope, 11)
+        self.assertEqual(player.health, 9)
+
 
 def json_names(filename):
     import json
