@@ -1,4 +1,84 @@
 - [x] Extend Oracle Wick cancellation to cover effects that modify hope via `Game.modify_hope` and item losses via `Player.lose_item`.
-- [ ] Allow item usage at the Final Threshold by passing a player object to `confirm_prompt`.
+- [x] Allow item usage at the Final Threshold by passing a player object to `confirm_prompt`.
 - [ ] Provide lookup summaries for other scripted encounters such as "The Discarded Room".
 - [ ] Use `confirm_prompt` for the Memory Token reroll question so lookups and item use work there.
+- [ ] Review card: Mirror of Versions
+- [ ] Review card: The Vending Machine of Moral Compromise
+- [ ] Review card: The Whispering Socket
+- [ ] Review card: The Pit of Almosts
+- [ ] Review card: Hall of Unfinished Goodbyes
+- [ ] Review card: Bureaucratic Maw
+- [ ] Review card: The Data Swamp
+- [ ] Review card: The Final Threshold
+- [ ] Review card: The Flickering Exit
+- [ ] Review card: The Crawlspace of Unfinished Projects
+- [ ] Review card: The Mouth of the Machine
+- [ ] Review card: The Library of Lost Causes
+- [ ] Review card: The Looping Corridor
+- [ ] Review card: The Apology Room
+- [ ] Review card: The Room You Forgot
+- [ ] Review card: The Plaza of Forgotten Names
+- [ ] Review card: The Graveyard of Yesterdays
+- [ ] Review card: The Elevator That Only Goes Down
+- [ ] Review card: The Silent Ward
+- [ ] Review card: The Hall of Digital Ghosts
+- [ ] Review card: Fork in the Real
+- [ ] Review card: The Snackless Breakroom
+- [ ] Review card: The Discarded Room
+- [ ] Review card: The Applause Trap
+- [ ] Review card: The Compromise Engine
+- [ ] Review card: The Void Restroom
+- [ ] Review card: The Room with No Door
+- [ ] Review card: The Archive of Everything That Didn’t Work
+- [ ] Review card: The Hall of Inherited Guilt
+- [ ] Review card: The Flickering Choir
+- [ ] Review card: The Paper Cathedral
+- [ ] Review card: The Gasping Gate
+- [ ] Review card: Teeth in the Floor
+- [ ] Review card: The Clockmaker’s Gallows
+- [ ] Review card: Gallery of Self-Doubt
+- [ ] Review card: The Mourning Closet
+- [ ] Review card: The Blood-Slick Mirror
+- [ ] Review card: The Hollow Host
+- [ ] Review card: The Smiling Husk
+- [ ] Review card: The Weeping Ledger
+- [ ] Review card: The Glass Colossus
+- [ ] Review card: The Skeletal Pianist
+- [ ] Review card: Cathedral of Static
+- [ ] Review card: Tower of the Forgotten Signal
+- [ ] Review card: The Chain That Whispers
+- [ ] Review card: The Lantern Maw
+- [ ] Review card: Dagger in the Cradle
+- [ ] Review card: The Rustbone Choir
+- [ ] Review card: Archive of Misremembered Promises
+- [ ] Review card: The Salting Tree
+- [ ] Review card: The Bone Lantern
+- [ ] Review card: The Stillbirth Clock
+- [ ] Review card: The Limbo Hearth
+- [ ] Review card: Altar of Echoed Sins
+- [ ] Review card: The Salt-Tongued Prophet
+- [ ] Review card: The Tarnished Halo
+- [ ] Review card: The Cradle of Static
+- [ ] Review card: The Maw of Sleep
+- [ ] Review card: The Windowless House
+- [ ] Review card: The Hung Verdict
+- [ ] Review card: The Corridor of Crooked Steps
+- [ ] Review card: The Screaming Frame
+- [ ] Review card: The Casket of Kindness
+- [ ] Review card: The Sleeping Choir
+- [ ] Review card: Throne of Melted Faces
+- [ ] Review card: The Hungry Cot
+- [ ] Review card: The Vine of Apologies
+- [ ] Review card: The Bleeding Mask
+- [ ] Review card: The Watcher’s Gallows
+- [ ] Review card: The Garden of Apologies
+- [ ] Review card: The Gutless Choir
+- [ ] Review card: The Lullaby Tomb
+- [ ] Review card: The Rotting Marriage
+- [ ] Review card: The Freezing Prayer
+- [ ] Review card: The Nameless Choir
+- [ ] Review card: The Shattered Stage
+- [ ] Review card: The Puppeted Pilgrim
+- [ ] Review card: The Candle-Melt Oracle
+- [ ] Review card: The Path of Remembered Crimes
+- [ ] Review card: The Machine That Regrets

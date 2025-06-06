@@ -2091,7 +2091,7 @@ class Game:
 
     def run_final_threshold(self) -> bool:
         print('You stand at the Final Threshold.')
-        if confirm_prompt('Sacrifice one player to let the other escape? (y/n) ', self):
+        if confirm_prompt('Sacrifice one player to let the other escape? (y/n) ', self, self.players[0]):
             names = '/'.join(p.name for p in self.players)
             victim = input(f'Who will be sacrificed? ({names}) ').strip().lower()
             for p in self.players:
