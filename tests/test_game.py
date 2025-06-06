@@ -98,6 +98,21 @@ class CardTests(unittest.TestCase):
             game.player_turn(player)
         self.assertIn('ITEM: Salted Trauma Chips', cap.getvalue())
 
+    def test_oracle_wick_cancels_effect(self):
+        game = self._new_game()
+        player = game.players[0]
+        wick = game.item_registry['oracle wick']
+        player.add_item(wick)
+        player.use_item(game, 'oracle wick', '')
+        game.apply_effect_dict({'Description': 'hit', 'Health': -2}, player)
+        self.assertEqual(player.health, 10)
+
+    def test_lookup_immediate_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'fork in the real')
+        self.assertIn('cannot share a tile', cap.getvalue().lower())
+
 
 def json_names(filename):
     import json

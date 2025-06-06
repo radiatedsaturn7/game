@@ -359,6 +359,7 @@ class Player:
     reroll_next: bool = False
     double_next: bool = False
     cancel_digital_next: bool = False
+    cancel_next_effect: bool = False
 
     def apply_effect(
         self,
@@ -368,6 +369,10 @@ class Player:
         sanity: int = 0,
         item: Optional[Item] = None,
     ):
+        if self.cancel_next_effect and (health or hope or sanity or item):
+            print('The Oracle Wick flares, canceling the effect.')
+            self.cancel_next_effect = False
+            return
         if self.loss_shield and (health < 0 or hope < 0 or sanity < 0):
             print('The Core of Something Real glows, preventing your losses.')
             if health < 0:
@@ -439,6 +444,7 @@ class EncounterCard:
     description: str
     effect: Dict[str, object] = field(default_factory=dict)
     choices: List[Dict[str, object]] = field(default_factory=list)
+    effect_text: str = ''
     immediate: Optional[Callable[['Game', Player], None]] = None
     revisit: Optional[Callable[['Game', Player], None]] = None
 
@@ -1581,6 +1587,11 @@ def use_refusal_bolt(game: 'Game', player: Player, location: str) -> bool:
     print('You load the bolt, ready to purposely fail the next encounter.')
     return True
 
+def use_oracle_wick(game: 'Game', player: Player, location: str) -> bool:
+    player.cancel_next_effect = True
+    print('The wick ignites, ready to nullify the next effect.')
+    return True
+
 def use_exit_sketch(game: 'Game', player: Player, location: str) -> bool:
     coords = []
     for x in range(game.board.size):
@@ -1781,11 +1792,16 @@ class Game:
                     'echo well': {'immediate': echo_well},
                     'beneath the clockface': {'immediate': beneath_clockface},
                 }
+                effect_texts = {
+                    'fork in the real': 'Split: +1 Hope and cannot share a tile until changed; burn: -1 Hope',
+                }
                 key = card.name.lower()
                 if key in mapping:
                     info = mapping[key]
                     card.immediate = info.get('immediate')
                     card.revisit = info.get('revisit')
+                if key in effect_texts:
+                    card.effect_text = effect_texts[key]
                 if not card.immediate and card.choices:
                     card.immediate = lambda g, p, c=card: data_encounter(c, g, p)
                 deck.append(card)
@@ -1815,6 +1831,8 @@ class Game:
                     item.use_effect = use_chips
                 if item.name == 'Frayed Neural Wire':
                     item.use_effect = use_neural_wire
+                if item.name == 'Oracle Wick':
+                    item.use_effect = use_oracle_wick
                 if item.name == 'Glimmer of What Could Be':
                     item.use_effect = use_glimmer
                 if item.name == 'Stamp of Legitimacy':
@@ -1887,6 +1905,10 @@ class Game:
     def apply_effect_text(self, text: str, player: Player):
         if not text:
             return
+        if player.cancel_next_effect:
+            print('The Oracle Wick flares, canceling the effect.')
+            player.cancel_next_effect = False
+            return
         print(f"Effect: {text}")
         lower = text.lower()
         for match in re.findall(r'([+-]?\d+)\s*(health|sanity|hope)', lower):
@@ -1926,6 +1948,10 @@ class Game:
 
     def apply_effect_dict(self, effect: Dict[str, object], player: Player):
         if not effect:
+            return
+        if player.cancel_next_effect:
+            print('The Oracle Wick flares, canceling the effect.')
+            player.cancel_next_effect = False
             return
         desc = effect.get('Description', '')
         if desc:
@@ -2049,6 +2075,8 @@ class Game:
                             eff = self.format_effect_short(enc.effect)
                             if eff:
                                 line += f" | Effect: {eff}"
+                        elif enc.effect_text:
+                            line += f" | Effect: {enc.effect_text}"
                         print(line)
         if not found:
             print('None yet.')
@@ -2132,6 +2160,8 @@ class Game:
                     eff = self.format_effect_short(card.effect)
                     if eff:
                         print(f"Effect: {eff}")
+                elif card.effect_text:
+                    print(f"Effect: {card.effect_text}")
                 return
         elif category == 'location':
             loc = self.location_lookup.get(key)
