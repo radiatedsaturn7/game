@@ -410,6 +410,10 @@ class Player:
     def lose_item(self, index: int = 0) -> Optional[Item]:
         if not self.inventory:
             return None
+        if self.cancel_next_effect:
+            print('The Oracle Wick flares, canceling the effect.')
+            self.cancel_next_effect = False
+            return None
         if self.loss_shield:
             print('The Core of Something Real glows, preventing your losses.')
             self.loss_shield = False
@@ -1792,6 +1796,12 @@ class Game:
 
     def modify_hope(self, amount: int):
         """Adjust shared Hope and sync with players."""
+        if amount != 0:
+            for p in self.players:
+                if p.cancel_next_effect:
+                    print('The Oracle Wick flares, canceling the effect.')
+                    p.cancel_next_effect = False
+                    return
         self.hope = max(0, min(12, self.hope + amount))
         for p in self.players:
             p.hope = self.hope

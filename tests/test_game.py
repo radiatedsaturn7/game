@@ -108,6 +108,27 @@ class CardTests(unittest.TestCase):
         game.apply_effect_dict({'Description': 'hit', 'Health': -2}, player)
         self.assertEqual(player.health, 10)
 
+    def test_oracle_wick_cancels_modify_hope(self):
+        game = self._new_game()
+        player = game.players[0]
+        wick = game.item_registry['oracle wick']
+        player.add_item(wick)
+        player.use_item(game, 'oracle wick', '')
+        game.modify_hope(-2)
+        self.assertEqual(game.hope, 10)
+
+    def test_oracle_wick_cancels_item_loss(self):
+        game = self._new_game()
+        player = game.players[0]
+        wick = game.item_registry['oracle wick']
+        tag = game.item_registry['blank tag']
+        player.add_item(Item(tag.name, tag.description, effect_text=tag.effect_text, use_effect=tag.use_effect))
+        player.add_item(wick)
+        player.use_item(game, 'oracle wick', '')
+        lost = player.lose_item()
+        self.assertIsNone(lost)
+        self.assertTrue(player.has_item('Blank Tag'))
+
     def test_wax_crown_added_and_toggle(self):
         game = self._new_game()
         player = game.players[0]
