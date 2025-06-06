@@ -141,7 +141,7 @@
     "ID": "24",
     "Name": "Oracle Wick",
     "Description": "Burns fate for truth.",
-    "Effect": "+1 Hope"
+    "Effect": "Cancel the next effect"
   },
   {
     "ID": "26",

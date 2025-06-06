@@ -148,29 +148,30 @@
     "Name": "Bureaucratic Maw",
     "Description": "Paperwork looms like teeth. A voice demands, 'Submit Form 7B: Acknowledgment of Cosmic Meaninglessness.'",
     "Choices": [
-      {
-        "Text": "Fill it out",
-        "RollSuccess": 0,
-        "Success": {
-          "Description": "-1 Hope; gain item: Stamp of Legitimacy",
-          "Hope": -1,
-          "Item": "Stamp of Legitimacy",
-          "ItemAddOrRemove": "add"
+        {
+          "Text": "Fill it out",
+          "RollSuccess": 0,
+          "Success": {
+            "Description": "-1 Hope; gain item: Stamp of Legitimacy",
+            "Hope": -1,
+            "Item": "Stamp of Legitimacy",
+            "ItemAddOrRemove": "add"
+          }
         },
-        "Failure": {
-          "Description": "Burn it"
+        {
+          "Text": "Burn it",
+          "RollSuccess": 4,
+          "Success": {
+            "Description": "+1 Sanity",
+            "Sanity": 1
+          },
+          "Failure": {
+            "Description": "-2 Hope",
+            "Hope": -2
+          }
         }
-      },
-      {
-        "Text": "",
-        "RollSuccess": 1,
-        "Success": {
-          "Description": "-2 Hope",
-          "Hope": -2
-        }
-      }
-    ]
-  },
+      ]
+    },
   {
     "ID": "7",
     "Name": "The Data Swamp",
@@ -184,15 +185,16 @@
           "Sanity": -1,
           "Item": "Distraction Device",
           "ItemAddOrRemove": "add"
-        },
-        "Failure": {
-          "Description": "Pull the plug"
         }
       },
       {
-        "Text": "",
-        "RollSuccess": 2,
+        "Text": "Pull the plug",
+        "RollSuccess": 4,
         "Success": {
+          "Description": "+2 Hope",
+          "Hope": 2
+        },
+        "Failure": {
           "Description": "-1 Sanity; -1 Hope",
           "Sanity": -1,
           "Hope": -1
@@ -305,15 +307,16 @@
         "Success": {
           "Description": "-2 Hope",
           "Hope": -2
-        },
-        "Failure": {
-          "Description": "Let it ride"
         }
       },
       {
-        "Text": "",
-        "RollSuccess": 1,
+        "Text": "Let it ride",
+        "RollSuccess": 4,
         "Success": {
+          "Description": "+1 Hope",
+          "Hope": 1
+        },
+        "Failure": {
           "Description": "-1 Sanity",
           "Sanity": -1
         }
@@ -333,16 +336,17 @@
           "Sanity": -1,
           "Item": "Echo of Closure",
           "ItemAddOrRemove": "add"
-        },
-        "Failure": {
-          "Description": "Yell back"
         }
       },
       {
-        "Text": "",
-        "RollSuccess": 1,
+        "Text": "Yell back",
+        "RollSuccess": 5,
         "Success": {
-          "Description": ">=5"
+          "Description": "+1 Sanity",
+          "Sanity": 1
+        },
+        "Failure": {
+          "Description": "Nothing happens"
         }
       }
     ]
@@ -366,7 +370,10 @@
       },
       {
         "Text": "Ignore it",
-        "RollSuccess": 0
+        "RollSuccess": 0,
+        "Success": {
+          "Description": "If encountered again, -1 Hope"
+        }
       }
     ]
   },
@@ -408,15 +415,16 @@
           "Hope": -1,
           "Item": "Memory Token",
           "ItemAddOrRemove": "add"
-        },
-        "Failure": {
-          "Description": "Bury one"
         }
       },
       {
-        "Text": "",
-        "RollSuccess": 1,
+        "Text": "Bury one",
+        "RollSuccess": 5,
         "Success": {
+          "Description": "+1 Sanity",
+          "Sanity": 1
+        },
+        "Failure": {
           "Description": "-1 Sanity",
           "Sanity": -1
         }

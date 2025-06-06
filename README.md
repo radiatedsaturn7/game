@@ -5,3 +5,6 @@ Developers should run `pytest` and ensure tests pass, especially tests/test_game
 During numbered encounter choices you may type `lookup <name>` to view
 information about an item, encounter or location before deciding. You can also
 use `use <item>` to activate an item in your inventory at that prompt.
+Using the **Oracle Wick** lets you cancel the next effect that would apply to
+you.
+Lookups for scripted encounters such as **Fork in the Real** and **The Silent Ward** now summarize their effects.

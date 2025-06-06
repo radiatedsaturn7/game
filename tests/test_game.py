@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch
 import random
 import main
+from main import Item
 
 # Ensure this test passes for all cards before submitting a pull request.
 
@@ -77,6 +78,558 @@ class CardTests(unittest.TestCase):
         with patch('builtins.input', dummy_input):
             over, _ = game.handle_tile(player, 'down')
         self.assertTrue(over)
+
+    def test_apology_room_listen(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the apology room']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Echo of Closure'))
+        self.assertEqual(player.sanity, 9)
+
+    def test_apology_room_yell_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the apology room']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=6):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 11)
+        self.assertFalse(player.has_item('Echo of Closure'))
+
+    def test_apology_room_yell_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the apology room']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=3):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 10)
+        self.assertFalse(player.has_item('Echo of Closure'))
+
+    def test_room_you_forgot_remember_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the room you forgot']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=6):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 11)
+        self.assertEqual(player.sanity, 10)
+
+    def test_room_you_forgot_remember_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the room you forgot']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 9)
+
+    def test_room_you_forgot_ignore_revisit(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the room you forgot']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 10)
+        card.apply(game, player, False)
+        self.assertEqual(game.hope, 9)
+
+    def test_lookup_with_space_during_move(self):
+        game = self._new_game()
+        player = game.players[0]
+        actions = iter(['look up salted trauma chips', 'end'])
+
+        def fake_input(prompt=''):
+            return next(actions)
+
+        with patch('builtins.input', fake_input), patch('os.system', lambda *_: None), main.CaptureBuffer() as cap:
+            game.player_turn(player)
+        self.assertIn('ITEM: Salted Trauma Chips', cap.getvalue())
+
+    def test_memory_token_reroll_prompt_allows_lookup(self):
+        game = self._new_game()
+        player = game.players[0]
+        token = game.item_registry['memory token']
+        crown = game.item_registry['wax crown']
+        player.add_item(Item(token.name, token.description, effect_text=token.effect_text, use_effect=token.use_effect))
+        player.add_item(Item(crown.name, crown.description, effect_text=crown.effect_text, use_effect=crown.use_effect))
+        player.use_item(game, 'memory token', '')
+        inputs = iter(['lookup wax crown', 'n'])
+
+        def fake_input(prompt=''):
+            return next(inputs)
+
+        with patch('builtins.input', fake_input), main.CaptureBuffer() as cap:
+            player.roll_d6(game)
+        self.assertIn('ITEM: Wax Crown', cap.getvalue())
+
+    def test_oracle_wick_cancels_effect(self):
+        game = self._new_game()
+        player = game.players[0]
+        wick = game.item_registry['oracle wick']
+        player.add_item(wick)
+        player.use_item(game, 'oracle wick', '')
+        game.apply_effect_dict({'Description': 'hit', 'Health': -2}, player)
+        self.assertEqual(player.health, 10)
+
+    def test_oracle_wick_cancels_modify_hope(self):
+        game = self._new_game()
+        player = game.players[0]
+        wick = game.item_registry['oracle wick']
+        player.add_item(wick)
+        player.use_item(game, 'oracle wick', '')
+        game.modify_hope(-2)
+        self.assertEqual(game.hope, 10)
+
+    def test_oracle_wick_cancels_item_loss(self):
+        game = self._new_game()
+        player = game.players[0]
+        wick = game.item_registry['oracle wick']
+        tag = game.item_registry['blank tag']
+        player.add_item(Item(tag.name, tag.description, effect_text=tag.effect_text, use_effect=tag.use_effect))
+        player.add_item(wick)
+        player.use_item(game, 'oracle wick', '')
+        lost = player.lose_item()
+        self.assertIsNone(lost)
+        self.assertTrue(player.has_item('Blank Tag'))
+
+    def test_wax_crown_added_and_toggle(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['throne of melted faces']
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Wax Crown'))
+        start_hope = player.hope
+        start_sanity = player.sanity
+        player.use_item(game, 'wax crown', '')
+        self.assertTrue(player.wearing_wax_crown)
+        self.assertEqual(player.hope, start_hope + 1)
+        self.assertEqual(player.sanity, start_sanity - 1)
+        self.assertTrue(player.has_item('Wax Crown'))
+        player.use_item(game, 'wax crown', '')
+        self.assertFalse(player.wearing_wax_crown)
+        self.assertEqual(player.hope, start_hope)
+        self.assertEqual(player.sanity, start_sanity)
+        self.assertTrue(player.has_item('Wax Crown'))
+
+    def test_vending_machine_use_machine(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the vending machine of moral compromise']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Salted Trauma Chips'))
+        self.assertEqual(player.sanity, 9)
+
+    def test_data_swamp_scroll(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the data swamp']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Distraction Device'))
+        self.assertEqual(player.sanity, 9)
+
+    def test_data_swamp_pull_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the data swamp']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=5):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 12)
+
+    def test_data_swamp_pull_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the data swamp']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 9)
+        self.assertEqual(game.hope, 9)
+
+    def test_graveyard_mourn(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the graveyard of yesterdays']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Memory Token'))
+        self.assertEqual(game.hope, 9)
+
+    def test_graveyard_bury_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the graveyard of yesterdays']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=5):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 11)
+
+    def test_graveyard_bury_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the graveyard of yesterdays']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 9)
+
+    def test_elevator_ride_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the elevator that only goes down']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=6):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 12)
+
+    def test_elevator_ride_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the elevator that only goes down']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=3):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 9)
+        self.assertEqual(game.hope, 9)
+
+    def test_elevator_take_stairs(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the elevator that only goes down']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 9)
+        self.assertTrue(player.has_item('Rusty Override Key'))
+
+    def test_plaza_new_name(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the plaza of forgotten names']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Blank Tag'))
+        self.assertEqual(game.hope, 9)
+
+    def test_plaza_keep_yours(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the plaza of forgotten names']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 11)
+
+    def test_core_recovers_lost_item(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the casket of kindness']
+        core = game.item_registry['core of something real']
+        tag = game.item_registry['blank tag']
+        player.add_item(Item(tag.name, tag.description, effect_text=tag.effect_text, use_effect=tag.use_effect))
+        player.add_item(Item(core.name, core.description, effect_text=core.effect_text, use_effect=core.use_effect))
+        card.apply(game, player, True)
+        self.assertFalse(player.has_item('Blank Tag'))
+        player.use_item(game, 'core of something real', '')
+        self.assertTrue(player.has_item('Blank Tag'))
+        self.assertFalse(player.has_item('Core of Something Real'))
+
+    def test_library_open_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the library of lost causes']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=6):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 12)
+
+    def test_library_open_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the library of lost causes']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 9)
+
+    def test_library_leave_be(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the library of lost causes']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 10)
+
+    def test_looping_corridor_break(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the looping corridor']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 8)
+
+    def test_looping_corridor_ride_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the looping corridor']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=5):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 11)
+
+    def test_looping_corridor_ride_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the looping corridor']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 9)
+
+    def test_flickering_exit_open_jackpot(self):
+        game = self._new_game()
+        player = game.players[0]
+        other = game.players[1]
+        card = game.encounter_lookup['the flickering exit']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=6):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 12)
+        self.assertEqual(other.x, player.x)
+        self.assertEqual(other.y, player.y)
+
+    def test_flickering_exit_open_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the flickering exit']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=1):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 8)
+        self.assertEqual(game.hope, 9)
+
+    def test_flickering_exit_ignore(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the flickering exit']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 11)
+
+    def test_mouth_of_machine_enter_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the mouth of the machine']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=5):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Core of Something Real'))
+        self.assertEqual(player.sanity, 10)
+
+    def test_mouth_of_machine_enter_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the mouth of the machine']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertFalse(player.has_item('Core of Something Real'))
+        self.assertEqual(player.sanity, 8)
+
+    def test_mouth_of_machine_walk_away(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the mouth of the machine']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 9)
+        self.assertEqual(player.sanity, 11)
+
+    def test_lookup_immediate_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'fork in the real')
+        self.assertIn('cannot share a tile', cap.getvalue().lower())
+
+    def test_lookup_silent_ward_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the silent ward')
+        self.assertIn('wait: -1 hope', cap.getvalue().lower())
+
+    def test_lookup_discarded_room_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the discarded room')
+        self.assertIn('claim: +1 sanity', cap.getvalue().lower())
+
+    def test_lookup_elevator_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the elevator that only goes down')
+        self.assertIn('ride: roll 1d6', cap.getvalue().lower())
+
+    def test_description_parses_missing_stats(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the corridor of crooked steps']
+        card.apply(game, player, True)
+        self.assertEqual(game.hope, 11)
+        self.assertEqual(player.health, 9)
+
+    def test_whispering_socket_rip_it_out(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the whispering socket']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Frayed Neural Wire'))
+        self.assertEqual(game.hope, 9)
+
+    def test_whispering_socket_plug_in_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the whispering socket']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=6):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 12)
+        self.assertEqual(player.sanity, 10)
+
+    def test_pit_of_almosts_cross_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the pit of almosts']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=6):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Glimmer of What Could Be'))
+
+    def test_pit_of_almosts_cross_failure(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the pit of almosts']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 8)
+
+    def test_pit_of_almosts_long_way(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the pit of almosts']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 9)
+
+    def test_crawlspace_finish_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the crawlspace of unfinished projects']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=5):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 11)
+
+    def test_crawlspace_finish_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the crawlspace of unfinished projects']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 8)
+
+    def test_crawlspace_burn(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the crawlspace of unfinished projects']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Ashes of Ambition'))
+        self.assertEqual(game.hope, 9)
+
+    def test_hall_of_unfinished_goodbyes_open_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['hall of unfinished goodbyes']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=6):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 11)
+
+    def test_hall_of_unfinished_goodbyes_open_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['hall of unfinished goodbyes']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 8)
+
+    def test_hall_of_unfinished_goodbyes_walk_away(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['hall of unfinished goodbyes']
+        with patch('builtins.input', lambda prompt='': '2'):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 9)
+
+    def test_bureaucratic_maw_fill_out(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['bureaucratic maw']
+        with patch('builtins.input', lambda prompt='': '1'):
+            card.apply(game, player, True)
+        self.assertTrue(player.has_item('Stamp of Legitimacy'))
+        self.assertEqual(game.hope, 9)
+
+    def test_bureaucratic_maw_burn_success(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['bureaucratic maw']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=5):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 11)
+        self.assertEqual(game.hope, 10)
+
+    def test_bureaucratic_maw_burn_fail(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['bureaucratic maw']
+        with patch('builtins.input', lambda prompt='': '2'), \
+             patch.object(player, 'roll_d6', return_value=2):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 8)
+
+    def test_final_threshold_sacrifice(self):
+        game = self._new_game()
+        inputs = iter(['y', 'rob'])
+
+        def fake_input(prompt=''):
+            return next(inputs)
+
+        with patch('builtins.input', fake_input), main.CaptureBuffer() as cap:
+            result = game.run_final_threshold()
+        self.assertTrue(result)
+        self.assertIn('lost to the Abyss', cap.getvalue())
+
+    def test_final_threshold_escape_together(self):
+        game = self._new_game()
+
+        with patch('builtins.input', lambda prompt='': 'n'), \
+             patch.object(game.players[0], 'roll_d6', return_value=5), \
+             patch.object(game.players[1], 'roll_d6', return_value=6), \
+             main.CaptureBuffer() as cap:
+            result = game.run_final_threshold()
+        self.assertTrue(result)
+        self.assertIn('Both players escape together', cap.getvalue())
 
 
 def json_names(filename):
