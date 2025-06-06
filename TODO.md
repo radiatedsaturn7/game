@@ -20,14 +20,14 @@
 - [x] Review card: The Plaza of Forgotten Names
 - [x] Review card: The Graveyard of Yesterdays
  - [x] Review card: The Elevator That Only Goes Down
-- [ ] Review card: The Silent Ward
-- [ ] Review card: The Hall of Digital Ghosts
-- [ ] Review card: Fork in the Real
-- [ ] Review card: The Snackless Breakroom
-- [ ] Review card: The Discarded Room
-- [ ] Review card: The Applause Trap
-- [ ] Review card: The Compromise Engine
-- [ ] Review card: The Void Restroom
+- [x] Review card: The Silent Ward
+- [x] Review card: The Hall of Digital Ghosts
+- [x] Review card: Fork in the Real
+- [x] Review card: The Snackless Breakroom
+- [x] Review card: The Discarded Room
+- [x] Review card: The Applause Trap
+- [x] Review card: The Compromise Engine
+- [x] Review card: The Void Restroom
 - [ ] Review card: The Room with No Door
 - [ ] Review card: The Archive of Everything That Didn’t Work
 - [ ] Review card: The Hall of Inherited Guilt

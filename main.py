@@ -1393,6 +1393,7 @@ class Game:
                     'the silent ward': {'immediate': silent_ward},
                     'fork in the real': {'immediate': fork_in_the_real},
                     'the discarded room': {'immediate': discarded_room},
+                    'the applause trap': {'immediate': applause_trap},
                     'the compromise engine': {'immediate': compromise_engine},
                     'mirror of broken memories': {'immediate': mirror_of_broken_memories},
                     'the whispering wound': {'immediate': whispering_wound, 'revisit': whispering_wound_revisit},
@@ -1409,6 +1410,8 @@ class Game:
                     'fork in the real': 'Split: +1 Hope and cannot share a tile until changed; burn: -1 Hope',
                     'the silent ward': 'Wait: -1 Hope. Move past: +1 Sanity and your next encounter occurs twice',
                     'the discarded room': 'Claim: +1 Sanity, -1 to next roll. Reject: roll 1d6; on 5+ nothing, else -1 Sanity',
+                    'the applause trap': 'Bow: +1 Hope, -1 Sanity; Walk away: +1 Sanity, -1 Hope',
+                    'the compromise engine': 'Insert: -2 Sanity, +2 Hope; Decline: gain Rusty Refusal Bolt',
                     'the flickering exit': 'Open: roll 1d6 (6:+2 Hope and pull partner, 3-5:-1 Sanity, 1-2:-2 Sanity and -1 Hope); Ignore: +1 Sanity',
                     'the looping corridor': 'Break: -2 Hope. Ride: roll 1d6 (4+: +1 Hope, else -1 Sanity)',
                     'the apology room': 'Listen: -1 Sanity, gain Echo of Closure. Yell: roll 1d6 (5+: +1 Sanity)',
@@ -1416,6 +1419,7 @@ class Game:
                     'the plaza of forgotten names': 'New name: -1 Hope and gain Blank Tag; Keep yours: +1 Sanity',
                     'the graveyard of yesterdays': 'Mourn: -1 Hope and gain Memory Token; Bury: roll 1d6 (5+: +1 Sanity, else -1 Sanity)',
                     'the elevator that only goes down': 'Ride: roll 1d6 (6:+2 Sanity, else -1 Sanity and -1 Hope); Stairs: -1 Sanity, gain Rusty Override Key',
+                    'the void restroom': 'Use the stall: roll 1d6 (4+: +1 Sanity, else -1 Hope); Hold it: -1 Sanity',
                 }
                 key = card.name.lower()
                 if key in mapping:
