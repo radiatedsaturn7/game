@@ -1,6 +1,6 @@
 - [x] Extend Oracle Wick cancellation to cover effects that modify hope via `Game.modify_hope` and item losses via `Player.lose_item`.
 - [x] Allow item usage at the Final Threshold by passing a player object to `confirm_prompt`.
-- [ ] Provide lookup summaries for other scripted encounters such as "The Discarded Room".
+- [x] Provide lookup summaries for other scripted encounters such as "The Discarded Room".
 - [ ] Use `confirm_prompt` for the Memory Token reroll question so lookups and item use work there.
 - [ ] Review card: Mirror of Versions
 - [ ] Review card: The Vending Machine of Moral Compromise

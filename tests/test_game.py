@@ -175,6 +175,12 @@ class CardTests(unittest.TestCase):
             game.perform_lookup('auto', 'the silent ward')
         self.assertIn('wait: -1 hope', cap.getvalue().lower())
 
+    def test_lookup_discarded_room_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the discarded room')
+        self.assertIn('claim: +1 sanity', cap.getvalue().lower())
+
     def test_description_parses_missing_stats(self):
         game = self._new_game()
         player = game.players[0]
