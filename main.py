@@ -1794,6 +1794,7 @@ class Game:
                 }
                 effect_texts = {
                     'fork in the real': 'Split: +1 Hope and cannot share a tile until changed; burn: -1 Hope',
+                    'the silent ward': 'Wait: -1 Hope. Move past: +1 Sanity and your next encounter occurs twice',
                 }
                 key = card.name.lower()
                 if key in mapping:

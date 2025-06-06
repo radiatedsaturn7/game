@@ -113,6 +113,12 @@ class CardTests(unittest.TestCase):
             game.perform_lookup('auto', 'fork in the real')
         self.assertIn('cannot share a tile', cap.getvalue().lower())
 
+    def test_lookup_silent_ward_effect(self):
+        game = self._new_game()
+        with main.CaptureBuffer() as cap:
+            game.perform_lookup('auto', 'the silent ward')
+        self.assertIn('wait: -1 hope', cap.getvalue().lower())
+
 
 def json_names(filename):
     import json
