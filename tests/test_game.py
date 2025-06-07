@@ -1137,6 +1137,29 @@ class CardTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertIn('Both players escape together', cap.getvalue())
 
+    def test_abyssal_shift_turn_trigger(self):
+        game = self._new_game()
+        with patch.object(game.board, 'shuffle_tiles') as shuffle, \
+             patch.object(game.players[0], 'roll_d6', return_value=4), \
+             patch.object(game.players[1], 'roll_d6', return_value=4):
+            game.turn_count = 10
+            game.maybe_trigger_abyssal_shift()
+        self.assertTrue(shuffle.called)
+
+    def test_abyssal_shift_reveal_trigger(self):
+        game = self._new_game()
+        count = 0
+        for x in range(game.board.size):
+            for y in range(game.board.size):
+                if count < 12:
+                    game.board.tile_at(x, y).revealed = True
+                    count += 1
+        with patch.object(game.board, 'shuffle_tiles') as shuffle, \
+             patch.object(game.players[0], 'roll_d6', return_value=4), \
+             patch.object(game.players[1], 'roll_d6', return_value=4):
+            game.maybe_trigger_abyssal_shift()
+        self.assertTrue(shuffle.called)
+
 
 def json_names(filename):
     import json
