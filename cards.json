@@ -929,7 +929,8 @@
     "Description": "Their harmony fractures bone but heals pride.",
     "Effect": {
       "Description": "-2 Health, +2 Hope",
-      "Health": -2
+      "Health": -2,
+      "Hope": 2
     }
   },
   {
@@ -938,7 +939,8 @@
     "Description": "You find a vow written in your own handwriting.",
     "Effect": {
       "Description": "+1 Sanity, -1 Hope",
-      "Sanity": 1
+      "Sanity": 1,
+      "Hope": -1
     }
   },
   {
@@ -986,7 +988,8 @@
     "Description": "Your crimes are written here. In someone else\u2019s blood.",
     "Effect": {
       "Description": "-1 Sanity, +1 Hope",
-      "Sanity": -1
+      "Sanity": -1,
+      "Hope": 1
     }
   },
   {
@@ -1026,7 +1029,8 @@
     "Description": "You feel the yawn crawl up your spine.",
     "Effect": {
       "Description": "+1 Health, +1 Sanity",
-      "Health": 1
+      "Health": 1,
+      "Sanity": 1
     }
   },
   {
@@ -1053,7 +1057,8 @@
     "Description": "Each step is a question. Each answer twists your ankle.",
     "Effect": {
       "Description": "-1 Health, +1 Hope",
-      "Health": -1
+      "Health": -1,
+      "Hope": 1
     }
   },
   {
@@ -1102,7 +1107,8 @@
     "Description": "The cradle rocks. The teeth beneath it do too.",
     "Effect": {
       "Description": "-1 Health, +1 Hope",
-      "Health": -1
+      "Health": -1,
+      "Hope": 1
     }
   },
   {
@@ -1111,7 +1117,8 @@
     "Description": "It wraps tighter with every sorry you didn\u2019t mean.",
     "Effect": {
       "Description": "-1 Hope, +1 Sanity",
-      "Hope": -1
+      "Hope": -1,
+      "Sanity": 1
     }
   },
   {
@@ -1179,7 +1186,8 @@
     "Description": "You mouth words you don\u2019t understand. Your breath crystallizes.",
     "Effect": {
       "Description": "-1 Health, +1 Sanity",
-      "Health": -1
+      "Health": -1,
+      "Sanity": 1
     }
   },
   {

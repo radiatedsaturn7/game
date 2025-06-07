@@ -261,6 +261,15 @@ class CardTests(unittest.TestCase):
         self.assertEqual(game.hope, 9)
         self.assertTrue(player.has_item('Singing Blade'))
 
+    def test_rustbone_choir_effect(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the rustbone choir']
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        self.assertEqual(player.health, 8)
+        self.assertEqual(game.hope, 12)
+
     def test_tower_of_the_forgotten_signal_reveals_tiles(self):
         game = self._new_game()
         player = game.players[0]
