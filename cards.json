@@ -848,7 +848,8 @@
     "Description": "It knows what you owe. And it's still calculating.",
     "Effect": {
       "Description": "-1 Health, +1 Hope",
-      "Health": -1
+      "Health": -1,
+      "Hope": 1
     }
   },
   {
@@ -896,7 +897,7 @@
     "Description": "It wraps around you like a question you\u2019re afraid to ask.",
     "Effect": {
       "Description": "Lose 1 Hope, gain item: Whisper Link (lets you pull Cait one tile)",
-      "Hope": 1,
+      "Hope": -1,
       "Item": "Whisper Link (lets you pull Cait one tile)",
       "ItemAddOrRemove": "add"
     }

@@ -40,15 +40,15 @@
 - [x] Review card: The Mourning Closet
 - [x] Review card: The Blood-Slick Mirror
 - [x] Review card: The Hollow Host
-- [ ] Review card: The Smiling Husk
-- [ ] Review card: The Weeping Ledger
-- [ ] Review card: The Glass Colossus
-- [ ] Review card: The Skeletal Pianist
-- [ ] Review card: Cathedral of Static
-- [ ] Review card: Tower of the Forgotten Signal
-- [ ] Review card: The Chain That Whispers
-- [ ] Review card: The Lantern Maw
-- [ ] Review card: Dagger in the Cradle
+- [x] Review card: The Smiling Husk
+- [x] Review card: The Weeping Ledger
+- [x] Review card: The Glass Colossus
+- [x] Review card: The Skeletal Pianist
+- [x] Review card: Cathedral of Static
+- [x] Review card: Tower of the Forgotten Signal
+- [x] Review card: The Chain That Whispers
+- [x] Review card: The Lantern Maw
+- [x] Review card: Dagger in the Cradle
 - [ ] Review card: The Rustbone Choir
 - [ ] Review card: Archive of Misremembered Promises
 - [ ] Review card: The Salting Tree
@@ -82,3 +82,5 @@
 - [ ] Review card: The Candle-Melt Oracle
 - [ ] Review card: The Path of Remembered Crimes
 - [ ] Review card: The Machine That Regrets
+- [ ] Implement Whisper Link use effect to pull Cait one tile
+- [ ] Implement Signal Crown use effect to resist the next encounter
