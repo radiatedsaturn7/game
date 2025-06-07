@@ -361,6 +361,7 @@ class Player:
     reroll_next: bool = False
     double_next: bool = False
     cancel_digital_next: bool = False
+    resist_next_encounter: bool = False
     cancel_next_effect: bool = False
     skip_next_tile: bool = False
     wearing_wax_crown: bool = False
@@ -484,6 +485,11 @@ class EncounterCard:
             if player.auto_succeed:
                 print('The Glimmer of What Could Be lets you skip this encounter.')
                 player.auto_succeed = False
+                self.triggered = True
+                return
+            if player.resist_next_encounter:
+                print('The Signal Crown protects you from the encounter.')
+                player.resist_next_encounter = False
                 self.triggered = True
                 return
             if player.cancel_digital_next and any(k in self.name.lower() for k in ['digital', 'data', 'machine', 'socket']):
@@ -1238,6 +1244,34 @@ def use_burden_token(game: 'Game', player: Player, location: str) -> bool:
     print(f'{other.name} is protected from their next loss.')
     return True
 
+def use_whisper_link(game: 'Game', player: Player, location: str) -> bool:
+    """Pull Cait one tile toward the user."""
+    target = next((p for p in game.players if p.name == 'Cait Vex'), None)
+    if not target:
+        return True
+    dx = 0
+    dy = 0
+    if target.x < player.x:
+        dx = 1
+    elif target.x > player.x:
+        dx = -1
+    if target.y < player.y:
+        dy = 1
+    elif target.y > player.y:
+        dy = -1
+    if dx == 0 and dy == 0:
+        print(f'{target.name} is already beside you.')
+    else:
+        game.board.move_player(target, dx, dy)
+        print(f'{target.name} is tugged closer by the Whisper Link.')
+    return True
+
+def use_signal_crown(game: 'Game', player: Player, location: str) -> bool:
+    """Resist the next encounter's effects."""
+    player.resist_next_encounter = True
+    print('The Signal Crown crackles, ready to resist the next encounter.')
+    return True
+
 class Tile:
     def __init__(self):
         self.revealed = False
@@ -1511,6 +1545,10 @@ class Game:
                     item.use_effect = use_ashen_archive
                 if item.name == 'Burden Token':
                     item.use_effect = use_burden_token
+                if item.name == 'Whisper Link':
+                    item.use_effect = use_whisper_link
+                if item.name == 'Signal Crown':
+                    item.use_effect = use_signal_crown
                 # store a copy for the deck
                 items.append(Item(item.name, item.description, effect_text=item.effect_text, use_effect=item.use_effect))
                 self.item_registry[item.name.lower()] = item
