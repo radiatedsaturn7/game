@@ -212,6 +212,17 @@ class CardTests(unittest.TestCase):
         self.assertEqual(player.sanity, 10)
         self.assertEqual(game.hope, 9)
 
+    def test_signal_crown_resists_encounter(self):
+        game = self._new_game()
+        player = game.players[0]
+        crown = game.item_registry['signal crown']
+        player.add_item(Item(crown.name, crown.description, effect_text=crown.effect_text, use_effect=crown.use_effect))
+        player.use_item(game, 'signal crown', '')
+        card = main.EncounterCard('Test Card', 'desc', effect={'Description': '-1 Sanity', 'Sanity': -1})
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 10)
+
     def test_weeping_ledger_effect(self):
         game = self._new_game()
         player = game.players[0]
@@ -238,6 +249,17 @@ class CardTests(unittest.TestCase):
             card.apply(game, player, True)
         self.assertEqual(game.hope, 9)
         self.assertTrue(player.has_item('Whisper Link'))
+
+    def test_whisper_link_moves_cait(self):
+        game = self._new_game()
+        player = game.players[0]
+        cait = game.players[1]
+        link = game.item_registry['whisper link']
+        player.add_item(Item(link.name, link.description, effect_text=link.effect_text, use_effect=link.use_effect))
+        player.x, player.y = 0, 0
+        cait.x, cait.y = 0, 2
+        player.use_item(game, 'whisper link', '')
+        self.assertEqual((cait.x, cait.y), (0, 1))
 
     def test_lantern_maw_effect(self):
         game = self._new_game()

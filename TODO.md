@@ -82,5 +82,5 @@
 - [x] Review card: The Candle-Melt Oracle
 - [x] Review card: The Path of Remembered Crimes
 - [x] Review card: The Machine That Regrets
-- [ ] Implement Whisper Link use effect to pull Cait one tile
-- [ ] Implement Signal Crown use effect to resist the next encounter
+- [x] Implement Whisper Link use effect to pull Cait one tile
+- [x] Implement Signal Crown use effect to resist the next encounter
