@@ -1366,6 +1366,23 @@ class Board:
             lines.append(border)
         return lines
 
+    def shuffle_tiles(self):
+        """Randomly rearrange all tiles on the board."""
+        tiles = [tile for row in self.grid for tile in row]
+        random.shuffle(tiles)
+        for idx, tile in enumerate(tiles):
+            x = idx // self.size
+            y = idx % self.size
+            self.grid[x][y] = tile
+        # Update special positions in case they moved
+        for x in range(self.size):
+            for y in range(self.size):
+                loc = self.grid[x][y].location
+                if loc and loc.name == 'The Fractured Vestibule':
+                    self.start_pos = (x, y)
+                if loc and loc.name == 'Final Gate':
+                    self.final_pos = (x, y)
+
 class Game:
     def __init__(self, hope: int = 10):
         self.encounter_lookup: Dict[str, EncounterCard] = {}
@@ -1386,6 +1403,8 @@ class Game:
         random.shuffle(self.deck)
         self.discovered_log: List[str] = []
         self.no_reunite: bool = False
+        self.turn_count: int = 0
+        self.shift_triggered: bool = False
 
         # Both players begin at the Fractured Vestibule
         start_x, start_y = self.board.start_pos
@@ -1410,6 +1429,24 @@ class Game:
         self.hope = max(0, min(12, self.hope + amount))
         for p in self.players:
             p.hope = self.hope
+
+    def tiles_revealed(self) -> int:
+        return sum(1 for row in self.board.grid for tile in row if tile.revealed)
+
+    def maybe_trigger_abyssal_shift(self):
+        if self.shift_triggered:
+            return
+        if self.turn_count >= 10 or self.tiles_revealed() >= 12:
+            self.abyssal_shift()
+            self.shift_triggered = True
+
+    def abyssal_shift(self):
+        print('--- Abyssal Shift ---')
+        self.board.shuffle_tiles()
+        for p in self.players:
+            roll = p.roll_d6(self)
+            if roll < 4:
+                p.apply_effect(self, sanity=-1)
 
     def load_locations(self):
         with open('locations.json') as f:
@@ -2197,6 +2234,8 @@ class Game:
         while not game_over:
             player = self.players[active]
             game_over = self.player_turn(player)
+            self.turn_count += 1
+            self.maybe_trigger_abyssal_shift()
             active = 1 - active
 
 if __name__ == '__main__':

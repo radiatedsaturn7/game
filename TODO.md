@@ -84,3 +84,18 @@
 - [x] Review card: The Machine That Regrets
 - [x] Implement Whisper Link use effect to pull Cait one tile
 - [x] Implement Signal Crown use effect to resist the next encounter
+
+- [x] Implement Abyssal Shift midgame board shuffle after 10 turns or 12 tiles revealed.
+- [ ] Add rest cooldown so players cannot rest two turns in a row.
+- [ ] Add Memory System to track persistent boons and flaws from encounters.
+- [ ] Implement optional Character Traits for unique player abilities.
+- [ ] Support applying Game Modifiers at the start (e.g., no Sanity recovery).
+- [ ] Allow variable board size when creating a new Game.
+- [ ] Expand location list with Sanctuary Node and other entries from README.
+- [ ] Implement Echo Tiles for communication or buffs between distant players.
+- [ ] Add Shared Visions rule for +1 Sanity when players stand on mirrored tiles.
+- [ ] Implement Anti-Camping mechanic that spawns Abyssal Shadows if players linger on a Sanctuary.
+- [ ] Add Null Signal Bloom event that disables items until the next Abyssal Shift.
+- [ ] Add Abyssal Engine location consuming an item for +2 Hope.
+- [ ] Implement Abyssal Flask item for +2 Sanity at the cost of 1 Hope.
+- [ ] Implement Coded Key item to unlock tiles or reroll Abyssal Shift effects.
