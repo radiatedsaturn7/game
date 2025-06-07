@@ -49,38 +49,38 @@
 - [x] Review card: The Chain That Whispers
 - [x] Review card: The Lantern Maw
 - [x] Review card: Dagger in the Cradle
-- [ ] Review card: The Rustbone Choir
-- [ ] Review card: Archive of Misremembered Promises
-- [ ] Review card: The Salting Tree
-- [ ] Review card: The Bone Lantern
-- [ ] Review card: The Stillbirth Clock
-- [ ] Review card: The Limbo Hearth
-- [ ] Review card: Altar of Echoed Sins
-- [ ] Review card: The Salt-Tongued Prophet
-- [ ] Review card: The Tarnished Halo
-- [ ] Review card: The Cradle of Static
-- [ ] Review card: The Maw of Sleep
-- [ ] Review card: The Windowless House
-- [ ] Review card: The Hung Verdict
-- [ ] Review card: The Corridor of Crooked Steps
-- [ ] Review card: The Screaming Frame
-- [ ] Review card: The Casket of Kindness
-- [ ] Review card: The Sleeping Choir
-- [ ] Review card: Throne of Melted Faces
-- [ ] Review card: The Hungry Cot
-- [ ] Review card: The Vine of Apologies
-- [ ] Review card: The Bleeding Mask
-- [ ] Review card: The Watcher’s Gallows
-- [ ] Review card: The Garden of Apologies
-- [ ] Review card: The Gutless Choir
-- [ ] Review card: The Lullaby Tomb
-- [ ] Review card: The Rotting Marriage
-- [ ] Review card: The Freezing Prayer
-- [ ] Review card: The Nameless Choir
-- [ ] Review card: The Shattered Stage
-- [ ] Review card: The Puppeted Pilgrim
-- [ ] Review card: The Candle-Melt Oracle
-- [ ] Review card: The Path of Remembered Crimes
-- [ ] Review card: The Machine That Regrets
+- [x] Review card: The Rustbone Choir
+- [x] Review card: Archive of Misremembered Promises
+- [x] Review card: The Salting Tree
+- [x] Review card: The Bone Lantern
+- [x] Review card: The Stillbirth Clock
+- [x] Review card: The Limbo Hearth
+- [x] Review card: Altar of Echoed Sins
+- [x] Review card: The Salt-Tongued Prophet
+- [x] Review card: The Tarnished Halo
+- [x] Review card: The Cradle of Static
+- [x] Review card: The Maw of Sleep
+- [x] Review card: The Windowless House
+- [x] Review card: The Hung Verdict
+- [x] Review card: The Corridor of Crooked Steps
+- [x] Review card: The Screaming Frame
+- [x] Review card: The Casket of Kindness
+- [x] Review card: The Sleeping Choir
+- [x] Review card: Throne of Melted Faces
+- [x] Review card: The Hungry Cot
+- [x] Review card: The Vine of Apologies
+- [x] Review card: The Bleeding Mask
+- [x] Review card: The Watcher’s Gallows
+- [x] Review card: The Garden of Apologies
+- [x] Review card: The Gutless Choir
+- [x] Review card: The Lullaby Tomb
+- [x] Review card: The Rotting Marriage
+- [x] Review card: The Freezing Prayer
+- [x] Review card: The Nameless Choir
+- [x] Review card: The Shattered Stage
+- [x] Review card: The Puppeted Pilgrim
+- [x] Review card: The Candle-Melt Oracle
+- [x] Review card: The Path of Remembered Crimes
+- [x] Review card: The Machine That Regrets
 - [ ] Implement Whisper Link use effect to pull Cait one tile
 - [ ] Implement Signal Crown use effect to resist the next encounter
