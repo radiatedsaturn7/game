@@ -75,7 +75,7 @@
     "ID": "13",
     "Name": "Whisper Link",
     "Description": "A psychic tether to someone who still matters.",
-    "Effect": "+1 Hope"
+    "Effect": "Pull Cait one tile"
   },
   {
     "ID": "14",
@@ -153,7 +153,7 @@
     "ID": "27",
     "Name": "Husk Mask",
     "Description": "A disguise woven from emptiness.",
-    "Effect": "+1 Hope"
+    "Effect": "Skip the next tile's effects (still lose Hope for revealing)"
   },
   {
     "ID": "28",

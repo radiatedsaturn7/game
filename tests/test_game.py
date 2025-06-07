@@ -196,6 +196,91 @@ class CardTests(unittest.TestCase):
         self.assertIsNone(lost)
         self.assertTrue(player.has_item('Blank Tag'))
 
+    def test_husk_mask_skips_next_tile(self):
+        game = self._new_game()
+        player = game.players[0]
+        mask = game.item_registry['husk mask']
+        player.add_item(Item(mask.name, mask.description, effect_text=mask.effect_text, use_effect=mask.use_effect))
+        player.use_item(game, 'husk mask', '')
+        # Prepare a predictable encounter
+        card = main.EncounterCard('Test Card', 'desc', effect={'Description': '-1 Sanity', 'Sanity': -1})
+        game.board.move_player(player, 1, 0)
+        tile = game.board.tile_at(player.x, player.y)
+        tile.encounter = card
+        with patch('builtins.input', dummy_input):
+            game.handle_tile(player, 'right')
+        self.assertEqual(player.sanity, 10)
+        self.assertEqual(game.hope, 9)
+
+    def test_weeping_ledger_effect(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the weeping ledger']
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        self.assertEqual(player.health, 9)
+        self.assertEqual(game.hope, 11)
+
+    def test_glass_colossus_awards_tearshard(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the glass colossus']
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        self.assertEqual(player.health, 9)
+        self.assertTrue(player.has_item('Tearshard'))
+
+    def test_chain_that_whispers_effect(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the chain that whispers']
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 9)
+        self.assertTrue(player.has_item('Whisper Link'))
+
+    def test_lantern_maw_effect(self):
+        game = self._new_game()
+        player = game.players[0]
+        extra = game.item_registry['blank tag']
+        player.add_item(Item(extra.name, extra.description, effect_text=extra.effect_text, use_effect=extra.use_effect))
+        inv_before = len(player.inventory)
+        card = game.encounter_lookup['the lantern maw']
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        self.assertEqual(len(player.inventory), inv_before - 1)
+        self.assertEqual(player.health, 10)
+        self.assertEqual(player.sanity, 11)
+
+    def test_dagger_in_the_cradle_effect(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['dagger in the cradle']
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        self.assertEqual(game.hope, 9)
+        self.assertTrue(player.has_item('Singing Blade'))
+
+    def test_tower_of_the_forgotten_signal_reveals_tiles(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['tower of the forgotten signal']
+        before = sum(
+            1
+            for x in range(game.board.size)
+            for y in range(game.board.size)
+            if game.board.tile_at(x, y).revealed
+        )
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        after = sum(
+            1
+            for x in range(game.board.size)
+            for y in range(game.board.size)
+            if game.board.tile_at(x, y).revealed
+        )
+        self.assertEqual(after - before, 3)
+
     def test_wax_crown_added_and_toggle(self):
         game = self._new_game()
         player = game.players[0]

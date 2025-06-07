@@ -362,6 +362,7 @@ class Player:
     double_next: bool = False
     cancel_digital_next: bool = False
     cancel_next_effect: bool = False
+    skip_next_tile: bool = False
     wearing_wax_crown: bool = False
     recently_lost_item: Optional[Item] = None
 
@@ -1200,6 +1201,11 @@ def use_oracle_wick(game: 'Game', player: Player, location: str) -> bool:
     print('The wick ignites, ready to nullify the next effect.')
     return True
 
+def use_husk_mask(game: 'Game', player: Player, location: str) -> bool:
+    player.skip_next_tile = True
+    print('You don the Husk Mask, ready to slip past the next tile unnoticed.')
+    return True
+
 def use_exit_sketch(game: 'Game', player: Player, location: str) -> bool:
     coords = []
     for x in range(game.board.size):
@@ -1473,6 +1479,8 @@ class Game:
                     item.use_effect = use_wax_crown
                 if item.name == 'Oracle Wick':
                     item.use_effect = use_oracle_wick
+                if item.name == 'Husk Mask':
+                    item.use_effect = use_husk_mask
                 if item.name == 'Glimmer of What Could Be':
                     item.use_effect = use_glimmer
                 if item.name == 'Stamp of Legitimacy':
@@ -1581,7 +1589,12 @@ class Game:
                 self.reveal_random_tiles(count)
             elif 'reveal a tile' in lower or 'reveal 1 tile' in lower:
                 self.reveal_random_tiles(1)
-        if 'lose 1 item' in lower or 'discard one item' in lower:
+        if (
+            'lose 1 item' in lower
+            or 'discard one item' in lower
+            or 'lose an item' in lower
+            or 'discard an item' in lower
+        ):
             if player.inventory:
                 lost = player.lose_item()
                 if lost:
@@ -1645,7 +1658,12 @@ class Game:
                     self.reveal_random_tiles(count)
                 elif 'reveal a tile' in lower or 'reveal 1 tile' in lower:
                     self.reveal_random_tiles(1)
-            if 'lose 1 item' in lower or 'discard one item' in lower:
+            if (
+                'lose 1 item' in lower
+                or 'discard one item' in lower
+                or 'lose an item' in lower
+                or 'discard an item' in lower
+            ):
                 if player.inventory:
                     lost = player.lose_item()
                     if lost:
@@ -1890,15 +1908,19 @@ class Game:
 
         enc_first = False
         with CaptureBuffer() as cap:
-            if tile.encounter and not tile.encounter.triggered:
-                enc_first = True
-                tile.encounter.apply(self, player, True)
-            elif tile.encounter and tile.encounter.revisit:
-                tile.encounter.apply(self, player, False)
+            if player.skip_next_tile:
+                print('The Husk Mask conceals you from the tile\'s effects.')
+                player.skip_next_tile = False
+            else:
+                if tile.encounter and not tile.encounter.triggered:
+                    enc_first = True
+                    tile.encounter.apply(self, player, True)
+                elif tile.encounter and tile.encounter.revisit:
+                    tile.encounter.apply(self, player, False)
 
-            if tile.location:
-                tile.location.apply(self, player)
-            self.check_item_triggers(player, tile)
+                if tile.location:
+                    tile.location.apply(self, player)
+                self.check_item_triggers(player, tile)
         self.last_action_description = cap.getvalue().strip()
 
         after = (player.health, player.sanity, self.hope)
