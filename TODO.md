@@ -94,7 +94,7 @@
 - [x] Expand location list with Sanctuary Node and other entries from README.
 - [x] Implement Echo Tiles for communication or buffs between distant players.
 - [x] Add Shared Visions rule for +1 Sanity when players stand on mirrored tiles.
-- [ ] Implement Anti-Camping mechanic that spawns Abyssal Shadows if players linger on a Sanctuary.
+- [x] Implement Anti-Camping mechanic that spawns Abyssal Shadows if players linger on a Sanctuary.
 - [ ] Add Null Signal Bloom event that disables items until the next Abyssal Shift.
 - [x] Add Abyssal Engine location consuming an item for +2 Hope.
 - [ ] Implement Abyssal Flask item for +2 Sanity at the cost of 1 Hope.
@@ -125,3 +125,5 @@
 - [ ] Implement Morality Dilemmas system for tough narrative choices.
 - [ ] Add remaining encounter cards from the design document (Judgment Echo,
   System Intrusion, Wandering Twin, etc.).
+- [ ] Implement Dead Frequency encounter granting +1 to the next Final Gate roll if the party remembers the "Echo of the Elevator".
+- [ ] Implement Hall of Broken Echoes location effect causing -1 Sanity each turn a player lingers there.
