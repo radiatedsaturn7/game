@@ -368,6 +368,7 @@ class Player:
     recently_lost_item: Optional[Item] = None
     rest_cooldown: bool = False
     memories: Set[str] = field(default_factory=set)
+    traits: Set[str] = field(default_factory=set)
 
     def apply_effect(
         self,
@@ -381,6 +382,12 @@ class Player:
             print('The Oracle Wick flares, canceling the effect.')
             self.cancel_next_effect = False
             return
+        if hope > 0 and 'Hopeful' in self.traits:
+            hope += 1
+            print('Hopeful trait grants +1 Hope.')
+        if sanity < 0 and 'Fragile Psyche' in self.traits:
+            sanity -= 1
+            print('Fragile Psyche worsens the sanity loss.')
         if self.loss_shield and (health < 0 or hope < 0 or sanity < 0):
             print('The Core of Something Real glows, preventing your losses.')
             if health < 0:
@@ -463,6 +470,17 @@ class Player:
         if name in self.memories:
             self.memories.remove(name)
 
+    def add_trait(self, name: str):
+        self.traits.add(name)
+        print(f"{self.name} gains trait: {name}.")
+
+    def has_trait(self, name: str) -> bool:
+        return name in self.traits
+
+    def remove_trait(self, name: str):
+        if name in self.traits:
+            self.traits.remove(name)
+
     def roll_d6(self, game: Optional['Game'] = None) -> int:
         roll = roll_d6()
         if self.roll_bonus != 0:
@@ -503,6 +521,10 @@ class EncounterCard:
             if player.resist_next_encounter:
                 print('The Signal Crown protects you from the encounter.')
                 player.resist_next_encounter = False
+                self.triggered = True
+                return
+            if player.has_trait('Digital Immunity') and any(k in self.name.lower() for k in ['digital', 'data', 'machine', 'socket']):
+                print(f"{player.name}'s Digital Immunity negates the encounter.")
                 self.triggered = True
                 return
             if player.cancel_digital_next and any(k in self.name.lower() for k in ['digital', 'data', 'machine', 'socket']):
@@ -1430,7 +1452,7 @@ class Board:
                     self.final_pos = (x, y)
 
 class Game:
-    def __init__(self, hope: int = 10):
+    def __init__(self, hope: int = 10, traits: Optional[Dict[str, List[str]]] = None):
         self.encounter_lookup: Dict[str, EncounterCard] = {}
         self.item_registry: Dict[str, Item] = {}
         self.location_lookup: Dict[str, Dict[str, str]] = {}
@@ -1439,6 +1461,10 @@ class Game:
             Player('Robtergeist', 'R'),
             Player('Cait Vex', 'C')
         ]
+        if traits:
+            for p in self.players:
+                for t in traits.get(p.name, []):
+                    p.add_trait(t)
         self.hope = max(0, min(12, hope))
         self.last_action_summary: str = 'Welcome to the Abyss.'
         self.last_action_description: str = ''
