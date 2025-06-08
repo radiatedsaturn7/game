@@ -1249,5 +1249,13 @@
       "Description": "-1 Sanity",
       "Sanity": -1
     }
+  },
+  {
+    "ID": "81",
+    "Name": "Null Signal Bloom",
+    "Description": "The tile goes dark. All items held are temporarily disabled until the next Abyssal Shift.",
+    "Effect": {
+      "Description": "Items are disabled until the next Abyssal Shift"
+    }
   }
 ]

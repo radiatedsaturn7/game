@@ -452,6 +452,9 @@ class Player:
         return any(it.name.lower() == item_name.lower() for it in self.inventory)
 
     def use_item(self, game: 'Game', item_name: str, location: str):
+        if game.items_disabled:
+            print('A Null Signal Bloom suppresses all items. You cannot use anything now.')
+            return
         if item_name.lower() not in game.item_registry:
             print(f"Item '{item_name}' not found in your world.")
             return
@@ -1092,6 +1095,11 @@ def flickering_choir(game: 'Game', player: Player):
     else:
         player.apply_effect(game, hope=-1, sanity=1)
 
+# ----- Null Signal Bloom effect -----
+def null_signal_bloom(game: 'Game', player: Player):
+    print('A Null Signal Bloom engulfs the area, rendering all items inert.')
+    game.items_disabled = True
+
 # ----- Final Gate encounter effects -----
 def abyssal_laugh(game: 'Game', players: Iterable[Player]):
     print('Unseen voices laugh from the darkness...')
@@ -1507,6 +1515,7 @@ class Game:
         self.turn_count: int = 0
         self.shift_triggered: bool = False
         self.shared_visions_active: bool = False
+        self.items_disabled: bool = False
 
         # Both players begin at the Fractured Vestibule
         start_x, start_y = self.board.start_pos
@@ -1583,6 +1592,9 @@ class Game:
             roll = p.roll_d6(self)
             if roll < 4:
                 p.apply_effect(self, sanity=-1)
+        if self.items_disabled:
+            print('The Null Signal fades. Items are usable again.')
+            self.items_disabled = False
 
     def load_locations(self):
         with open('locations.json') as f:
@@ -1623,6 +1635,7 @@ class Game:
                     'the archive of everything that didn\u2019t work': {'immediate': archive_everything},
                     'the hall of inherited guilt': {'immediate': inherited_guilt},
                     'the flickering choir': {'immediate': flickering_choir},
+                    'null signal bloom': {'immediate': null_signal_bloom},
                 }
                 effect_texts = {
                     'fork in the real': 'Split: +1 Hope and cannot share a tile until changed; burn: -1 Hope',
@@ -1646,6 +1659,7 @@ class Game:
                     'the gasping gate': '-1 Hope; reveal 1 tile',
                     'teeth in the floor': '-2 Health',
                     'the clockmaker\u2019s gallows': '+1 Sanity',
+                    'null signal bloom': 'Items are disabled until the next Abyssal Shift',
                 }
                 key = card.name.lower()
                 if key in mapping:
