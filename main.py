@@ -1505,6 +1505,7 @@ class Game:
         self.no_reunite: bool = False
         self.turn_count: int = 0
         self.shift_triggered: bool = False
+        self.shared_visions_active: bool = False
 
         # Both players begin at the Fractured Vestibule
         start_x, start_y = self.board.start_pos
@@ -1546,6 +1547,19 @@ class Game:
         if self.turn_count >= 10 or self.tiles_revealed() >= 12:
             self.abyssal_shift()
             self.shift_triggered = True
+
+    def check_shared_visions(self):
+        """Grant +1 Sanity when players occupy mirrored tiles."""
+        p1, p2 = self.players
+        size = self.board.size
+        mirrored = p1.x == size - 1 - p2.x and p1.y == size - 1 - p2.y
+        if mirrored and not self.shared_visions_active:
+            print('Shared Visions: Your mirrored positions steady your minds.')
+            for p in self.players:
+                p.apply_effect(self, sanity=1)
+            self.shared_visions_active = True
+        elif not mirrored:
+            self.shared_visions_active = False
 
     def abyssal_shift(self):
         print('--- Abyssal Shift ---')
@@ -2252,6 +2266,7 @@ class Game:
 
     def player_turn(self, player: Player, can_move: bool = True) -> bool:
         while True:
+            self.check_shared_visions()
             action = self.render_screen(player)
             if action.startswith('items'):
                 parts = action.split(maxsplit=1)

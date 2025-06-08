@@ -93,7 +93,7 @@
 - [x] Allow variable board size when creating a new Game.
 - [x] Expand location list with Sanctuary Node and other entries from README.
 - [x] Implement Echo Tiles for communication or buffs between distant players.
-- [ ] Add Shared Visions rule for +1 Sanity when players stand on mirrored tiles.
+- [x] Add Shared Visions rule for +1 Sanity when players stand on mirrored tiles.
 - [ ] Implement Anti-Camping mechanic that spawns Abyssal Shadows if players linger on a Sanctuary.
 - [ ] Add Null Signal Bloom event that disables items until the next Abyssal Shift.
 - [x] Add Abyssal Engine location consuming an item for +2 Hope.
