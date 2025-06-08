@@ -1352,6 +1352,13 @@ def use_signal_crown(game: 'Game', player: Player, location: str) -> bool:
     print('The Signal Crown crackles, ready to resist the next encounter.')
     return True
 
+def use_abyssal_flask(game: 'Game', player: Player, location: str) -> bool:
+    """Restore 2 Sanity at the cost of 1 Hope."""
+    player.apply_effect(game, sanity=2)
+    game.modify_hope(-1)
+    print('You drink the Abyssal Flask, feeling steadier but less hopeful.')
+    return True
+
 class Tile:
     def __init__(self):
         self.revealed = False
@@ -1725,6 +1732,8 @@ class Game:
                     item.use_effect = use_offline
                 if item.name == 'Comfort Snack':
                     item.use_effect = use_comfort_snack
+                if item.name == 'Abyssal Flask':
+                    item.use_effect = use_abyssal_flask
                 if item.name == 'Rusty Refusal Bolt':
                     item.use_effect = use_refusal_bolt
                 if item.name == 'Exit Sketch':
