@@ -273,6 +273,28 @@ class CardTests(unittest.TestCase):
         self.assertEqual(game.hope, start_hope - 1)
         self.assertFalse(player.has_item('Abyssal Flask'))
 
+    def test_coded_key_unlocks_tile(self):
+        game = self._new_game()
+        player = game.players[0]
+        key = game.item_registry['coded key']
+        player.add_item(Item(key.name, key.description, effect_text=key.effect_text, use_effect=key.use_effect))
+        tile = game.board.tile_at(1, 1)
+        tile.locked = True
+        player.use_item(game, 'coded key', '')
+        self.assertFalse(tile.locked)
+        self.assertFalse(player.has_item('Coded Key'))
+
+    def test_coded_key_rerolls_shift(self):
+        game = self._new_game()
+        player = game.players[0]
+        key = game.item_registry['coded key']
+        player.add_item(Item(key.name, key.description, effect_text=key.effect_text, use_effect=key.use_effect))
+        player.use_item(game, 'coded key', '')
+        with patch.object(player, 'roll_d6', side_effect=[1, 6]):
+            game.abyssal_shift()
+        self.assertEqual(player.sanity, 10)
+        self.assertFalse(player.reroll_shift)
+
     def test_lantern_maw_effect(self):
         game = self._new_game()
         player = game.players[0]

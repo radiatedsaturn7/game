@@ -359,6 +359,7 @@ class Player:
     auto_fail: bool = False
     loss_shield: bool = False
     reroll_next: bool = False
+    reroll_shift: bool = False
     double_next: bool = False
     cancel_digital_next: bool = False
     resist_next_encounter: bool = False
@@ -1271,6 +1272,19 @@ def use_refusal_bolt(game: 'Game', player: Player, location: str) -> bool:
     print('You load the bolt, ready to purposely fail the next encounter.')
     return True
 
+def use_coded_key(game: 'Game', player: Player, location: str) -> bool:
+    """Unlock the first locked tile or prepare to reroll the next Abyssal Shift."""
+    for x in range(game.board.size):
+        for y in range(game.board.size):
+            tile = game.board.tile_at(x, y)
+            if getattr(tile, 'locked', False):
+                tile.locked = False
+                print('A locked path clicks open.')
+                return True
+    player.reroll_shift = True
+    print('The key hums, ready to rewrite the next Abyssal Shift.')
+    return True
+
 def use_wax_crown(game: 'Game', player: Player, location: str) -> bool:
     if player.wearing_wax_crown:
         player.wearing_wax_crown = False
@@ -1364,6 +1378,7 @@ class Tile:
         self.revealed = False
         self.encounter: Optional[EncounterCard] = None
         self.location: Optional[LocationCard] = None
+        self.locked: bool = False
 
 class Board:
     def __init__(self, size: int = 5):
@@ -1422,6 +1437,10 @@ class Board:
         new_y = player.y + dy
         if not self.in_bounds(new_x, new_y):
             print("Cannot move outside the Abyss.")
+            return False
+        tile = self.tile_at(new_x, new_y)
+        if getattr(tile, 'locked', False):
+            print('The path is locked.')
             return False
         player.x, player.y = new_x, new_y
         return True
@@ -1597,6 +1616,10 @@ class Game:
         self.board.shuffle_tiles()
         for p in self.players:
             roll = p.roll_d6(self)
+            if roll < 4 and p.reroll_shift:
+                print('The Coded Key flashes. Rerolling...')
+                roll = p.roll_d6(self)
+                p.reroll_shift = False
             if roll < 4:
                 p.apply_effect(self, sanity=-1)
         if self.items_disabled:
@@ -1742,6 +1765,8 @@ class Game:
                     item.use_effect = use_ashen_archive
                 if item.name == 'Burden Token':
                     item.use_effect = use_burden_token
+                if item.name == 'Coded Key':
+                    item.use_effect = use_coded_key
                 if item.name == 'Whisper Link':
                     item.use_effect = use_whisper_link
                 if item.name == 'Signal Crown':
