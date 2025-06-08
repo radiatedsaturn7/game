@@ -307,5 +307,11 @@
     "Name": "Abyssal Flask",
     "Description": "Drink to steady your nerves, but the taste is hopeless.",
     "Effect": "+2 Sanity, -1 Hope"
+  },
+  {
+    "ID": "52",
+    "Name": "Coded Key",
+    "Description": "Lines of code etched into a metal key.",
+    "Effect": "Unlock a tile or reroll Abyssal Shift"
   }
 ]
