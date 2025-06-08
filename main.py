@@ -388,6 +388,9 @@ class Player:
         if sanity < 0 and 'Fragile Psyche' in self.traits:
             sanity -= 1
             print('Fragile Psyche worsens the sanity loss.')
+        if sanity > 0 and game.has_modifier('no_sanity_recovery'):
+            print('An Abyssal Rule prevents sanity recovery.')
+            sanity = 0
         if self.loss_shield and (health < 0 or hope < 0 or sanity < 0):
             print('The Core of Something Real glows, preventing your losses.')
             if health < 0:
@@ -1452,7 +1455,12 @@ class Board:
                     self.final_pos = (x, y)
 
 class Game:
-    def __init__(self, hope: int = 10, traits: Optional[Dict[str, List[str]]] = None):
+    def __init__(
+        self,
+        hope: int = 10,
+        traits: Optional[Dict[str, List[str]]] = None,
+        modifiers: Optional[Iterable[str]] = None,
+    ):
         self.encounter_lookup: Dict[str, EncounterCard] = {}
         self.item_registry: Dict[str, Item] = {}
         self.location_lookup: Dict[str, Dict[str, str]] = {}
@@ -1468,6 +1476,7 @@ class Game:
         self.hope = max(0, min(12, hope))
         self.last_action_summary: str = 'Welcome to the Abyss.'
         self.last_action_description: str = ''
+        self.modifiers = set(modifiers or [])
         self.load_locations()
         self.deck = self.create_deck()
         self.item_deck = self.create_item_deck()
@@ -1501,6 +1510,10 @@ class Game:
         self.hope = max(0, min(12, self.hope + amount))
         for p in self.players:
             p.hope = self.hope
+
+    def has_modifier(self, name: str) -> bool:
+        """Return True if the given game modifier is active."""
+        return name.lower() in self.modifiers
 
     def any_player_has_memory(self, name: str) -> bool:
         return any(p.has_memory(name) for p in self.players)

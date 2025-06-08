@@ -89,7 +89,7 @@
 - [x] Add rest cooldown so players cannot rest two turns in a row.
 - [x] Add Memory System to track persistent boons and flaws from encounters.
 - [x] Implement optional Character Traits for unique player abilities.
-- [ ] Support applying Game Modifiers at the start (e.g., no Sanity recovery).
+- [x] Support applying Game Modifiers at the start (e.g., no Sanity recovery).
 - [ ] Allow variable board size when creating a new Game.
 - [ ] Expand location list with Sanctuary Node and other entries from README.
 - [ ] Implement Echo Tiles for communication or buffs between distant players.

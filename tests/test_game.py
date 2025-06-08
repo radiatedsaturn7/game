@@ -1204,6 +1204,13 @@ class CardTests(unittest.TestCase):
             card.apply(game, player, True)
         self.assertEqual(player.sanity, 10)
 
+    def test_no_sanity_recovery_modifier(self):
+        game = main.Game(modifiers=['no_sanity_recovery'])
+        player = game.players[0]
+        player.sanity = 5
+        player.apply_effect(game, sanity=2)
+        self.assertEqual(player.sanity, 5)
+
 
 def json_names(filename):
     import json
