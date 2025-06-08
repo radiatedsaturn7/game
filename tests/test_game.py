@@ -1251,6 +1251,22 @@ class CardTests(unittest.TestCase):
         self.assertFalse(p1.has_item('Test Item'))
         self.assertTrue(p2.has_item('Test Item'))
 
+    def test_null_signal_bloom_disables_items_until_shift(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['null signal bloom']
+        token = game.item_registry['memory token']
+        player.add_item(Item(token.name, token.description, effect_text=token.effect_text, use_effect=token.use_effect))
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        player.use_item(game, 'memory token', '')
+        self.assertTrue(player.has_item('Memory Token'))
+        self.assertFalse(player.reroll_next)
+        game.abyssal_shift()
+        player.use_item(game, 'memory token', '')
+        self.assertFalse(player.has_item('Memory Token'))
+        self.assertTrue(player.reroll_next)
+
 
 def json_names(filename):
     import json

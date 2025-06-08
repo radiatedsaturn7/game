@@ -95,7 +95,7 @@
 - [x] Implement Echo Tiles for communication or buffs between distant players.
 - [x] Add Shared Visions rule for +1 Sanity when players stand on mirrored tiles.
 - [x] Implement Anti-Camping mechanic that spawns Abyssal Shadows if players linger on a Sanctuary.
-- [ ] Add Null Signal Bloom event that disables items until the next Abyssal Shift.
+- [x] Add Null Signal Bloom event that disables items until the next Abyssal Shift.
 - [x] Add Abyssal Engine location consuming an item for +2 Hope.
 - [ ] Implement Abyssal Flask item for +2 Sanity at the cost of 1 Hope.
 - [ ] Implement Coded Key item to unlock tiles or reroll Abyssal Shift effects.
