@@ -86,8 +86,8 @@
 - [x] Implement Signal Crown use effect to resist the next encounter
 
 - [x] Implement Abyssal Shift midgame board shuffle after 10 turns or 12 tiles revealed.
-- [ ] Add rest cooldown so players cannot rest two turns in a row.
-- [ ] Add Memory System to track persistent boons and flaws from encounters.
+- [x] Add rest cooldown so players cannot rest two turns in a row.
+- [x] Add Memory System to track persistent boons and flaws from encounters.
 - [ ] Implement optional Character Traits for unique player abilities.
 - [ ] Support applying Game Modifiers at the start (e.g., no Sanity recovery).
 - [ ] Allow variable board size when creating a new Game.
@@ -99,3 +99,8 @@
 - [ ] Add Abyssal Engine location consuming an item for +2 Hope.
 - [ ] Implement Abyssal Flask item for +2 Sanity at the cost of 1 Hope.
 - [ ] Implement Coded Key item to unlock tiles or reroll Abyssal Shift effects.
+- [ ] Implement Signal Flare item to reveal an unrevealed tile.
+- [ ] Implement Fragmented Doll item granting +1 Hope if discarded before the Final Encounter.
+- [ ] Implement Worn Compass item to cancel forced movement or teleportation.
+- [ ] Implement Red Circuit item for +1 to any dice roll.
+- [ ] Implement Mirror Shard item to reroll one failed Sanity check.
