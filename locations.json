@@ -233,5 +233,11 @@
     "Name": "Harmonic Node",
     "Description": "Soft tones resonate, strengthening shared resolve.",
     "Effect": "Each turn here lowers next turn's Sanity loss by 1."
+  },
+  {
+    "ID": "40",
+    "Name": "Echo Node",
+    "Description": "Twin beacons resonate across the void.",
+    "Effect": "Players here may trade with a partner on another Echo Node."
   }
 ]

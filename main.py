@@ -3,7 +3,7 @@ import json
 import re
 import os
 from dataclasses import dataclass, field
-from typing import List, Callable, Optional, Iterable, Dict, Set
+from typing import List, Callable, Optional, Iterable, Dict, Set, Tuple
 import sys
 from io import StringIO
 
@@ -1384,6 +1384,20 @@ class Board:
             description=gate['Description'],
         )
 
+        # place paired Echo Nodes for remote communication
+        echo_desc = locs.get('Echo Node', {'Description': ''})['Description']
+        self.echo_nodes: List[Tuple[int, int]] = []
+        for _ in range(2):
+            while True:
+                x, y = random.randint(0, size - 1), random.randint(0, size - 1)
+                if (x, y) not in (self.start_pos, self.final_pos) and (x, y) not in self.echo_nodes:
+                    self.echo_nodes.append((x, y))
+                    self.grid[x][y].location = LocationCard(
+                        name='Echo Node',
+                        description=echo_desc,
+                    )
+                    break
+
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.size and 0 <= y < self.size
 
@@ -1446,6 +1460,7 @@ class Board:
             y = idx % self.size
             self.grid[x][y] = tile
         # Update special positions in case they moved
+        self.echo_nodes = []
         for x in range(self.size):
             for y in range(self.size):
                 loc = self.grid[x][y].location
@@ -1453,6 +1468,9 @@ class Board:
                     self.start_pos = (x, y)
                 if loc and loc.name == 'Final Gate':
                     self.final_pos = (x, y)
+                if loc and loc.name == 'Echo Node':
+                    if (x, y) not in self.echo_nodes:
+                        self.echo_nodes.append((x, y))
 
 class Game:
     def __init__(
@@ -2196,9 +2214,18 @@ class Game:
                 player.apply_effect(game, hope=1)
 
     def trade(self, from_player: Player, to_player: Player, item_name: str):
-        if from_player.x != to_player.x or from_player.y != to_player.y:
-            print("Both players must be on the same tile to trade.")
-            return
+        same_tile = from_player.x == to_player.x and from_player.y == to_player.y
+        if not same_tile:
+            tile_a = self.board.tile_at(from_player.x, from_player.y)
+            tile_b = self.board.tile_at(to_player.x, to_player.y)
+            on_echo = (
+                tile_a.location and tile_b.location and
+                tile_a.location.name == 'Echo Node' and
+                tile_b.location.name == 'Echo Node'
+            )
+            if not on_echo:
+                print("Both players must be on the same tile to trade.")
+                return
         for i, it in enumerate(from_player.inventory):
             if it.name.lower() == item_name.lower():
                 from_player.inventory.pop(i)

@@ -1216,6 +1216,19 @@ class CardTests(unittest.TestCase):
         self.assertEqual(game.board.size, 7)
         self.assertEqual(len(game.board.grid), 7)
 
+    def test_echo_node_remote_trade(self):
+        game = self._new_game()
+        p1, p2 = game.players
+        # move players to different echo nodes
+        coords = game.board.echo_nodes
+        p1.x, p1.y = coords[0]
+        p2.x, p2.y = coords[1]
+        item = Item('Test Item', 'desc')
+        p1.add_item(item)
+        game.trade(p1, p2, 'Test Item')
+        self.assertFalse(p1.has_item('Test Item'))
+        self.assertTrue(p2.has_item('Test Item'))
+
 
 def json_names(filename):
     import json
