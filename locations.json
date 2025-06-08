@@ -149,4 +149,89 @@
     "Description": "It doesn\u2019t open. It consumes. But maybe, just maybe, it lets go.",
     "Effect": "Exit card. Only available when both Rob and Cait are present with 3+ Hope and Sanity."
   }
+  ,
+  {
+    "ID": "26",
+    "Name": "Sanctuary Node",
+    "Description": "A rare pocket of calm hums with gentle static.",
+    "Effect": "Resting here restores +1 Sanity, no Hope loss."
+  },
+  {
+    "ID": "27",
+    "Name": "Hall of Broken Echoes",
+    "Description": "Every sound fractures into shards that cut the mind.",
+    "Effect": "Speaking here causes 1 Sanity loss per turn."
+  },
+  {
+    "ID": "28",
+    "Name": "Glass Field",
+    "Description": "Fragments crunch underfoot, reflecting endless possibilities.",
+    "Effect": "When leaving, roll 1d6; on a 1, take 1 Sanity damage."
+  },
+  {
+    "ID": "29",
+    "Name": "Clattering Archive",
+    "Description": "Files scatter themselves like startled birds.",
+    "Effect": "Reveal all adjacent tiles when uncovered."
+  },
+  {
+    "ID": "30",
+    "Name": "Blood Loop",
+    "Description": "A track worn red from endless pacing.",
+    "Effect": "End two turns here in a row to gain 1 Sanity but lose 1 Hope."
+  },
+  {
+    "ID": "31",
+    "Name": "Static Well",
+    "Description": "A deep pit crackles with glimpses of other places.",
+    "Effect": "Peek at any tile but you cannot move next turn."
+  },
+  {
+    "ID": "32",
+    "Name": "Resonance Chamber",
+    "Description": "Walls vibrate with the frequency of companionship.",
+    "Effect": "If both players are here, gain +1 Hope."
+  },
+  {
+    "ID": "33",
+    "Name": "Abyssal Engine",
+    "Description": "A grotesque device churns, hungry for offerings.",
+    "Effect": "Use an item for +2 Hope, then discard this tile."
+  },
+  {
+    "ID": "34",
+    "Name": "Twilight Chamber",
+    "Description": "Fading light distorts every action into uncertainty.",
+    "Effect": "All rolls +1 difficulty; success grants +1 Sanity."
+  },
+  {
+    "ID": "35",
+    "Name": "Dust Archive",
+    "Description": "Stacks of brittle paper crumble at your touch.",
+    "Effect": "Reveal nearest unrevealed tile; if it's a Location, gain 1 Hope."
+  },
+  {
+    "ID": "36",
+    "Name": "Fragment Corridor",
+    "Description": "Walls shift disjointedly, scattering your focus.",
+    "Effect": "Sanity checks are rolled twice; use the worse result."
+  },
+  {
+    "ID": "37",
+    "Name": "Eye of the Storm",
+    "Description": "Calm emptiness sits at the center of swirling chaos.",
+    "Effect": "End a turn here alone to gain 1 Sanity but lose 1 Hope."
+  },
+  {
+    "ID": "38",
+    "Name": "Corrupter's Trace",
+    "Description": "Distorted footprints hint at something stalking you.",
+    "Effect": "After leaving, roll 1d6; on 6, spawn a random Encounter next turn."
+  },
+  {
+    "ID": "39",
+    "Name": "Harmonic Node",
+    "Description": "Soft tones resonate, strengthening shared resolve.",
+    "Effect": "Each turn here lowers next turn's Sanity loss by 1."
+  }
 ]
