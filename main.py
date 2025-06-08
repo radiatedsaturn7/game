@@ -369,6 +369,7 @@ class Player:
     rest_cooldown: bool = False
     memories: Set[str] = field(default_factory=set)
     traits: Set[str] = field(default_factory=set)
+    sanctuary_turns: int = 0
 
     def apply_effect(
         self,
@@ -1561,6 +1562,20 @@ class Game:
         elif not mirrored:
             self.shared_visions_active = False
 
+    def check_anti_camping(self, player: Player, location_name: str):
+        """Punish lingering too long on Sanctuary Nodes."""
+        if location_name == 'Sanctuary Node':
+            player.sanctuary_turns += 1
+            if player.sanctuary_turns >= 2:
+                print('Abyssal Shadows gather around you for lingering...')
+                roll = player.roll_d6(self)
+                if roll < 4:
+                    player.apply_effect(self, sanity=-1)
+                else:
+                    print('You steel yourself against the darkness.')
+        else:
+            player.sanctuary_turns = 0
+
     def abyssal_shift(self):
         print('--- Abyssal Shift ---')
         self.board.shuffle_tiles()
@@ -2334,10 +2349,14 @@ class Game:
                 if player.rest_cooldown:
                     print('You cannot rest two turns in a row.')
                     continue
+                tile = self.board.tile_at(player.x, player.y)
+                loc = tile.location.name if tile.location else ''
                 player.apply_effect(self, sanity=1)
-                self.modify_hope(-1)
-                self.last_action_summary = f"{player.name} rested."
+                if loc != 'Sanctuary Node':
+                    self.modify_hope(-1)
+                self.last_action_summary = f"{player.name} rested." if loc != 'Sanctuary Node' else f"{player.name} rested at a Sanctuary."
                 player.rest_cooldown = True
+                self.check_anti_camping(player, loc)
                 return self.hope == 0
             if action == 'end':
                 if not can_move:
@@ -2345,6 +2364,9 @@ class Game:
                     continue
                 self.last_action_summary = f"{player.name} ended their turn."
                 player.rest_cooldown = False
+                tile = self.board.tile_at(player.x, player.y)
+                loc = tile.location.name if tile.location else ''
+                self.check_anti_camping(player, loc)
                 return False
             moves = {'w': (0,-1), 'a': (-1,0), 's': (0,1), 'd': (1,0)}
             if action in moves:
@@ -2362,9 +2384,15 @@ class Game:
                     game_over, summary = self.handle_tile(player, dir_word)
                     self.last_action_summary = summary
                     player.rest_cooldown = False
+                    tile = self.board.tile_at(player.x, player.y)
+                    loc = tile.location.name if tile.location else ''
+                    self.check_anti_camping(player, loc)
                     return game_over
                 self.last_action_summary = f"{player.name} cannot move that way."
                 player.rest_cooldown = False
+                tile = self.board.tile_at(player.x, player.y)
+                loc = tile.location.name if tile.location else ''
+                self.check_anti_camping(player, loc)
                 return False
             print('Invalid action.')
             continue

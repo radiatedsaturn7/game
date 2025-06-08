@@ -1174,6 +1174,28 @@ class CardTests(unittest.TestCase):
             game.player_turn(player)
         self.assertIn('cannot rest two turns in a row', cap.getvalue().lower())
 
+    def test_sanctuary_rest_avoids_hope_loss(self):
+        game = self._new_game()
+        player = game.players[0]
+        tile = game.board.tile_at(player.x, player.y)
+        tile.location = main.LocationCard('Sanctuary Node', 'calm', 'Resting here restores +1 Sanity, no Hope loss.')
+        with patch('builtins.input', lambda prompt='': 'rest'):
+            game.player_turn(player)
+        self.assertEqual(game.hope, 10)
+        self.assertEqual(player.sanity, 11)
+
+    def test_anti_camping_triggers_shadow(self):
+        game = self._new_game()
+        player = game.players[0]
+        tile = game.board.tile_at(player.x, player.y)
+        tile.location = main.LocationCard('Sanctuary Node', 'calm')
+        with patch('builtins.input', lambda prompt='': 'end'):
+            game.player_turn(player)
+        with patch('builtins.input', lambda prompt='': 'end'), \
+             patch.object(player, 'roll_d6', return_value=3):
+            game.player_turn(player)
+        self.assertEqual(player.sanity, 9)
+
     def test_elevator_adds_memory(self):
         game = self._new_game()
         player = game.players[0]
