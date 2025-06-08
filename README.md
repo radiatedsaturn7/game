@@ -31,6 +31,8 @@ If Hope reaches 0: All is lost. Game over.
 Grid Layout
 
 Default: 5x5 tile grid (expandable to 7x7 or variable shapes).
+The Python implementation accepts a ``board_size`` parameter when
+instantiating ``Game`` to customize this value.
 
 Each tile may contain:
 

@@ -90,7 +90,7 @@
 - [x] Add Memory System to track persistent boons and flaws from encounters.
 - [x] Implement optional Character Traits for unique player abilities.
 - [x] Support applying Game Modifiers at the start (e.g., no Sanity recovery).
-- [ ] Allow variable board size when creating a new Game.
+- [x] Allow variable board size when creating a new Game.
 - [ ] Expand location list with Sanctuary Node and other entries from README.
 - [ ] Implement Echo Tiles for communication or buffs between distant players.
 - [ ] Add Shared Visions rule for +1 Sanity when players stand on mirrored tiles.
@@ -111,3 +111,14 @@
 - [ ] Implement Torn Locket item letting both players gain 1 Hope when gifted.
 - [ ] Implement Echo Pendant item preventing partner Sanity loss for one turn.
 - [ ] Implement Dead Channel Map item to move to a visited tile at 1 Sanity cost.
+- [ ] Add Glass Field location causing a 1 Sanity loss on a roll of 1 when leaving.
+- [ ] Add Clattering Archive location that reveals all adjacent tiles when uncovered.
+- [ ] Add Blood Loop location that grants +1 Sanity but costs 1 Hope if ending two turns in a row there.
+- [ ] Add Static Well location allowing a peek at any tile but preventing movement next turn.
+- [ ] Add Resonance Chamber location granting +1 Hope when both players are present.
+- [ ] Add Twilight Chamber location with +1 difficulty to rolls but +1 Sanity on success.
+- [ ] Add Dust Archive location revealing the nearest tile and granting Hope if it's a Location.
+- [ ] Add Fragment Corridor location forcing two Sanity checks and taking the worse result.
+- [ ] Add Eye of the Storm location giving +1 Sanity but -1 Hope if a player ends alone there.
+- [ ] Add Corrupter's Trace location that may spawn an Encounter after leaving.
+- [ ] Add Harmonic Node location that lowers Sanity loss by 1 for the next turn.

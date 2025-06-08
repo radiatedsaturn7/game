@@ -1211,6 +1211,11 @@ class CardTests(unittest.TestCase):
         player.apply_effect(game, sanity=2)
         self.assertEqual(player.sanity, 5)
 
+    def test_custom_board_size(self):
+        game = main.Game(board_size=7)
+        self.assertEqual(game.board.size, 7)
+        self.assertEqual(len(game.board.grid), 7)
+
 
 def json_names(filename):
     import json
