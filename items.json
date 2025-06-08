@@ -301,5 +301,11 @@
     "Name": "Burden Token",
     "Description": "A weight you carry for someone else.",
     "Effect": "Shield an ally from one loss"
+  },
+  {
+    "ID": "51",
+    "Name": "Abyssal Flask",
+    "Description": "Drink to steady your nerves, but the taste is hopeless.",
+    "Effect": "+2 Sanity, -1 Hope"
   }
 ]

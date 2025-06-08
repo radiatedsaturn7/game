@@ -261,6 +261,18 @@ class CardTests(unittest.TestCase):
         player.use_item(game, 'whisper link', '')
         self.assertEqual((cait.x, cait.y), (0, 1))
 
+    def test_abyssal_flask_use(self):
+        game = self._new_game()
+        player = game.players[0]
+        flask = game.item_registry['abyssal flask']
+        player.add_item(Item(flask.name, flask.description, effect_text=flask.effect_text, use_effect=flask.use_effect))
+        start_sanity = player.sanity
+        start_hope = game.hope
+        player.use_item(game, 'abyssal flask', '')
+        self.assertEqual(player.sanity, start_sanity + 2)
+        self.assertEqual(game.hope, start_hope - 1)
+        self.assertFalse(player.has_item('Abyssal Flask'))
+
     def test_lantern_maw_effect(self):
         game = self._new_game()
         player = game.players[0]
