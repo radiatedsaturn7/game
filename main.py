@@ -3,7 +3,7 @@ import json
 import re
 import os
 from dataclasses import dataclass, field
-from typing import List, Callable, Optional, Iterable, Dict
+from typing import List, Callable, Optional, Iterable, Dict, Set
 import sys
 from io import StringIO
 
@@ -366,6 +366,8 @@ class Player:
     skip_next_tile: bool = False
     wearing_wax_crown: bool = False
     recently_lost_item: Optional[Item] = None
+    rest_cooldown: bool = False
+    memories: Set[str] = field(default_factory=set)
 
     def apply_effect(
         self,
@@ -449,6 +451,17 @@ class Player:
                     del self.inventory[i]
                 return
         print(f"{self.name} does not have {item_name}.")
+
+    def add_memory(self, name: str):
+        self.memories.add(name)
+        print(f"Memory gained: {name}.")
+
+    def has_memory(self, name: str) -> bool:
+        return name in self.memories
+
+    def remove_memory(self, name: str):
+        if name in self.memories:
+            self.memories.remove(name)
 
     def roll_d6(self, game: Optional['Game'] = None) -> int:
         roll = roll_d6()
@@ -663,6 +676,39 @@ def bleeding_window_revisit(game: 'Game', player: Player):
         player.apply_effect(game, sanity=1, hope=-1)
     elif choice == 'm':
         player.apply_effect(game, hope=1, sanity=-1)
+
+def elevator_first(game: 'Game', player: Player):
+    key_item = game.item_registry.get('rusty override key')
+    choice = choose_numbered(
+        (
+            'Ride it',
+            [
+                'Roll **1d6**.',
+                'On **6**, gain **+2 Sanity**.',
+                'Otherwise, lose **-1 Sanity** and **-1 Hope**.',
+            ],
+        ),
+        (
+            'Take the stairs',
+            [
+                'Lose **-1 Sanity** and gain **Rusty Override Key**.',
+            ],
+        ),
+        game,
+        player,
+    )
+    if choice == '1':
+        roll = player.roll_d6(game)
+        if roll == 6:
+            player.apply_effect(game, sanity=2)
+        else:
+            player.apply_effect(game, sanity=-1)
+            game.modify_hope(-1)
+        player.add_memory('Echo of the Elevator')
+    else:
+        player.apply_effect(game, sanity=-1)
+        if key_item:
+            player.add_item(Item(key_item.name, key_item.description, effect_text=key_item.effect_text, use_effect=key_item.use_effect))
 
 
 
@@ -1430,6 +1476,9 @@ class Game:
         for p in self.players:
             p.hope = self.hope
 
+    def any_player_has_memory(self, name: str) -> bool:
+        return any(p.has_memory(name) for p in self.players)
+
     def tiles_revealed(self) -> int:
         return sum(1 for row in self.board.grid for tile in row if tile.revealed)
 
@@ -1479,6 +1528,7 @@ class Game:
                     'the nameless grave': {'immediate': nameless_grave_first, 'revisit': nameless_grave_revisit},
                     'shiverglass lake': {'immediate': shiverglass_lake_first, 'revisit': shiverglass_lake_revisit},
                     'the bleeding window': {'immediate': bleeding_window_first, 'revisit': bleeding_window_revisit},
+                    'the elevator that only goes down': {'immediate': elevator_first},
                     'the laughing statue': {'immediate': laughing_statue},
                     'echo well': {'immediate': echo_well},
                     'beneath the clockface': {'immediate': beneath_clockface},
@@ -1782,6 +1832,9 @@ class Game:
         success = True
         for p in self.players:
             roll = p.roll_d6(self)
+            if p.has_memory('Echo of the Elevator'):
+                roll = min(6, roll + 1)
+                print('Your memory of the Elevator empowers you.')
             if roll < 5:
                 success = False
         if success:
@@ -2196,15 +2249,20 @@ class Game:
                     self.last_action_summary = f"{player.name} used {item_name}."
                 continue
             if action == 'rest':
+                if player.rest_cooldown:
+                    print('You cannot rest two turns in a row.')
+                    continue
                 player.apply_effect(self, sanity=1)
                 self.modify_hope(-1)
                 self.last_action_summary = f"{player.name} rested."
+                player.rest_cooldown = True
                 return self.hope == 0
             if action == 'end':
                 if not can_move:
                     print('You cannot end during a pass. Type "pass" to return.')
                     continue
                 self.last_action_summary = f"{player.name} ended their turn."
+                player.rest_cooldown = False
                 return False
             moves = {'w': (0,-1), 'a': (-1,0), 's': (0,1), 'd': (1,0)}
             if action in moves:
@@ -2221,8 +2279,10 @@ class Game:
                     dir_word = {'w': 'up', 'a': 'left', 's': 'down', 'd': 'right'}[action]
                     game_over, summary = self.handle_tile(player, dir_word)
                     self.last_action_summary = summary
+                    player.rest_cooldown = False
                     return game_over
                 self.last_action_summary = f"{player.name} cannot move that way."
+                player.rest_cooldown = False
                 return False
             print('Invalid action.')
             continue

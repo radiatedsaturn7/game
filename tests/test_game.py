@@ -1160,6 +1160,41 @@ class CardTests(unittest.TestCase):
             game.maybe_trigger_abyssal_shift()
         self.assertTrue(shuffle.called)
 
+    def test_rest_cooldown(self):
+        game = self._new_game()
+        player = game.players[0]
+        with patch('builtins.input', lambda prompt='': 'rest'):
+            game.player_turn(player)
+        inputs = iter(['rest', 'end'])
+
+        def fake_input(prompt=''):
+            return next(inputs)
+
+        with patch('builtins.input', fake_input), main.CaptureBuffer() as cap:
+            game.player_turn(player)
+        self.assertIn('cannot rest two turns in a row', cap.getvalue().lower())
+
+    def test_elevator_adds_memory(self):
+        game = self._new_game()
+        player = game.players[0]
+        card = game.encounter_lookup['the elevator that only goes down']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=6):
+            card.apply(game, player, True)
+        self.assertIn('Echo of the Elevator', player.memories)
+
+    def test_memory_bonus_final_threshold(self):
+        game = self._new_game()
+        player = game.players[0]
+        player.add_memory('Echo of the Elevator')
+        with patch('builtins.input', lambda prompt='': 'n'), \
+             patch.object(player, 'roll_d6', return_value=4), \
+             patch.object(game.players[1], 'roll_d6', return_value=5), \
+             main.CaptureBuffer() as cap:
+            result = game.run_final_threshold()
+        self.assertTrue(result)
+        self.assertIn('Both players escape together', cap.getvalue())
+
 
 def json_names(filename):
     import json
