@@ -261,6 +261,19 @@ class CardTests(unittest.TestCase):
         player.use_item(game, 'whisper link', '')
         self.assertEqual((cait.x, cait.y), (0, 1))
 
+    def test_signal_flare_reveals_tile(self):
+        game = self._new_game()
+        player = game.players[0]
+        flare = game.item_registry['signal flare']
+        player.add_item(Item(flare.name, flare.description, effect_text=flare.effect_text, use_effect=flare.use_effect))
+        player.x, player.y = 2, 2
+        before = sum(1 for x in range(game.board.size) for y in range(game.board.size) if game.board.tile_at(x, y).revealed)
+        with patch('builtins.input', lambda prompt='': '1'):
+            player.use_item(game, 'signal flare', '')
+        after = sum(1 for x in range(game.board.size) for y in range(game.board.size) if game.board.tile_at(x, y).revealed)
+        self.assertEqual(after, before + 1)
+        self.assertFalse(player.has_item('Signal Flare'))
+
     def test_abyssal_flask_use(self):
         game = self._new_game()
         player = game.players[0]

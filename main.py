@@ -1366,6 +1366,45 @@ def use_signal_crown(game: 'Game', player: Player, location: str) -> bool:
     print('The Signal Crown crackles, ready to resist the next encounter.')
     return True
 
+def use_signal_flare(game: 'Game', player: Player, location: str) -> bool:
+    """Reveal the first unrevealed tile in a chosen direction."""
+    directions = {
+        'n': (0, -1),
+        's': (0, 1),
+        'e': (1, 0),
+        'w': (-1, 0),
+        'ne': (1, -1),
+        'nw': (-1, -1),
+        'se': (1, 1),
+        'sw': (-1, 1),
+    }
+    options = []
+    for name, (dx, dy) in directions.items():
+        x, y = player.x, player.y
+        while True:
+            x += dx
+            y += dy
+            if not game.board.in_bounds(x, y):
+                break
+            tile = game.board.tile_at(x, y)
+            if not tile.revealed:
+                options.append((name, x, y))
+                break
+            # continue through revealed tiles
+    if not options:
+        print('No unrevealed tiles lie in any direction.')
+        return True
+    print('Choose a direction to flare:')
+    for idx, (name, x, y) in enumerate(options, 1):
+        print(f' {idx}. {name.upper()} -> ({x},{y})')
+    choice = input('Select number: ').strip()
+    if choice.isdigit() and 1 <= int(choice) <= len(options):
+        _, x, y = options[int(choice) - 1]
+        game.reveal_tile(x, y)
+    else:
+        print('Cancelled.')
+    return True
+
 def use_abyssal_flask(game: 'Game', player: Player, location: str) -> bool:
     """Restore 2 Sanity at the cost of 1 Hope."""
     player.apply_effect(game, sanity=2)
@@ -1771,6 +1810,8 @@ class Game:
                     item.use_effect = use_whisper_link
                 if item.name == 'Signal Crown':
                     item.use_effect = use_signal_crown
+                if item.name == 'Signal Flare':
+                    item.use_effect = use_signal_flare
                 # store a copy for the deck
                 items.append(Item(item.name, item.description, effect_text=item.effect_text, use_effect=item.use_effect))
                 self.item_registry[item.name.lower()] = item

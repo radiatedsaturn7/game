@@ -313,5 +313,11 @@
     "Name": "Coded Key",
     "Description": "Lines of code etched into a metal key.",
     "Effect": "Unlock a tile or reroll Abyssal Shift"
+  },
+  {
+    "ID": "53",
+    "Name": "Signal Flare",
+    "Description": "Burns bright, showing hidden paths.",
+    "Effect": "Reveal 1 tile"
   }
 ]

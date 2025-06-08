@@ -99,7 +99,7 @@
 - [x] Add Abyssal Engine location consuming an item for +2 Hope.
 - [x] Implement Abyssal Flask item for +2 Sanity at the cost of 1 Hope.
 - [x] Implement Coded Key item to unlock tiles or reroll Abyssal Shift effects.
-- [ ] Implement Signal Flare item to reveal an unrevealed tile.
+- [x] Implement Signal Flare item to reveal an unrevealed tile.
 - [ ] Implement Fragmented Doll item granting +1 Hope if discarded before the Final Encounter.
 - [ ] Implement Worn Compass item to cancel forced movement or teleportation.
 - [ ] Implement Red Circuit item for +1 to any dice roll.
