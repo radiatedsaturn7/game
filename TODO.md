@@ -92,7 +92,7 @@
 - [x] Support applying Game Modifiers at the start (e.g., no Sanity recovery).
 - [x] Allow variable board size when creating a new Game.
 - [x] Expand location list with Sanctuary Node and other entries from README.
-- [ ] Implement Echo Tiles for communication or buffs between distant players.
+- [x] Implement Echo Tiles for communication or buffs between distant players.
 - [ ] Add Shared Visions rule for +1 Sanity when players stand on mirrored tiles.
 - [ ] Implement Anti-Camping mechanic that spawns Abyssal Shadows if players linger on a Sanctuary.
 - [ ] Add Null Signal Bloom event that disables items until the next Abyssal Shift.
@@ -123,3 +123,5 @@
 - [x] Add Corrupter's Trace location that may spawn an Encounter after leaving.
 - [x] Add Harmonic Node location that lowers Sanity loss by 1 for the next turn.
 - [ ] Implement Morality Dilemmas system for tough narrative choices.
+- [ ] Add remaining encounter cards from the design document (Judgment Echo,
+  System Intrusion, Wandering Twin, etc.).
