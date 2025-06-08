@@ -1195,6 +1195,15 @@ class CardTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertIn('Both players escape together', cap.getvalue())
 
+    def test_digital_immunity_trait(self):
+        traits = {'Robtergeist': ['Digital Immunity']}
+        game = main.Game(traits=traits)
+        player = game.players[0]
+        card = main.EncounterCard('Digital Apparition', 'A glitchy ghost', effect={'Sanity': -1})
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        self.assertEqual(player.sanity, 10)
+
 
 def json_names(filename):
     import json

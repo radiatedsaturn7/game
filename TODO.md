@@ -88,7 +88,7 @@
 - [x] Implement Abyssal Shift midgame board shuffle after 10 turns or 12 tiles revealed.
 - [x] Add rest cooldown so players cannot rest two turns in a row.
 - [x] Add Memory System to track persistent boons and flaws from encounters.
-- [ ] Implement optional Character Traits for unique player abilities.
+- [x] Implement optional Character Traits for unique player abilities.
 - [ ] Support applying Game Modifiers at the start (e.g., no Sanity recovery).
 - [ ] Allow variable board size when creating a new Game.
 - [ ] Expand location list with Sanctuary Node and other entries from README.
@@ -104,3 +104,10 @@
 - [ ] Implement Worn Compass item to cancel forced movement or teleportation.
 - [ ] Implement Red Circuit item for +1 to any dice roll.
 - [ ] Implement Mirror Shard item to reroll one failed Sanity check.
+- [ ] Implement Binding Thread item to pull the other player to you.
+- [ ] Implement Encrypted Page item to peek at upcoming Encounters.
+- [ ] Implement Old Coin item to cancel Morality Dilemmas through trade.
+- [ ] Implement Null Charm item to ignore the next Encounter.
+- [ ] Implement Torn Locket item letting both players gain 1 Hope when gifted.
+- [ ] Implement Echo Pendant item preventing partner Sanity loss for one turn.
+- [ ] Implement Dead Channel Map item to move to a visited tile at 1 Sanity cost.
