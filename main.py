@@ -1460,11 +1460,12 @@ class Game:
         hope: int = 10,
         traits: Optional[Dict[str, List[str]]] = None,
         modifiers: Optional[Iterable[str]] = None,
+        board_size: int = 5,
     ):
         self.encounter_lookup: Dict[str, EncounterCard] = {}
         self.item_registry: Dict[str, Item] = {}
         self.location_lookup: Dict[str, Dict[str, str]] = {}
-        self.board = Board()
+        self.board = Board(board_size)
         self.players = [
             Player('Robtergeist', 'R'),
             Player('Cait Vex', 'C')
