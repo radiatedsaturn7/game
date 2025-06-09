@@ -319,5 +319,11 @@
     "Name": "Signal Flare",
     "Description": "Burns bright, showing hidden paths.",
     "Effect": "Reveal 1 tile"
+  },
+  {
+    "ID": "54",
+    "Name": "Fragmented Doll",
+    "Description": "A doll in pieces, clinging to faint memories.",
+    "Effect": "Discard before the Final Encounter for +1 Hope"
   }
 ]
