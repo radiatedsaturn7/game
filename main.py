@@ -1412,6 +1412,15 @@ def use_abyssal_flask(game: 'Game', player: Player, location: str) -> bool:
     print('You drink the Abyssal Flask, feeling steadier but less hopeful.')
     return True
 
+def use_fragmented_doll(game: 'Game', player: Player, location: str) -> bool:
+    """Discard the doll before the Final Encounter to gain 1 Hope."""
+    if not getattr(game, 'final_encounter_started', False):
+        game.modify_hope(1)
+        print('Discarding the Fragmented Doll fills you with hope.')
+    else:
+        print('The doll crumbles away, its moment passed.')
+    return True
+
 class Tile:
     def __init__(self):
         self.revealed = False
@@ -1581,6 +1590,7 @@ class Game:
         self.shift_triggered: bool = False
         self.shared_visions_active: bool = False
         self.items_disabled: bool = False
+        self.final_encounter_started: bool = False
 
         # Both players begin at the Fractured Vestibule
         start_x, start_y = self.board.start_pos
@@ -1812,6 +1822,8 @@ class Game:
                     item.use_effect = use_signal_crown
                 if item.name == 'Signal Flare':
                     item.use_effect = use_signal_flare
+                if item.name == 'Fragmented Doll':
+                    item.use_effect = use_fragmented_doll
                 # store a copy for the deck
                 items.append(Item(item.name, item.description, effect_text=item.effect_text, use_effect=item.use_effect))
                 self.item_registry[item.name.lower()] = item
@@ -1983,6 +1995,7 @@ class Game:
         return '; '.join(parts)
 
     def run_final_gate(self) -> bool:
+        self.final_encounter_started = True
         random.shuffle(self.final_deck)
         trials = self.final_deck[:3]
         print('--- Final Gate Trials ---')
@@ -1997,6 +2010,7 @@ class Game:
         return True
 
     def run_final_threshold(self) -> bool:
+        self.final_encounter_started = True
         print('You stand at the Final Threshold.')
         if confirm_prompt('Sacrifice one player to let the other escape? (y/n) ', self, self.players[0]):
             names = '/'.join(p.name for p in self.players)

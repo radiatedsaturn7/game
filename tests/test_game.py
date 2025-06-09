@@ -286,6 +286,27 @@ class CardTests(unittest.TestCase):
         self.assertEqual(game.hope, start_hope - 1)
         self.assertFalse(player.has_item('Abyssal Flask'))
 
+    def test_fragmented_doll_before_final(self):
+        game = self._new_game()
+        player = game.players[0]
+        doll = game.item_registry['fragmented doll']
+        player.add_item(Item(doll.name, doll.description, effect_text=doll.effect_text, use_effect=doll.use_effect))
+        start_hope = game.hope
+        player.use_item(game, 'fragmented doll', '')
+        self.assertEqual(game.hope, start_hope + 1)
+        self.assertFalse(player.has_item('Fragmented Doll'))
+
+    def test_fragmented_doll_after_final_no_bonus(self):
+        game = self._new_game()
+        player = game.players[0]
+        doll = game.item_registry['fragmented doll']
+        player.add_item(Item(doll.name, doll.description, effect_text=doll.effect_text, use_effect=doll.use_effect))
+        game.final_encounter_started = True
+        start_hope = game.hope
+        player.use_item(game, 'fragmented doll', '')
+        self.assertEqual(game.hope, start_hope)
+        self.assertFalse(player.has_item('Fragmented Doll'))
+
     def test_coded_key_unlocks_tile(self):
         game = self._new_game()
         player = game.players[0]
