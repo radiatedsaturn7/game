@@ -319,5 +319,17 @@
     "Name": "Signal Flare",
     "Description": "Burns bright, showing hidden paths.",
     "Effect": "Reveal 1 tile"
+  },
+  {
+    "ID": "54",
+    "Name": "Worn Compass",
+    "Description": "Its needle trembles against unseen tides.",
+    "Effect": "Cancel the next forced movement or teleport"
+  },
+  {
+    "ID": "55",
+    "Name": "Binding Thread",
+    "Description": "A frayed cord yearning for reunion.",
+    "Effect": "Pull your partner to you"
   }
 ]

@@ -364,6 +364,7 @@ class Player:
     cancel_digital_next: bool = False
     resist_next_encounter: bool = False
     cancel_next_effect: bool = False
+    cancel_forced_move: bool = False
     skip_next_tile: bool = False
     wearing_wax_crown: bool = False
     recently_lost_item: Optional[Item] = None
@@ -773,7 +774,7 @@ def flickering_exit_first(game: 'Game', player: Player):
             others = [p for p in game.players if p != player]
             if others:
                 other = others[0]
-                other.x, other.y = player.x, player.y
+                game.teleport_player(other, player.x, player.y, forced=True)
                 print(f'{other.name} is drawn through the exit!')
         elif 3 <= roll <= 5:
             player.apply_effect(game, sanity=-1)
@@ -1321,7 +1322,8 @@ def use_exit_sketch(game: 'Game', player: Player, location: str) -> bool:
         print(f' {idx}. ({x},{y})')
     choice = input('Select number: ').strip()
     if choice.isdigit() and 1 <= int(choice) <= len(coords):
-        player.x, player.y = coords[int(choice) - 1]
+        x, y = coords[int(choice) - 1]
+        game.teleport_player(player, x, y, forced=False)
         print('You step through your sketched doorway.')
     else:
         print('Cancelled.')
@@ -1356,7 +1358,7 @@ def use_whisper_link(game: 'Game', player: Player, location: str) -> bool:
     if dx == 0 and dy == 0:
         print(f'{target.name} is already beside you.')
     else:
-        game.board.move_player(target, dx, dy)
+        game.board.move_player(target, dx, dy, forced=True)
         print(f'{target.name} is tugged closer by the Whisper Link.')
     return True
 
@@ -1410,6 +1412,22 @@ def use_abyssal_flask(game: 'Game', player: Player, location: str) -> bool:
     player.apply_effect(game, sanity=2)
     game.modify_hope(-1)
     print('You drink the Abyssal Flask, feeling steadier but less hopeful.')
+    return True
+
+def use_worn_compass(game: 'Game', player: Player, location: str) -> bool:
+    """Prepare to cancel the next forced movement or teleportation."""
+    player.cancel_forced_move = True
+    print('The Worn Compass vibrates, ready to anchor you in place.')
+    return True
+
+def use_binding_thread(game: 'Game', player: Player, location: str) -> bool:
+    """Pull the other player directly to your tile."""
+    other = next(p for p in game.players if p != player)
+    if other.x == player.x and other.y == player.y:
+        print('You are already together.')
+    else:
+        game.teleport_player(other, player.x, player.y, forced=True)
+        print(f'{other.name} is yanked to your side by the Binding Thread.')
     return True
 
 class Tile:
@@ -1471,7 +1489,11 @@ class Board:
     def in_bounds(self, x: int, y: int) -> bool:
         return 0 <= x < self.size and 0 <= y < self.size
 
-    def move_player(self, player: Player, dx: int, dy: int):
+    def move_player(self, player: Player, dx: int, dy: int, forced: bool = False):
+        if forced and player.cancel_forced_move:
+            print('The Worn Compass steadies you, canceling the movement.')
+            player.cancel_forced_move = False
+            return False
         new_x = player.x + dx
         new_y = player.y + dy
         if not self.in_bounds(new_x, new_y):
@@ -1812,6 +1834,10 @@ class Game:
                     item.use_effect = use_signal_crown
                 if item.name == 'Signal Flare':
                     item.use_effect = use_signal_flare
+                if item.name == 'Worn Compass':
+                    item.use_effect = use_worn_compass
+                if item.name == 'Binding Thread':
+                    item.use_effect = use_binding_thread
                 # store a copy for the deck
                 items.append(Item(item.name, item.description, effect_text=item.effect_text, use_effect=item.use_effect))
                 self.item_registry[item.name.lower()] = item
@@ -2317,6 +2343,18 @@ class Game:
         for x, y in coords[:count]:
             self.reveal_tile(x, y)
 
+    def teleport_player(self, player: Player, x: int, y: int, forced: bool = True):
+        """Move a player directly to the given coordinates."""
+        if forced and player.cancel_forced_move:
+            print('The Worn Compass steadies you, canceling the teleportation.')
+            player.cancel_forced_move = False
+            return False
+        if not self.board.in_bounds(x, y):
+            print('Cannot move outside the Abyss.')
+            return False
+        player.x, player.y = x, y
+        return True
+
     def check_item_triggers(self, player: Player, tile: Tile):
         """Apply automatic item effects based on the current tile."""
         mask = next((it for it in player.inventory if it.name == 'Splintered Mask'), None)
@@ -2468,7 +2506,7 @@ class Game:
                     if other.x == player.x + dx and other.y == player.y + dy:
                         print('A force keeps you apart for now.')
                         continue
-                if self.board.move_player(player, dx, dy):
+                if self.board.move_player(player, dx, dy, forced=False):
                     dir_word = {'w': 'up', 'a': 'left', 's': 'down', 'd': 'right'}[action]
                     game_over, summary = self.handle_tile(player, dir_word)
                     self.last_action_summary = summary

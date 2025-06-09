@@ -261,6 +261,33 @@ class CardTests(unittest.TestCase):
         player.use_item(game, 'whisper link', '')
         self.assertEqual((cait.x, cait.y), (0, 1))
 
+    def test_worn_compass_cancels_forced_move(self):
+        game = self._new_game()
+        rob = game.players[0]
+        cait = game.players[1]
+        compass = game.item_registry['worn compass']
+        cait.add_item(Item(compass.name, compass.description, effect_text=compass.effect_text, use_effect=compass.use_effect))
+        cait.use_item(game, 'worn compass', '')
+        link = game.item_registry['whisper link']
+        rob.add_item(Item(link.name, link.description, effect_text=link.effect_text, use_effect=link.use_effect))
+        rob.x, rob.y = 0, 0
+        cait.x, cait.y = 0, 2
+        rob.use_item(game, 'whisper link', '')
+        self.assertEqual((cait.x, cait.y), (0, 2))
+        self.assertFalse(cait.has_item('Worn Compass'))
+
+    def test_binding_thread_pulls_partner(self):
+        game = self._new_game()
+        player = game.players[0]
+        other = game.players[1]
+        thread = game.item_registry['binding thread']
+        player.add_item(Item(thread.name, thread.description, effect_text=thread.effect_text, use_effect=thread.use_effect))
+        player.x, player.y = 1, 1
+        other.x, other.y = 3, 3
+        player.use_item(game, 'binding thread', '')
+        self.assertEqual((other.x, other.y), (1, 1))
+        self.assertFalse(player.has_item('Binding Thread'))
+
     def test_signal_flare_reveals_tile(self):
         game = self._new_game()
         player = game.players[0]
