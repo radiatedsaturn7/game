@@ -100,17 +100,28 @@
 - [x] Implement Abyssal Flask item for +2 Sanity at the cost of 1 Hope.
 - [x] Implement Coded Key item to unlock tiles or reroll Abyssal Shift effects.
 - [x] Implement Signal Flare item to reveal an unrevealed tile.
+# DEVELOPER 1 TASKS
 - [ ] Implement Fragmented Doll item granting +1 Hope if discarded before the Final Encounter.
+
+# DEVELOPER 2 TASKS
 - [ ] Implement Worn Compass item to cancel forced movement or teleportation.
+- [ ] Implement Binding Thread item to pull the other player to you.
+
+# DEVELOPER 3 TASKS
 - [ ] Implement Red Circuit item for +1 to any dice roll.
 - [ ] Implement Mirror Shard item to reroll one failed Sanity check.
-- [ ] Implement Binding Thread item to pull the other player to you.
 - [ ] Implement Encrypted Page item to peek at upcoming Encounters.
+
+# DEVELOPER 4 TASKS
 - [ ] Implement Old Coin item to cancel Morality Dilemmas through trade.
 - [ ] Implement Null Charm item to ignore the next Encounter.
 - [ ] Implement Torn Locket item letting both players gain 1 Hope when gifted.
 - [ ] Implement Echo Pendant item preventing partner Sanity loss for one turn.
 - [ ] Implement Dead Channel Map item to move to a visited tile at 1 Sanity cost.
+- [ ] Implement Morality Dilemmas system for tough narrative choices.
+- [ ] Add remaining encounter cards from the design document (Judgment Echo, System Intrusion, Wandering Twin, etc.).
+- [ ] Implement Dead Frequency encounter granting +1 to the next Final Gate roll if the party remembers the "Echo of the Elevator".
+- [ ] Implement Hall of Broken Echoes location effect causing -1 Sanity each turn a player lingers there.
 - [x] Add Glass Field location causing a 1 Sanity loss on a roll of 1 when leaving.
 - [x] Add Clattering Archive location that reveals all adjacent tiles when uncovered.
 - [x] Add Blood Loop location that grants +1 Sanity but costs 1 Hope if ending two turns in a row there.
@@ -122,8 +133,3 @@
 - [x] Add Eye of the Storm location giving +1 Sanity but -1 Hope if a player ends alone there.
 - [x] Add Corrupter's Trace location that may spawn an Encounter after leaving.
 - [x] Add Harmonic Node location that lowers Sanity loss by 1 for the next turn.
-- [ ] Implement Morality Dilemmas system for tough narrative choices.
-- [ ] Add remaining encounter cards from the design document (Judgment Echo,
-  System Intrusion, Wandering Twin, etc.).
-- [ ] Implement Dead Frequency encounter granting +1 to the next Final Gate roll if the party remembers the "Echo of the Elevator".
-- [ ] Implement Hall of Broken Echoes location effect causing -1 Sanity each turn a player lingers there.
