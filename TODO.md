@@ -118,7 +118,7 @@
 - [x] Implement Torn Locket item letting both players gain 1 Hope when gifted.
 - [x] Implement Echo Pendant item preventing partner Sanity loss for one turn.
 - [x] Implement Dead Channel Map item to move to a visited tile at 1 Sanity cost.
-- [ ] Implement Morality Dilemmas system for tough narrative choices.
+- [x] Implement Morality Dilemmas system for tough narrative choices.
 - [ ] Add remaining encounter cards from the design document (Judgment Echo, System Intrusion, Wandering Twin, etc.).
 - [ ] Implement Dead Frequency encounter granting +1 to the next Final Gate roll if the party remembers the "Echo of the Elevator".
 - [ ] Implement Hall of Broken Echoes location effect causing -1 Sanity each turn a player lingers there.

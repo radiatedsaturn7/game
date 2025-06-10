@@ -600,6 +600,47 @@ class FinalGateCard:
         if self.choices:
             final_data_encounter(self, game, players)
 
+
+@dataclass
+class MoralityDilemma:
+    """Binary choice affecting both players before the final escape."""
+    name: str
+    description: str
+    choices: List[Dict[str, object]] = field(default_factory=list)
+
+    def apply(self, game: 'Game', players: Iterable[Player]):
+        print(color(self.name, 'bold'))
+        print(self.description)
+        options: List[tuple[str, List[str]]] = []
+        for ch in self.choices:
+            text = ch.get('Text', '').strip()
+            eff = ch.get('Effect', {})
+            lines: List[str] = []
+            if eff:
+                short = game.format_effect_short(eff)
+                if short:
+                    lines.append(short)
+            if text:
+                options.append((text, lines))
+        if not options:
+            return
+        first = next(iter(players))
+        if len(options) == 1:
+            title, lines = options[0]
+            print(f"**{title}**")
+            for line in lines:
+                print(f"• {line}")
+            if not confirm_prompt('Proceed? (y/n) ', game, first):
+                return
+            choice_idx = 0
+        else:
+            choice = choose_numbered(options[0], options[1], game, first)
+            choice_idx = 0 if choice == '1' else 1
+        chosen = self.choices[choice_idx]
+        eff = chosen.get('Effect', {})
+        for p in players:
+            game.apply_effect_dict(eff, p)
+
 def mirror_of_broken_memories(game: 'Game', player: Player):
     player.apply_effect(game, sanity=-1)
 
@@ -1467,7 +1508,8 @@ def use_encrypted_page(game: 'Game', player: Player, location: str) -> bool:
     return True
 
 def use_old_coin(game: 'Game', player: Player, location: str) -> bool:
-    print('The Old Coin glints. Morality Dilemmas are not yet implemented.')
+    game.cancel_next_dilemma = True
+    print('The Old Coin glints. The next Morality Dilemma will be canceled.')
     return True
 
 def use_null_charm(game: 'Game', player: Player, location: str) -> bool:
@@ -1669,6 +1711,7 @@ class Game:
         self.deck = self.create_deck()
         self.item_deck = self.create_item_deck()
         self.final_deck = self.create_final_deck()
+        self.dilemmas = self.load_dilemmas()
         random.shuffle(self.deck)
         self.discovered_log: List[str] = []
         self.no_reunite: bool = False
@@ -1676,6 +1719,7 @@ class Game:
         self.shift_triggered: bool = False
         self.shared_visions_active: bool = False
         self.items_disabled: bool = False
+        self.cancel_next_dilemma: bool = False
         self.final_encounter_started: bool = False
 
         # Both players begin at the Fractured Vestibule
@@ -1965,6 +2009,21 @@ class Game:
         random.shuffle(deck)
         return deck
 
+    def load_dilemmas(self) -> List[MoralityDilemma]:
+        deck: List[MoralityDilemma] = []
+        if os.path.exists('dilemmas.json'):
+            with open('dilemmas.json') as f:
+                for row in json.load(f):
+                    deck.append(
+                        MoralityDilemma(
+                            name=row['Name'],
+                            description=row['Description'],
+                            choices=row.get('Choices', [])
+                        )
+                    )
+        random.shuffle(deck)
+        return deck
+
     def draw_item(self) -> Optional[Item]:
         if not self.item_deck:
             return None
@@ -2114,8 +2173,20 @@ class Game:
             parts.append(f"{action} {effect['Item']}")
         return '; '.join(parts)
 
+    def run_morality_dilemma(self):
+        if self.cancel_next_dilemma:
+            print('The Old Coin glints, canceling the Morality Dilemma.')
+            self.cancel_next_dilemma = False
+            return
+        if not self.dilemmas:
+            return
+        card = self.dilemmas.pop()
+        print('--- Morality Dilemma ---')
+        card.apply(self, self.players)
+
     def run_final_gate(self) -> bool:
         self.final_encounter_started = True
+        self.run_morality_dilemma()
         random.shuffle(self.final_deck)
         trials = self.final_deck[:3]
         print('--- Final Gate Trials ---')
@@ -2131,6 +2202,7 @@ class Game:
 
     def run_final_threshold(self) -> bool:
         self.final_encounter_started = True
+        self.run_morality_dilemma()
         print('You stand at the Final Threshold.')
         if confirm_prompt('Sacrifice one player to let the other escape? (y/n) ', self, self.players[0]):
             names = '/'.join(p.name for p in self.players)
