@@ -1883,6 +1883,19 @@ class Game:
                     'teeth in the floor': '-2 Health',
                     'the clockmaker\u2019s gallows': '+1 Sanity',
                     'null signal bloom': 'Items are disabled until the next Abyssal Shift',
+                    'the laughing mirror': 'Roll 1d6 (1-2:-2 Sanity, 3-4:-1 Sanity, 5-6:+1 Sanity and -1 Hope)',
+                    'crawling signal': 'Reveal any tile; both players lose 1 Hope',
+                    'judgment echo': 'Lower Sanity player rolls 1d6 (4+: no effect, else -2 Sanity)',
+                    'the forgotten path': 'Teleport to a revealed tile; it fogs unless both players are there',
+                    'system intrusion': 'Draw an item or +2 Hope (item may be cursed on 1)',
+                    'hall of eyes': 'Both roll 1d6; one fail swaps with the other; both fail: -1 Hope',
+                    'dead frequency': 'If remembering "Echo of the Elevator," +1 to next Final Gate roll',
+                    'wandering twin': 'Follow: skip next turn, +2 Sanity; Ignore: -1 Hope',
+                    'the unmarked door': 'Move to an unrevealed tile; roll 1d6 (1-3:-2 Sanity)',
+                    'whispers beneath': 'Both roll 1d6; lowest loses 1 Sanity and cannot move next turn',
+                    'flicker event': 'Swap two tiles; roll 1d6 (1-2:-1 Sanity)',
+                    'shifting persona': 'Swap character traits with partner; -1 Sanity',
+                    'the recursive staircase': 'Reroll any tile; if Location:+1 Sanity else resolve encounter',
                 }
                 key = card.name.lower()
                 if key in mapping:
