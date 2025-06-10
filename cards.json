@@ -1257,5 +1257,84 @@
     "Effect": {
       "Description": "Items are disabled until the next Abyssal Shift"
     }
-  }
+  },
+  {
+  "ID": "82",
+  "Name": "The Laughing Mirror",
+  "Description": "You see a reflection of yourself with eyes that don't blink.",
+  "Effect": {}
+},
+{
+  "ID": "83",
+  "Name": "Crawling Signal",
+  "Description": "A whisper rides the static, offering a glimpse elsewhere at a price.",
+  "Effect": {}
+},
+{
+  "ID": "84",
+  "Name": "Judgment Echo",
+  "Description": "The tile remembers your sins. The player with lower Sanity must roll.",
+  "Effect": {}
+},
+{
+  "ID": "85",
+  "Name": "The Forgotten Path",
+  "Description": "A faded walkway leads anywhere you've been before, but erases your steps.",
+  "Effect": {}
+},
+{
+  "ID": "86",
+  "Name": "System Intrusion",
+  "Description": "A ghost in the code offers aid in exchange for trust.",
+  "Effect": {}
+},
+{
+  "ID": "87",
+  "Name": "Hall of Eyes",
+  "Description": "The walls watch. Judgement waits upon a single die roll.",
+  "Effect": {}
+},
+{
+  "ID": "88",
+  "Name": "Dead Frequency",
+  "Description": "An old memory plays a familiar tune from the abyss.",
+  "Effect": {}
+},
+{
+  "ID": "89",
+  "Name": "Wandering Twin",
+  "Description": "A version of a companion beckons you down a side path.",
+  "Effect": {}
+},
+{
+  "ID": "90",
+  "Name": "The Unmarked Door",
+  "Description": "A door appears only for you, leading somewhere unknown.",
+  "Effect": {}
+},
+{
+  "ID": "91",
+  "Name": "Whispers Beneath",
+  "Description": "A low hum rises from below, rattling your resolve.",
+  "Effect": {}
+},
+{
+  "ID": "92",
+  "Name": "Flicker Event",
+  "Description": "The board glitches, warping space for a heartbeat.",
+  "Effect": {}
+},
+{
+  "ID": "93",
+  "Name": "Shifting Persona",
+  "Description": "Doubt claws at your sense of self, threatening change.",
+  "Effect": {}
+},
+{
+  "ID": "94",
+  "Name": "The Recursive Staircase",
+  "Description": "Endless steps spiral into repeating possibilities.",
+  "Effect": {}
+}
+
 ]

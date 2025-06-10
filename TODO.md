@@ -119,7 +119,7 @@
 - [x] Implement Echo Pendant item preventing partner Sanity loss for one turn.
 - [x] Implement Dead Channel Map item to move to a visited tile at 1 Sanity cost.
 - [x] Implement Morality Dilemmas system for tough narrative choices.
-- [ ] Add remaining encounter cards from the design document (Judgment Echo, System Intrusion, Wandering Twin, etc.).
+- [x] Add remaining encounter cards from the design document (Judgment Echo, System Intrusion, Wandering Twin, etc.).
 - [ ] Implement Dead Frequency encounter granting +1 to the next Final Gate roll if the party remembers the "Echo of the Elevator".
 - [ ] Implement Hall of Broken Echoes location effect causing -1 Sanity each turn a player lingers there.
 - [x] Add Glass Field location causing a 1 Sanity loss on a roll of 1 when leaving.
