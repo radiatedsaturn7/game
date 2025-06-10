@@ -1,0 +1,18 @@
+[
+  {
+    "Name": "The Familiar Voice",
+    "Description": "You hear a familiar voice calling from the darkness.",
+    "Choices": [
+      {"Text": "Follow it", "Effect": {"Sanity": -1}},
+      {"Text": "Ignore it", "Effect": {"Hope": -2}}
+    ]
+  },
+  {
+    "Name": "The Weight of Possessions",
+    "Description": "The Abyss demands a sacrifice of what little you carry.",
+    "Choices": [
+      {"Text": "Give up an item", "Effect": {"Description": "Discard one item"}},
+      {"Text": "Refuse", "Effect": {"Hope": -1}}
+    ]
+  }
+]

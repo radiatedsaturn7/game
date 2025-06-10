@@ -1395,6 +1395,36 @@ class CardTests(unittest.TestCase):
         self.assertFalse(player.has_item('Memory Token'))
         self.assertTrue(player.reroll_next)
 
+    def test_morality_dilemma_applies(self):
+        game = self._new_game()
+        dilemma = main.MoralityDilemma(
+            'Test Dilemma',
+            'desc',
+            [{'Text': 'do it', 'Effect': {'Sanity': -1}}]
+        )
+        game.dilemmas = [dilemma]
+        p1, p2 = game.players
+        with patch('builtins.input', lambda prompt='': '1'):
+            game.run_morality_dilemma()
+        self.assertEqual(p1.sanity, 9)
+        self.assertEqual(p2.sanity, 9)
+
+    def test_old_coin_cancels_dilemma(self):
+        game = self._new_game()
+        coin = game.item_registry['old coin']
+        p1 = game.players[0]
+        p1.add_item(Item(coin.name, coin.description, effect_text=coin.effect_text, use_effect=coin.use_effect))
+        dilemma = main.MoralityDilemma(
+            'Test',
+            'desc',
+            [{'Text': 'x', 'Effect': {'Hope': -1}}]
+        )
+        game.dilemmas = [dilemma]
+        p1.use_item(game, 'old coin', '')
+        with patch('builtins.input', lambda prompt='': '1'):
+            game.run_morality_dilemma()
+        self.assertEqual(game.hope, 10)
+
 
 def json_names(filename):
     import json
