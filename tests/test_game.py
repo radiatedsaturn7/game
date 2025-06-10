@@ -261,6 +261,32 @@ class CardTests(unittest.TestCase):
         player.use_item(game, 'whisper link', '')
         self.assertEqual((cait.x, cait.y), (0, 1))
 
+    def test_binding_thread_pulls_other(self):
+        game = self._new_game()
+        player = game.players[0]
+        other = game.players[1]
+        thread = game.item_registry['binding thread']
+        player.add_item(Item(thread.name, thread.description, effect_text=thread.effect_text, use_effect=thread.use_effect))
+        player.x, player.y = 1, 1
+        other.x, other.y = 1, 3
+        player.use_item(game, 'binding thread', '')
+        self.assertEqual((other.x, other.y), (player.x, player.y))
+        self.assertFalse(player.has_item('Binding Thread'))
+
+    def test_binding_thread_blocked_by_compass(self):
+        game = self._new_game()
+        player = game.players[0]
+        other = game.players[1]
+        thread = game.item_registry['binding thread']
+        compass = game.item_registry['worn compass']
+        player.add_item(Item(thread.name, thread.description, effect_text=thread.effect_text, use_effect=thread.use_effect))
+        other.add_item(Item(compass.name, compass.description, effect_text=compass.effect_text, use_effect=compass.use_effect))
+        other.use_item(game, 'worn compass', '')
+        player.x, player.y = 0, 0
+        other.x, other.y = 0, 2
+        player.use_item(game, 'binding thread', '')
+        self.assertNotEqual((other.x, other.y), (player.x, player.y))
+
     def test_signal_flare_reveals_tile(self):
         game = self._new_game()
         player = game.players[0]
@@ -285,6 +311,25 @@ class CardTests(unittest.TestCase):
         self.assertEqual(player.sanity, start_sanity + 2)
         self.assertEqual(game.hope, start_hope - 1)
         self.assertFalse(player.has_item('Abyssal Flask'))
+
+    def test_red_circuit_bonus(self):
+        game = self._new_game()
+        player = game.players[0]
+        circuit = game.item_registry['red circuit']
+        player.add_item(Item(circuit.name, circuit.description, effect_text=circuit.effect_text, use_effect=circuit.use_effect))
+        player.use_item(game, 'red circuit', '')
+        with patch('main.roll_d6', return_value=3):
+            roll = player.roll_d6(game)
+        self.assertEqual(roll, 4)
+        self.assertFalse(player.has_item('Red Circuit'))
+
+    def test_mirror_shard_sets_reroll(self):
+        game = self._new_game()
+        player = game.players[0]
+        shard = game.item_registry['mirror shard']
+        player.add_item(Item(shard.name, shard.description, effect_text=shard.effect_text, use_effect=shard.use_effect))
+        player.use_item(game, 'mirror shard', '')
+        self.assertTrue(player.reroll_next)
 
     def test_fragmented_doll_before_final(self):
         game = self._new_game()
@@ -586,6 +631,21 @@ class CardTests(unittest.TestCase):
         self.assertEqual(game.hope, 12)
         self.assertEqual(other.x, player.x)
         self.assertEqual(other.y, player.y)
+
+    def test_worn_compass_blocks_flicker_pull(self):
+        game = self._new_game()
+        player = game.players[0]
+        other = game.players[1]
+        compass = game.item_registry['worn compass']
+        other.add_item(Item(compass.name, compass.description, effect_text=compass.effect_text, use_effect=compass.use_effect))
+        other.use_item(game, 'worn compass', '')
+        player.x, player.y = 0, 0
+        other.x, other.y = 2, 2
+        card = game.encounter_lookup['the flickering exit']
+        with patch('builtins.input', lambda prompt='': '1'), \
+             patch.object(player, 'roll_d6', return_value=6):
+            card.apply(game, player, True)
+        self.assertNotEqual((other.x, other.y), (player.x, player.y))
 
     def test_flickering_exit_open_fail(self):
         game = self._new_game()

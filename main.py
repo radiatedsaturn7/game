@@ -365,6 +365,7 @@ class Player:
     resist_next_encounter: bool = False
     cancel_next_effect: bool = False
     skip_next_tile: bool = False
+    cancel_forced_movement: bool = False
     wearing_wax_crown: bool = False
     recently_lost_item: Optional[Item] = None
     rest_cooldown: bool = False
@@ -773,8 +774,10 @@ def flickering_exit_first(game: 'Game', player: Player):
             others = [p for p in game.players if p != player]
             if others:
                 other = others[0]
-                other.x, other.y = player.x, player.y
-                print(f'{other.name} is drawn through the exit!')
+                if not game.force_move_player(other, player.x, player.y):
+                    pass
+                else:
+                    print(f'{other.name} is drawn through the exit!')
         elif 3 <= roll <= 5:
             player.apply_effect(game, sanity=-1)
         else:
@@ -1421,6 +1424,89 @@ def use_fragmented_doll(game: 'Game', player: Player, location: str) -> bool:
         print('The doll crumbles away, its moment passed.')
     return True
 
+def use_worn_compass(game: 'Game', player: Player, location: str) -> bool:
+    """Prepare to cancel the next forced movement or teleportation."""
+    player.cancel_forced_movement = True
+    print('The Worn Compass vibrates, ready to anchor you in place.')
+    return True
+
+def use_binding_thread(game: 'Game', player: Player, location: str) -> bool:
+    """Pull the other player to your tile unless prevented."""
+    other = next((p for p in game.players if p != player), None)
+    if not other:
+        return True
+    if other.x == player.x and other.y == player.y:
+        print(f'{other.name} is already here.')
+        return True
+    if other.cancel_forced_movement:
+        print(f"{other.name}'s Worn Compass glows, preventing the pull.")
+        other.cancel_forced_movement = False
+        return True
+    game.force_move_player(other, player.x, player.y)
+    print(f'{other.name} is pulled to your side by the Binding Thread.')
+    return True
+
+def use_red_circuit(game: 'Game', player: Player, location: str) -> bool:
+    player.roll_bonus += 1
+    print('The Red Circuit sparks. Your next roll gets +1.')
+    return True
+
+def use_mirror_shard(game: 'Game', player: Player, location: str) -> bool:
+    player.reroll_next = True
+    print('The Mirror Shard shimmers. You may reroll a failed sanity check.')
+    return True
+
+def use_encrypted_page(game: 'Game', player: Player, location: str) -> bool:
+    peek = game.deck[-2:] if len(game.deck) >= 2 else list(game.deck)
+    if not peek:
+        print('The page reveals nothing.')
+    else:
+        print('Encrypted whispers hint at what comes next:')
+        for card in peek:
+            print(f' - {card.name}')
+    return True
+
+def use_old_coin(game: 'Game', player: Player, location: str) -> bool:
+    print('The Old Coin glints. Morality Dilemmas are not yet implemented.')
+    return True
+
+def use_null_charm(game: 'Game', player: Player, location: str) -> bool:
+    player.resist_next_encounter = True
+    print('The Null Charm hums, ready to negate the next encounter.')
+    return True
+
+def use_torn_locket(game: 'Game', player: Player, location: str) -> bool:
+    other = next((p for p in game.players if p != player), None)
+    if not other:
+        return True
+    game.modify_hope(1)
+    print(f'You share the Torn Locket with {other.name}. Hope swells between you.')
+    return True
+
+def use_echo_pendant(game: 'Game', player: Player, location: str) -> bool:
+    other = next((p for p in game.players if p != player), None)
+    if not other:
+        return True
+    other.sanity_shield = True
+    print(f'The Echo Pendant resonates, shielding {other.name} from sanity loss.')
+    return True
+
+def use_dead_channel_map(game: 'Game', player: Player, location: str) -> bool:
+    visited = [
+        (x, y)
+        for x in range(game.board.size)
+        for y in range(game.board.size)
+        if game.board.tile_at(x, y).revealed and (x, y) != (player.x, player.y)
+    ]
+    if not visited:
+        print('No visited tiles to navigate to.')
+        return True
+    target = visited[0]
+    player.apply_effect(game, sanity=-1)
+    game.force_move_player(player, target[0], target[1])
+    print('You follow the Dead Channel Map to a familiar place.')
+    return True
+
 class Tile:
     def __init__(self):
         self.revealed = False
@@ -1615,6 +1701,20 @@ class Game:
         self.hope = max(0, min(12, self.hope + amount))
         for p in self.players:
             p.hope = self.hope
+
+    def force_move_player(self, player: Player, x: int, y: int) -> bool:
+        """Attempt to move a player without consent, respecting Worn Compass."""
+        if player.cancel_forced_movement:
+            print(f"{player.name}'s Worn Compass glows, anchoring them in place.")
+            player.cancel_forced_movement = False
+            return False
+        if not self.board.in_bounds(x, y):
+            return False
+        tile = self.board.tile_at(x, y)
+        if getattr(tile, 'locked', False):
+            return False
+        player.x, player.y = x, y
+        return True
 
     def has_modifier(self, name: str) -> bool:
         """Return True if the given game modifier is active."""
@@ -1824,6 +1924,26 @@ class Game:
                     item.use_effect = use_signal_flare
                 if item.name == 'Fragmented Doll':
                     item.use_effect = use_fragmented_doll
+                if item.name == 'Worn Compass':
+                    item.use_effect = use_worn_compass
+                if item.name == 'Binding Thread':
+                    item.use_effect = use_binding_thread
+                if item.name == 'Red Circuit':
+                    item.use_effect = use_red_circuit
+                if item.name == 'Mirror Shard':
+                    item.use_effect = use_mirror_shard
+                if item.name == 'Encrypted Page':
+                    item.use_effect = use_encrypted_page
+                if item.name == 'Old Coin':
+                    item.use_effect = use_old_coin
+                if item.name == 'Null Charm':
+                    item.use_effect = use_null_charm
+                if item.name == 'Torn Locket':
+                    item.use_effect = use_torn_locket
+                if item.name == 'Echo Pendant':
+                    item.use_effect = use_echo_pendant
+                if item.name == 'Dead Channel Map':
+                    item.use_effect = use_dead_channel_map
                 # store a copy for the deck
                 items.append(Item(item.name, item.description, effect_text=item.effect_text, use_effect=item.use_effect))
                 self.item_registry[item.name.lower()] = item
