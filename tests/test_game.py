@@ -1345,6 +1345,23 @@ class CardTests(unittest.TestCase):
         self.assertTrue(result)
         self.assertIn('Both players escape together', cap.getvalue())
 
+    def test_dead_frequency_grants_bonus(self):
+        game = self._new_game()
+        player = game.players[0]
+        player.add_memory('Echo of the Elevator')
+        card = game.encounter_lookup['dead frequency']
+        with patch('builtins.input', dummy_input):
+            card.apply(game, player, True)
+        self.assertEqual(game.final_gate_bonus, 1)
+
+    def test_hall_broken_echoes_linger(self):
+        game = self._new_game()
+        player = game.players[0]
+        game.check_broken_echoes(player, 'Hall of Broken Echoes')  # move in
+        start = player.sanity
+        game.check_broken_echoes(player, 'Hall of Broken Echoes')  # linger
+        self.assertEqual(player.sanity, start - 1)
+
     def test_digital_immunity_trait(self):
         traits = {'Robtergeist': ['Digital Immunity']}
         game = main.Game(traits=traits)
