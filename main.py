@@ -372,6 +372,7 @@ class Player:
     memories: Set[str] = field(default_factory=set)
     traits: Set[str] = field(default_factory=set)
     sanctuary_turns: int = 0
+    broken_echoes_turns: int = 0
 
     def apply_effect(
         self,
@@ -667,6 +668,14 @@ def revisit_minus_sanity(game: 'Game', player: Player):
 
 def revisit_plus_hope(game: 'Game', player: Player):
     player.apply_effect(game, hope=1)
+
+def dead_frequency(game: 'Game', player: Player):
+    """Grant a Final Gate bonus if the party recalls the elevator."""
+    if game.any_player_has_memory('Echo of the Elevator'):
+        print('The old tune stirs determination for the final escape.')
+        game.final_gate_bonus = 1
+    else:
+        print('The static hums meaninglessly.')
 
 # --- New Encounter Effects ---
 def crooked_bell_first(game: 'Game', player: Player):
@@ -1721,6 +1730,7 @@ class Game:
         self.items_disabled: bool = False
         self.cancel_next_dilemma: bool = False
         self.final_encounter_started: bool = False
+        self.final_gate_bonus: int = 0
 
         # Both players begin at the Fractured Vestibule
         start_x, start_y = self.board.start_pos
@@ -1804,6 +1814,16 @@ class Game:
         else:
             player.sanctuary_turns = 0
 
+    def check_broken_echoes(self, player: Player, location_name: str):
+        """Apply sanity loss for lingering in the Hall of Broken Echoes."""
+        if location_name == 'Hall of Broken Echoes':
+            if getattr(player, 'broken_echoes_turns', 0) >= 1:
+                print('The broken echoes gnaw at your mind...')
+                player.apply_effect(self, sanity=-1)
+            player.broken_echoes_turns = getattr(player, 'broken_echoes_turns', 0) + 1
+        else:
+            player.broken_echoes_turns = 0
+
     def abyssal_shift(self):
         print('--- Abyssal Shift ---')
         self.board.shuffle_tiles()
@@ -1859,6 +1879,7 @@ class Game:
                     'the hall of inherited guilt': {'immediate': inherited_guilt},
                     'the flickering choir': {'immediate': flickering_choir},
                     'null signal bloom': {'immediate': null_signal_bloom},
+                    'dead frequency': {'immediate': dead_frequency},
                 }
                 effect_texts = {
                     'fork in the real': 'Split: +1 Hope and cannot share a tile until changed; burn: -1 Hope',
@@ -2227,6 +2248,10 @@ class Game:
         success = True
         for p in self.players:
             roll = p.roll_d6(self)
+            if self.final_gate_bonus:
+                roll = min(6, roll + self.final_gate_bonus)
+                print('The Dead Frequency resonates, bolstering your resolve.')
+                self.final_gate_bonus = 0
             if p.has_memory('Echo of the Elevator'):
                 roll = min(6, roll + 1)
                 print('Your memory of the Elevator empowers you.')
@@ -2665,6 +2690,7 @@ class Game:
                 self.last_action_summary = f"{player.name} rested." if loc != 'Sanctuary Node' else f"{player.name} rested at a Sanctuary."
                 player.rest_cooldown = True
                 self.check_anti_camping(player, loc)
+                self.check_broken_echoes(player, loc)
                 return self.hope == 0
             if action == 'end':
                 if not can_move:
@@ -2675,6 +2701,7 @@ class Game:
                 tile = self.board.tile_at(player.x, player.y)
                 loc = tile.location.name if tile.location else ''
                 self.check_anti_camping(player, loc)
+                self.check_broken_echoes(player, loc)
                 return False
             moves = {'w': (0,-1), 'a': (-1,0), 's': (0,1), 'd': (1,0)}
             if action in moves:
@@ -2695,12 +2722,14 @@ class Game:
                     tile = self.board.tile_at(player.x, player.y)
                     loc = tile.location.name if tile.location else ''
                     self.check_anti_camping(player, loc)
+                    self.check_broken_echoes(player, loc)
                     return game_over
                 self.last_action_summary = f"{player.name} cannot move that way."
                 player.rest_cooldown = False
                 tile = self.board.tile_at(player.x, player.y)
                 loc = tile.location.name if tile.location else ''
                 self.check_anti_camping(player, loc)
+                self.check_broken_echoes(player, loc)
                 return False
             print('Invalid action.')
             continue
