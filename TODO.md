@@ -101,23 +101,23 @@
 - [x] Implement Coded Key item to unlock tiles or reroll Abyssal Shift effects.
 - [x] Implement Signal Flare item to reveal an unrevealed tile.
 # DEVELOPER 1 TASKS
-- [ ] Implement Fragmented Doll item granting +1 Hope if discarded before the Final Encounter.
+- [x] Implement Fragmented Doll item granting +1 Hope if discarded before the Final Encounter.
 
 # DEVELOPER 2 TASKS
-- [ ] Implement Worn Compass item to cancel forced movement or teleportation.
-- [ ] Implement Binding Thread item to pull the other player to you.
+- [x] Implement Worn Compass item to cancel forced movement or teleportation.
+- [x] Implement Binding Thread item to pull the other player to you.
 
 # DEVELOPER 3 TASKS
-- [ ] Implement Red Circuit item for +1 to any dice roll.
-- [ ] Implement Mirror Shard item to reroll one failed Sanity check.
-- [ ] Implement Encrypted Page item to peek at upcoming Encounters.
+- [x] Implement Red Circuit item for +1 to any dice roll.
+- [x] Implement Mirror Shard item to reroll one failed Sanity check.
+- [x] Implement Encrypted Page item to peek at upcoming Encounters.
 
 # DEVELOPER 4 TASKS
-- [ ] Implement Old Coin item to cancel Morality Dilemmas through trade.
-- [ ] Implement Null Charm item to ignore the next Encounter.
-- [ ] Implement Torn Locket item letting both players gain 1 Hope when gifted.
-- [ ] Implement Echo Pendant item preventing partner Sanity loss for one turn.
-- [ ] Implement Dead Channel Map item to move to a visited tile at 1 Sanity cost.
+- [x] Implement Old Coin item to cancel Morality Dilemmas through trade.
+- [x] Implement Null Charm item to ignore the next Encounter.
+- [x] Implement Torn Locket item letting both players gain 1 Hope when gifted.
+- [x] Implement Echo Pendant item preventing partner Sanity loss for one turn.
+- [x] Implement Dead Channel Map item to move to a visited tile at 1 Sanity cost.
 - [ ] Implement Morality Dilemmas system for tough narrative choices.
 - [ ] Add remaining encounter cards from the design document (Judgment Echo, System Intrusion, Wandering Twin, etc.).
 - [ ] Implement Dead Frequency encounter granting +1 to the next Final Gate roll if the party remembers the "Echo of the Elevator".

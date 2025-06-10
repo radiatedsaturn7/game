@@ -325,5 +325,65 @@
     "Name": "Fragmented Doll",
     "Description": "A doll in pieces, clinging to faint memories.",
     "Effect": "Discard before the Final Encounter for +1 Hope"
+  },
+  {
+    "ID": "55",
+    "Name": "Worn Compass",
+    "Description": "Its needle spins until danger forces your path.",
+    "Effect": "Cancel forced movement or teleportation"
+  },
+  {
+    "ID": "56",
+    "Name": "Binding Thread",
+    "Description": "A cord longing to reunite what is apart.",
+    "Effect": "Pull the other player to you"
+  },
+  {
+    "ID": "57",
+    "Name": "Red Circuit",
+    "Description": "Crackles with borrowed power.",
+    "Effect": "+1 to any roll"
+  },
+  {
+    "ID": "58",
+    "Name": "Mirror Shard",
+    "Description": "Shows you the moment before you faltered.",
+    "Effect": "Reroll a failed Sanity check"
+  },
+  {
+    "ID": "59",
+    "Name": "Encrypted Page",
+    "Description": "Illegible yet oddly revealing when burned.",
+    "Effect": "Peek at the next two Encounters"
+  },
+  {
+    "ID": "60",
+    "Name": "Old Coin",
+    "Description": "Worn smooth by countless bargains.",
+    "Effect": "Trade to cancel a Morality Dilemma"
+  },
+  {
+    "ID": "61",
+    "Name": "Null Charm",
+    "Description": "A trinket that rejects reality.",
+    "Effect": "Ignore the next Encounter"
+  },
+  {
+    "ID": "62",
+    "Name": "Torn Locket",
+    "Description": "Half of a memory longing to be whole.",
+    "Effect": "Gift for both players to gain 1 Hope"
+  },
+  {
+    "ID": "63",
+    "Name": "Echo Pendant",
+    "Description": "Resonates with your partner's heartbeat.",
+    "Effect": "Prevent partner Sanity loss for one turn"
+  },
+  {
+    "ID": "64",
+    "Name": "Dead Channel Map",
+    "Description": "Marks the paths once taken.",
+    "Effect": "Move to a visited tile at 1 Sanity cost"
   }
 ]
