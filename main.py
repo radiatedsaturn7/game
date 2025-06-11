@@ -1932,7 +1932,7 @@ class Game:
                 self.encounter_lookup[card.name.lower()] = card
         random.shuffle(deck)
         final_card = EncounterCard(
-            name='Final Threshold',
+            name='The Final Threshold',
             description="A black door hums with power. Your name is etched above it—twice. The void speaks: 'One walks. One stays.'",
         )
         insert_at = max(0, len(deck) - random.randint(3, 5))
@@ -2339,6 +2339,7 @@ class Game:
                         print(line)
         if not found:
             print('None yet.')
+        input('Press Enter to continue...')
 
     def format_stats(self, player: Player, inv_width: int = 10) -> str:
         items = ', '.join(shorten_name(it.name, inv_width) for it in player.inventory)
@@ -2519,7 +2520,7 @@ class Game:
         location_name = tile.location.name if tile.location else ''
         summary = self.generate_summary(player, direction, encounter_name, enc_first, location_name, stat_changes, item_changes)
 
-        if encounter_name == 'Final Threshold' and enc_first:
+        if encounter_name == 'The Final Threshold' and enc_first:
             game_over = self.run_final_threshold()
             return game_over, summary
 
