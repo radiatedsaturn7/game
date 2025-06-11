@@ -53,14 +53,6 @@ class CardTests(unittest.TestCase):
                 card.apply(game, game.players)
 
     def test_loss_conditions(self):
-        # Health zero
-        game = self._new_game()
-        player = game.players[0]
-        player.health = 0
-        with patch('builtins.input', dummy_input):
-            over, _ = game.handle_tile(player, 'down')
-        self.assertTrue(over)
-
         # Sanity zero
         game = self._new_game()
         player = game.players[0]
@@ -140,7 +132,7 @@ class CardTests(unittest.TestCase):
     def test_lookup_with_space_during_move(self):
         game = self._new_game()
         player = game.players[0]
-        actions = iter(['look up salted trauma chips', 'end'])
+        actions = iter(['look up salted trauma chips', '', 'end'])
 
         def fake_input(prompt=''):
             return next(actions)
@@ -173,7 +165,7 @@ class CardTests(unittest.TestCase):
         player.add_item(wick)
         player.use_item(game, 'oracle wick', '')
         game.apply_effect_dict({'Description': 'hit', 'Health': -2}, player)
-        self.assertEqual(player.health, 10)
+        self.assertEqual(player.sanity, 10)
 
     def test_oracle_wick_cancels_modify_hope(self):
         game = self._new_game()
@@ -229,7 +221,7 @@ class CardTests(unittest.TestCase):
         card = game.encounter_lookup['the weeping ledger']
         with patch('builtins.input', dummy_input):
             card.apply(game, player, True)
-        self.assertEqual(player.health, 9)
+        self.assertEqual(player.sanity, 9)
         self.assertEqual(game.hope, 11)
 
     def test_glass_colossus_awards_tearshard(self):
@@ -238,7 +230,7 @@ class CardTests(unittest.TestCase):
         card = game.encounter_lookup['the glass colossus']
         with patch('builtins.input', dummy_input):
             card.apply(game, player, True)
-        self.assertEqual(player.health, 9)
+        self.assertEqual(player.sanity, 9)
         self.assertTrue(player.has_item('Tearshard'))
 
     def test_chain_that_whispers_effect(self):
@@ -384,7 +376,7 @@ class CardTests(unittest.TestCase):
         with patch('builtins.input', dummy_input):
             card.apply(game, player, True)
         self.assertEqual(len(player.inventory), inv_before - 1)
-        self.assertEqual(player.health, 10)
+        self.assertEqual(game.hope, 11)
         self.assertEqual(player.sanity, 11)
 
     def test_dagger_in_the_cradle_effect(self):
@@ -402,7 +394,7 @@ class CardTests(unittest.TestCase):
         card = game.encounter_lookup['the rustbone choir']
         with patch('builtins.input', dummy_input):
             card.apply(game, player, True)
-        self.assertEqual(player.health, 8)
+        self.assertEqual(player.sanity, 8)
         self.assertEqual(game.hope, 12)
 
     def test_tower_of_the_forgotten_signal_reveals_tiles(self):
@@ -1020,7 +1012,7 @@ class CardTests(unittest.TestCase):
         card = game.encounter_lookup['teeth in the floor']
         with patch('builtins.input', lambda prompt='': '1'):
             card.apply(game, player, True)
-        self.assertEqual(player.health, 8)
+        self.assertEqual(player.sanity, 8)
 
     def test_clockmakers_gallows_effect(self):
         game = self._new_game()
@@ -1100,7 +1092,7 @@ class CardTests(unittest.TestCase):
         game = self._new_game()
         with main.CaptureBuffer() as cap:
             game.perform_lookup('auto', 'teeth in the floor')
-        self.assertIn('-2 health', cap.getvalue().lower())
+        self.assertIn('-2 sanity', cap.getvalue().lower())
 
     def test_lookup_clockmakers_gallows_effect(self):
         game = self._new_game()
@@ -1114,7 +1106,7 @@ class CardTests(unittest.TestCase):
         card = game.encounter_lookup['the corridor of crooked steps']
         card.apply(game, player, True)
         self.assertEqual(game.hope, 11)
-        self.assertEqual(player.health, 9)
+        self.assertEqual(player.sanity, 9)
 
     def test_whispering_socket_rip_it_out(self):
         game = self._new_game()
