@@ -15,7 +15,7 @@
     "ID": "3",
     "Name": "The Drowned Room",
     "Description": "Water up to your knees. Something colder clings to your ankles.",
-    "Effect": "Lose 1 Health on entry, +1 Sanity on exit."
+    "Effect": "Lose 1 Sanity on entry, +1 Sanity on exit."
   },
   {
     "ID": "4",
@@ -39,7 +39,7 @@
     "ID": "7",
     "Name": "The Hollow Spine",
     "Description": "A corridor of vertebrae, and you're the marrow.",
-    "Effect": "+1 Health if you leave an item behind."
+    "Effect": "+1 Hope if you leave an item behind."
   },
   {
     "ID": "8",
@@ -57,7 +57,7 @@
     "ID": "10",
     "Name": "The Ember Basin",
     "Description": "Ash falls like snow. Your lungs remember a fire that never happened.",
-    "Effect": "+1 Health, -1 Sanity."
+    "Effect": "+1 Hope, -1 Sanity."
   },
   {
     "ID": "11",
@@ -75,7 +75,7 @@
     "ID": "13",
     "Name": "The Silted Orchard",
     "Description": "Fruit grows in the dirt, not the branches.",
-    "Effect": "Trade 1 item for +1 Health."
+    "Effect": "Trade 1 item for +1 Hope."
   },
   {
     "ID": "14",
@@ -111,13 +111,13 @@
     "ID": "19",
     "Name": "The Threshing Frame",
     "Description": "It grinds memory into meaning.",
-    "Effect": "Choose: +1 Sanity or +1 Hope, lose 1 Health."
+    "Effect": "Choose: +1 Sanity or +1 Hope, lose 1 Sanity."
   },
   {
     "ID": "20",
     "Name": "The Flayed Sanctum",
     "Description": "Walls peeled to nerve endings. They scream when touched.",
-    "Effect": "-1 Health every turn spent."
+    "Effect": "-1 Sanity every turn spent."
   },
   {
     "ID": "21",

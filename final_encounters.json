@@ -12,8 +12,8 @@
           "Sanity": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -38,8 +38,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -64,8 +64,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -90,8 +90,8 @@
           "Sanity": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -115,8 +115,8 @@
           "Description": "Prevents sanity loss at Whispering Wound."
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -140,8 +140,8 @@
           "Description": "Reveals a tile if used while resting."
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -165,8 +165,8 @@
           "Description": "Reveal 1 tile"
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -190,8 +190,8 @@
           "Description": "Reveal adjacent tile."
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -215,8 +215,8 @@
           "Description": "Reveal 1 tile"
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -241,8 +241,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -263,12 +263,12 @@
         "Text": "Face it",
         "RollSuccess": 4,
         "Success": {
-          "Description": "Restore 1 Health.",
-          "Health": 1
+          "Description": "Gain 1 Hope.",
+          "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -292,8 +292,8 @@
           "Description": "Reveal 1 tile"
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -318,8 +318,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -344,8 +344,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -366,12 +366,12 @@
         "Text": "Face it",
         "RollSuccess": 4,
         "Success": {
-          "Description": "+2 Health on use.",
-          "Health": 2
+          "Description": "+2 Hope on use.",
+          "Hope": 2
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -396,8 +396,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -421,8 +421,8 @@
           "Description": "Reveal any tile once."
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -447,8 +447,8 @@
           "Sanity": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -473,8 +473,8 @@
           "Sanity": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -499,8 +499,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -525,8 +525,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -551,8 +551,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -577,8 +577,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -603,8 +603,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {
@@ -629,8 +629,8 @@
           "Hope": 1
         },
         "Failure": {
-          "Description": "-2 Health",
-          "Health": -2
+          "Description": "-2 Sanity",
+          "Sanity": -2
         }
       },
       {

@@ -63,7 +63,7 @@
     "ID": "11",
     "Name": "Withered Apple",
     "Description": "Tastes like regret. Heals like forgiveness.",
-    "Effect": "Restore 1 Health."
+    "Effect": "Gain 1 Hope."
   },
   {
     "ID": "12",
@@ -87,7 +87,7 @@
     "ID": "15",
     "Name": "Saltroot Bandage",
     "Description": "Stings. Then soothes.",
-    "Effect": "+2 Health on use."
+    "Effect": "+2 Hope on use."
   },
   {
     "ID": "16",
@@ -159,7 +159,7 @@
     "ID": "28",
     "Name": "Halo Fragment",
     "Description": "A shard of fallen grace.",
-    "Effect": "+1 Hope, -1 Health"
+    "Effect": "+1 Hope, -1 Sanity"
   },
   {
     "ID": "29",
