@@ -777,8 +777,8 @@
     "Name": "Teeth in the Floor",
     "Description": "You stepped too hard. It bites back.",
     "Effect": {
-      "Description": "-2 Health",
-      "Health": -2
+      "Description": "-2 Sanity",
+      "Sanity": -2
     }
   },
   {
@@ -826,8 +826,7 @@
     "Name": "The Hollow Host",
     "Description": "It welcomes you with arms full of nothing.",
     "Effect": {
-      "Description": "+1 Health, lose 1 Hope",
-      "Health": 1,
+      "Description": "-1 Hope",
       "Hope": -1
     }
   },
@@ -847,8 +846,8 @@
     "Name": "The Weeping Ledger",
     "Description": "It knows what you owe. And it's still calculating.",
     "Effect": {
-      "Description": "-1 Health, +1 Hope",
-      "Health": -1,
+      "Description": "-1 Sanity, +1 Hope",
+      "Sanity": -1,
       "Hope": 1
     }
   },
@@ -857,8 +856,8 @@
     "Name": "The Glass Colossus",
     "Description": "A shattered giant weeps molten glass tears into your hands.",
     "Effect": {
-      "Description": "-1 Health, gain item: Tearshard (use to reveal any tile)",
-      "Health": -1,
+      "Description": "-1 Sanity, gain item: Tearshard (use to reveal any tile)",
+      "Sanity": -1,
       "Item": "Tearshard (use to reveal any tile)",
       "ItemAddOrRemove": "add"
     }
@@ -907,8 +906,8 @@
     "Name": "The Lantern Maw",
     "Description": "It lights the way by consuming what you love.",
     "Effect": {
-      "Description": "Lose an item, gain +1 Health and +1 Sanity",
-      "Health": 1,
+      "Description": "Lose an item, gain +1 Hope and +1 Sanity",
+      "Hope": 1,
       "Sanity": 1
     }
   },
@@ -928,8 +927,8 @@
     "Name": "The Rustbone Choir",
     "Description": "Their harmony fractures bone but heals pride.",
     "Effect": {
-      "Description": "-2 Health, +2 Hope",
-      "Health": -2,
+      "Description": "-2 Sanity, +2 Hope",
+      "Sanity": -2,
       "Hope": 2
     }
   },
@@ -948,9 +947,9 @@
     "Name": "The Salting Tree",
     "Description": "Its branches grow from old wounds. They reach for yours.",
     "Effect": {
-      "Description": "-1 Health, gain item: Saltroot Bandage (+2 Health on use)",
-      "Health": -1,
-      "Item": "Saltroot Bandage (+2 Health on use)",
+      "Description": "-1 Sanity, gain item: Saltroot Bandage (+2 Hope on use)",
+      "Sanity": -1,
+      "Item": "Saltroot Bandage (+2 Hope on use)",
       "ItemAddOrRemove": "add"
     }
   },
@@ -1008,9 +1007,9 @@
     "Name": "The Tarnished Halo",
     "Description": "Once sacred. Now it just feels heavy.",
     "Effect": {
-      "Description": "Gain item: Halo Fragment (+1 Hope, but lose 1 Health every third turn if held)",
+      "Description": "Gain item: Halo Fragment (+1 Hope, but lose 1 Sanity every third turn if held)",
       "Hope": 1,
-      "Item": "Halo Fragment (+1 Hope, but lose 1 Health every third turn if held)",
+      "Item": "Halo Fragment (+1 Hope, but lose 1 Sanity every third turn if held)",
       "ItemAddOrRemove": "add"
     }
   },
@@ -1028,8 +1027,8 @@
     "Name": "The Maw of Sleep",
     "Description": "You feel the yawn crawl up your spine.",
     "Effect": {
-      "Description": "+1 Health, +1 Sanity",
-      "Health": 1,
+      "Description": "+1 Hope, +1 Sanity",
+      "Hope": 1,
       "Sanity": 1
     }
   },
@@ -1038,8 +1037,8 @@
     "Name": "The Windowless House",
     "Description": "It has walls. No doors. Yet you are inside.",
     "Effect": {
-      "Description": "-1 Health",
-      "Health": -1
+      "Description": "-1 Sanity",
+      "Sanity": -1
     }
   },
   {
@@ -1056,8 +1055,8 @@
     "Name": "The Corridor of Crooked Steps",
     "Description": "Each step is a question. Each answer twists your ankle.",
     "Effect": {
-      "Description": "-1 Health, +1 Hope",
-      "Health": -1,
+      "Description": "-1 Sanity, +1 Hope",
+      "Sanity": -1,
       "Hope": 1
     }
   },
@@ -1106,8 +1105,8 @@
     "Name": "The Hungry Cot",
     "Description": "The cradle rocks. The teeth beneath it do too.",
     "Effect": {
-      "Description": "-1 Health, +1 Hope",
-      "Health": -1,
+      "Description": "-1 Sanity, +1 Hope",
+      "Sanity": -1,
       "Hope": 1
     }
   },
@@ -1185,8 +1184,8 @@
     "Name": "The Freezing Prayer",
     "Description": "You mouth words you don\u2019t understand. Your breath crystallizes.",
     "Effect": {
-      "Description": "-1 Health, +1 Sanity",
-      "Health": -1,
+      "Description": "-1 Sanity, +1 Sanity",
+      "Sanity": -1,
       "Sanity": 1
     }
   },
@@ -1226,8 +1225,8 @@
     "Name": "The Candle-Melt Oracle",
     "Description": "Drips fall like fate. Burn or be buried.",
     "Effect": {
-      "Description": "-1 Health, gain item: Oracle Wick (once per game, cancel 1 effect)",
-      "Health": -1,
+      "Description": "-1 Sanity, gain item: Oracle Wick (once per game, cancel 1 effect)",
+      "Sanity": -1,
       "Item": "Oracle Wick (once per game, cancel 1 effect)",
       "ItemAddOrRemove": "add"
     }
