@@ -94,7 +94,7 @@ def confirm_prompt(
     game: Optional['Game'] = None,
     player: Optional['Player'] = None,
 ) -> bool:
-    """Prompt the user for yes/no while allowing lookups and item use."""
+    """Prompt the user for yes/no while allowing lookups, item use, and item lists."""
     while True:
         resp = input(prompt).strip().lower()
         if resp and resp[0] in ('y', '1'):
@@ -114,6 +114,24 @@ def confirm_prompt(
                 location = tile.location.name if tile.location else ''
                 player.use_item(game, item_name, location)
             continue
+        if resp.startswith('items') and game:
+            parts = resp.split(maxsplit=1)
+            name = parts[1] if len(parts) == 2 else (player.name if player else '')
+            target = next(
+                (p for p in game.players if p.name.lower().startswith(name.lower())),
+                None,
+            )
+            if target:
+                if target.inventory:
+                    print(
+                        f"{target.name} has: "
+                        + ", ".join(it.name for it in target.inventory)
+                    )
+                else:
+                    print(f"{target.name} has no items.")
+            else:
+                print('Unknown player.')
+            continue
         return False
 
 
@@ -126,9 +144,9 @@ def choose_numbered(
 ) -> str:
     """Present two numbered options with bullet details and return the choice.
 
-    The prompt also accepts ``lookup <name>`` to view card or item details and
-    ``use <item>`` to activate an item before deciding when a ``game`` and
-    ``player`` are provided.
+    The prompt also accepts ``lookup <name>`` to view card or item details,
+    ``items <player>`` to list inventory, and ``use <item>`` to activate an item
+    before deciding when a ``game`` and ``player`` are provided.
     """
     print("**Choose an option:**")
     print()
@@ -159,7 +177,26 @@ def choose_numbered(
                 location = tile.location.name if tile.location else ''
                 player.use_item(game, item_name, location)
             continue
-        print("Invalid input. Type '1' or '2', or use 'lookup <name>' or 'use <item>'")
+        if resp.startswith('items') and game:
+            parts = resp.split(maxsplit=1)
+            name = parts[1] if len(parts) == 2 else (player.name if player else '')
+            target = next(
+                (p for p in game.players if p.name.lower().startswith(name.lower())),
+                None,
+            )
+            if target:
+                if target.inventory:
+                    print(
+                        f"{target.name} has: " + ', '.join(it.name for it in target.inventory)
+                    )
+                else:
+                    print(f"{target.name} has no items.")
+            else:
+                print('Unknown player.')
+            continue
+        print(
+            "Invalid input. Type '1' or '2', or use 'lookup <name>', 'items <player>' or 'use <item>'"
+        )
 
 
 def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
@@ -2473,7 +2510,9 @@ class Game:
                 entry = f"[{player.x},{player.y}] - {tile.location.name} (Location)"
                 if entry not in self.discovered_log:
                     self.discovered_log.append(entry)
-            self.modify_hope(-1)
+            # Reduce hope only every other newly revealed tile to ease difficulty
+            if self.tiles_revealed() % 2 == 0:
+                self.modify_hope(-1)
 
         before = (player.sanity, self.hope)
         before_items = [it.name for it in player.inventory]
@@ -2643,14 +2682,20 @@ class Game:
             if action.startswith('items'):
                 parts = action.split(maxsplit=1)
                 name = parts[1] if len(parts) == 2 else player.name
-                target = next((p for p in self.players if p.name.lower() == name.lower()), None)
+                target = next(
+                    (p for p in self.players if p.name.lower().startswith(name.lower())),
+                    None,
+                )
                 if target:
                     if target.inventory:
-                        print(f"{target.name} has: " + ', '.join(it.name for it in target.inventory))
+                        print(
+                            f"{target.name} has: " + ', '.join(it.name for it in target.inventory)
+                        )
                     else:
                         print(f"{target.name} has no items.")
                 else:
                     print('Unknown player.')
+                input('Press Enter to continue...')
                 continue
             if action.startswith('discovered'):
                 self.show_discovered_locations()
