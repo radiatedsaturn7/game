@@ -2519,7 +2519,7 @@ class Game:
         location_name = tile.location.name if tile.location else ''
         summary = self.generate_summary(player, direction, encounter_name, enc_first, location_name, stat_changes, item_changes)
 
-        if encounter_name == 'Final Threshold' and enc_first:
+        if encounter_name in ('Final Threshold', 'The Final Threshold') and enc_first:
             game_over = self.run_final_threshold()
             return game_over, summary
 
