@@ -141,6 +141,43 @@ class CardTests(unittest.TestCase):
             game.player_turn(player)
         self.assertIn('ITEM: Salted Trauma Chips', cap.getvalue())
 
+    def test_lookup_close_match(self):
+        game = self._new_game()
+        player = game.players[0]
+        actions = iter(['lookup bone latern', '', 'end'])
+
+        def fake_input(prompt=''):
+            return next(actions)
+
+        with patch('builtins.input', fake_input), patch('os.system', lambda *_: None), main.CaptureBuffer() as cap:
+            game.player_turn(player)
+        out = cap.getvalue().lower()
+        self.assertTrue('bone lantern' in out)
+
+    def test_items_command_self(self):
+        game = self._new_game()
+        player = game.players[0]
+        actions = iter(['items', '', 'end'])
+
+        def fake_input(prompt=''):
+            return next(actions)
+
+        with patch('builtins.input', fake_input), patch('os.system', lambda *_: None), main.CaptureBuffer() as cap:
+            game.player_turn(player)
+        self.assertIn('has no items', cap.getvalue())
+
+    def test_items_command_other_partial_name(self):
+        game = self._new_game()
+        player = game.players[0]
+        actions = iter(['items cait', '', 'end'])
+
+        def fake_input(prompt=''):
+            return next(actions)
+
+        with patch('builtins.input', fake_input), patch('os.system', lambda *_: None), main.CaptureBuffer() as cap:
+            game.player_turn(player)
+        self.assertIn('Cait Vex has no items', cap.getvalue())
+
     def test_memory_token_reroll_prompt_allows_lookup(self):
         game = self._new_game()
         player = game.players[0]
@@ -157,6 +194,34 @@ class CardTests(unittest.TestCase):
         with patch('builtins.input', fake_input), main.CaptureBuffer() as cap:
             player.roll_d6(game)
         self.assertIn('ITEM: Wax Crown', cap.getvalue())
+
+    def test_confirm_prompt_allows_items(self):
+        game = self._new_game()
+        player = game.players[0]
+        token = game.item_registry['memory token']
+        player.add_item(Item(token.name, token.description, effect_text=token.effect_text, use_effect=token.use_effect))
+        player.use_item(game, 'memory token', '')
+        inputs = iter(['items', 'n'])
+
+        def fake_input(prompt=''):
+            return next(inputs)
+
+        with patch('builtins.input', fake_input), main.CaptureBuffer() as cap:
+            player.roll_d6(game)
+        self.assertIn('Robtergeist has no items', cap.getvalue())
+
+    def test_choose_numbered_allows_items(self):
+        game = self._new_game()
+        player = game.players[0]
+        inputs = iter(['items', '1'])
+
+        def fake_input(prompt=''):
+            return next(inputs)
+
+        with patch('builtins.input', fake_input), main.CaptureBuffer() as cap:
+            choice = main.choose_numbered(('Do it', []), ('Walk away', []), game, player)
+        self.assertEqual(choice, '1')
+        self.assertIn('Robtergeist has no items', cap.getvalue())
 
     def test_oracle_wick_cancels_effect(self):
         game = self._new_game()

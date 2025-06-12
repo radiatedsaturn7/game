@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Iterable, Dict, Set, Tuple
 import sys
 from io import StringIO
+from difflib import get_close_matches
 
 
 class CaptureBuffer:
@@ -94,7 +95,7 @@ def confirm_prompt(
     game: Optional['Game'] = None,
     player: Optional['Player'] = None,
 ) -> bool:
-    """Prompt the user for yes/no while allowing lookups and item use."""
+    """Prompt the user for yes/no while allowing lookups, item use, and item lists."""
     while True:
         resp = input(prompt).strip().lower()
         if resp and resp[0] in ('y', '1'):
@@ -114,6 +115,24 @@ def confirm_prompt(
                 location = tile.location.name if tile.location else ''
                 player.use_item(game, item_name, location)
             continue
+        if resp.startswith('items') and game:
+            parts = resp.split(maxsplit=1)
+            name = parts[1] if len(parts) == 2 else (player.name if player else '')
+            target = next(
+                (p for p in game.players if p.name.lower().startswith(name.lower())),
+                None,
+            )
+            if target:
+                if target.inventory:
+                    print(
+                        f"{target.name} has: "
+                        + ", ".join(it.name for it in target.inventory)
+                    )
+                else:
+                    print(f"{target.name} has no items.")
+            else:
+                print('Unknown player.')
+            continue
         return False
 
 
@@ -126,9 +145,9 @@ def choose_numbered(
 ) -> str:
     """Present two numbered options with bullet details and return the choice.
 
-    The prompt also accepts ``lookup <name>`` to view card or item details and
-    ``use <item>`` to activate an item before deciding when a ``game`` and
-    ``player`` are provided.
+    The prompt also accepts ``lookup <name>`` to view card or item details,
+    ``items <player>`` to list inventory, and ``use <item>`` to activate an item
+    before deciding when a ``game`` and ``player`` are provided.
     """
     print("**Choose an option:**")
     print()
@@ -159,7 +178,26 @@ def choose_numbered(
                 location = tile.location.name if tile.location else ''
                 player.use_item(game, item_name, location)
             continue
-        print("Invalid input. Type '1' or '2', or use 'lookup <name>' or 'use <item>'")
+        if resp.startswith('items') and game:
+            parts = resp.split(maxsplit=1)
+            name = parts[1] if len(parts) == 2 else (player.name if player else '')
+            target = next(
+                (p for p in game.players if p.name.lower().startswith(name.lower())),
+                None,
+            )
+            if target:
+                if target.inventory:
+                    print(
+                        f"{target.name} has: " + ', '.join(it.name for it in target.inventory)
+                    )
+                else:
+                    print(f"{target.name} has no items.")
+            else:
+                print('Unknown player.')
+            continue
+        print(
+            "Invalid input. Type '1' or '2', or use 'lookup <name>', 'items <player>' or 'use <item>'"
+        )
 
 
 def data_encounter(card: 'EncounterCard', game: 'Game', player: 'Player'):
@@ -2390,6 +2428,12 @@ class Game:
 
     def perform_lookup(self, category: str, name: str):
         key = name.lower()
+        def best_match(options: Iterable[str]) -> Optional[str]:
+            matches = [opt for opt in options if opt.startswith(key)]
+            if len(matches) == 1:
+                return matches[0]
+            close = get_close_matches(key, list(options), n=1, cutoff=0.6)
+            return close[0] if close else None
         if category in ('any', 'auto'):
             if key in self.item_registry:
                 self.perform_lookup('item', name)
@@ -2400,6 +2444,18 @@ class Game:
             if key in self.location_lookup:
                 self.perform_lookup('location', name)
                 return
+            match = best_match(self.item_registry.keys())
+            if match:
+                self.perform_lookup('item', match)
+                return
+            match = best_match(self.encounter_lookup.keys())
+            if match:
+                self.perform_lookup('encounter', match)
+                return
+            match = best_match(self.location_lookup.keys())
+            if match:
+                self.perform_lookup('location', match)
+                return
             print('Nothing found with that name.')
             return
         if category == 'item':
@@ -2409,6 +2465,10 @@ class Game:
                 print(f"{item.description}")
                 if item.effect_text:
                     print(f"Effect: {item.effect_text}")
+                return
+            match = best_match(self.item_registry.keys())
+            if match:
+                self.perform_lookup('item', match)
                 return
         elif category in ('encounter', 'card'):
             card = self.encounter_lookup.get(key)
@@ -2429,6 +2489,10 @@ class Game:
                 print(loc['Description'])
                 if loc.get('Effect'):
                     print(f"Effect: {loc['Effect']}")
+                return
+            match = best_match(self.location_lookup.keys())
+            if match:
+                self.perform_lookup('location', match)
                 return
         if category == 'item':
             print(f"Item '{name}' not found in your world.")
@@ -2473,7 +2537,9 @@ class Game:
                 entry = f"[{player.x},{player.y}] - {tile.location.name} (Location)"
                 if entry not in self.discovered_log:
                     self.discovered_log.append(entry)
-            self.modify_hope(-1)
+            # Reduce hope only every other newly revealed tile to ease difficulty
+            if self.tiles_revealed() % 2 == 0:
+                self.modify_hope(-1)
 
         before = (player.sanity, self.hope)
         before_items = [it.name for it in player.inventory]
@@ -2519,7 +2585,7 @@ class Game:
         location_name = tile.location.name if tile.location else ''
         summary = self.generate_summary(player, direction, encounter_name, enc_first, location_name, stat_changes, item_changes)
 
-        if encounter_name == 'Final Threshold' and enc_first:
+        if encounter_name in ('Final Threshold', 'The Final Threshold') and enc_first:
             game_over = self.run_final_threshold()
             return game_over, summary
 
@@ -2643,17 +2709,24 @@ class Game:
             if action.startswith('items'):
                 parts = action.split(maxsplit=1)
                 name = parts[1] if len(parts) == 2 else player.name
-                target = next((p for p in self.players if p.name.lower() == name.lower()), None)
+                target = next(
+                    (p for p in self.players if p.name.lower().startswith(name.lower())),
+                    None,
+                )
                 if target:
                     if target.inventory:
-                        print(f"{target.name} has: " + ', '.join(it.name for it in target.inventory))
+                        print(
+                            f"{target.name} has: " + ', '.join(it.name for it in target.inventory)
+                        )
                     else:
                         print(f"{target.name} has no items.")
                 else:
                     print('Unknown player.')
+                input('Press Enter to continue...')
                 continue
             if action.startswith('discovered'):
                 self.show_discovered_locations()
+                input('Press Enter to continue...')
                 continue
             if action.startswith('lookup') or action.startswith('look up'):
                 parts = action.split(maxsplit=2)
