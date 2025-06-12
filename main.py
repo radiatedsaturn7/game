@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Iterable, Dict, Set, Tuple
 import sys
 from io import StringIO
+from difflib import get_close_matches
 
 
 class CaptureBuffer:
@@ -2427,6 +2428,12 @@ class Game:
 
     def perform_lookup(self, category: str, name: str):
         key = name.lower()
+        def best_match(options: Iterable[str]) -> Optional[str]:
+            matches = [opt for opt in options if opt.startswith(key)]
+            if len(matches) == 1:
+                return matches[0]
+            close = get_close_matches(key, list(options), n=1, cutoff=0.6)
+            return close[0] if close else None
         if category in ('any', 'auto'):
             if key in self.item_registry:
                 self.perform_lookup('item', name)
@@ -2437,6 +2444,18 @@ class Game:
             if key in self.location_lookup:
                 self.perform_lookup('location', name)
                 return
+            match = best_match(self.item_registry.keys())
+            if match:
+                self.perform_lookup('item', match)
+                return
+            match = best_match(self.encounter_lookup.keys())
+            if match:
+                self.perform_lookup('encounter', match)
+                return
+            match = best_match(self.location_lookup.keys())
+            if match:
+                self.perform_lookup('location', match)
+                return
             print('Nothing found with that name.')
             return
         if category == 'item':
@@ -2446,6 +2465,10 @@ class Game:
                 print(f"{item.description}")
                 if item.effect_text:
                     print(f"Effect: {item.effect_text}")
+                return
+            match = best_match(self.item_registry.keys())
+            if match:
+                self.perform_lookup('item', match)
                 return
         elif category in ('encounter', 'card'):
             card = self.encounter_lookup.get(key)
@@ -2466,6 +2489,10 @@ class Game:
                 print(loc['Description'])
                 if loc.get('Effect'):
                     print(f"Effect: {loc['Effect']}")
+                return
+            match = best_match(self.location_lookup.keys())
+            if match:
+                self.perform_lookup('location', match)
                 return
         if category == 'item':
             print(f"Item '{name}' not found in your world.")
@@ -2699,6 +2726,7 @@ class Game:
                 continue
             if action.startswith('discovered'):
                 self.show_discovered_locations()
+                input('Press Enter to continue...')
                 continue
             if action.startswith('lookup') or action.startswith('look up'):
                 parts = action.split(maxsplit=2)

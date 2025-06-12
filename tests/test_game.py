@@ -141,6 +141,19 @@ class CardTests(unittest.TestCase):
             game.player_turn(player)
         self.assertIn('ITEM: Salted Trauma Chips', cap.getvalue())
 
+    def test_lookup_close_match(self):
+        game = self._new_game()
+        player = game.players[0]
+        actions = iter(['lookup bone latern', '', 'end'])
+
+        def fake_input(prompt=''):
+            return next(actions)
+
+        with patch('builtins.input', fake_input), patch('os.system', lambda *_: None), main.CaptureBuffer() as cap:
+            game.player_turn(player)
+        out = cap.getvalue().lower()
+        self.assertTrue('bone lantern' in out)
+
     def test_items_command_self(self):
         game = self._new_game()
         player = game.players[0]
