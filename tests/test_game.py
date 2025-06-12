@@ -141,6 +141,30 @@ class CardTests(unittest.TestCase):
             game.player_turn(player)
         self.assertIn('ITEM: Salted Trauma Chips', cap.getvalue())
 
+    def test_items_command_self(self):
+        game = self._new_game()
+        player = game.players[0]
+        actions = iter(['items', '', 'end'])
+
+        def fake_input(prompt=''):
+            return next(actions)
+
+        with patch('builtins.input', fake_input), patch('os.system', lambda *_: None), main.CaptureBuffer() as cap:
+            game.player_turn(player)
+        self.assertIn('has no items', cap.getvalue())
+
+    def test_items_command_other_partial_name(self):
+        game = self._new_game()
+        player = game.players[0]
+        actions = iter(['items cait', '', 'end'])
+
+        def fake_input(prompt=''):
+            return next(actions)
+
+        with patch('builtins.input', fake_input), patch('os.system', lambda *_: None), main.CaptureBuffer() as cap:
+            game.player_turn(player)
+        self.assertIn('Cait Vex has no items', cap.getvalue())
+
     def test_memory_token_reroll_prompt_allows_lookup(self):
         game = self._new_game()
         player = game.players[0]
