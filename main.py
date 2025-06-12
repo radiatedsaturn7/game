@@ -54,6 +54,24 @@ def roll_d20() -> int:
     return random.randint(1, 20)
 
 
+def levenshtein(a: str, b: str) -> int:
+    """Compute the Levenshtein distance between two strings."""
+    if a == b:
+        return 0
+    if not a:
+        return len(b)
+    if not b:
+        return len(a)
+    prev_row = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        row = [i]
+        for j, cb in enumerate(b, 1):
+            cost = 0 if ca == cb else 1
+            row.append(min(row[j - 1] + 1, prev_row[j] + 1, prev_row[j - 1] + cost))
+        prev_row = row
+    return prev_row[-1]
+
+
 def shorten_name(name: str, max_length: int = 15) -> str:
     """Return a name shortened to fit within max_length."""
     if len(name) <= max_length:
@@ -2377,6 +2395,44 @@ class Game:
         if not found:
             print('None yet.')
 
+    def show_index(self, category: str = 'encounter'):
+        """Display all cards or items for reference."""
+        category = category.lower()
+        if category.startswith('enc'):  # encounters/cards
+            entries = sorted(self.encounter_lookup.values(), key=lambda c: c.name)
+            print(f"Encounter Index ({len(entries)} cards)")
+            for card in entries:
+                print(color(card.name, 'bold'))
+                print(card.description)
+                if card.effect:
+                    eff = self.format_effect_short(card.effect)
+                    if eff:
+                        print(f"Effect: {eff}")
+                elif card.effect_text:
+                    print(f"Effect: {card.effect_text}")
+                input('Press Enter to continue...')
+        elif category.startswith('item'):
+            entries = sorted(self.item_registry.values(), key=lambda i: i.name)
+            print(f"Item Index ({len(entries)} items)")
+            for it in entries:
+                print(color(it.name, 'bold'))
+                print(it.description)
+                if it.effect_text:
+                    print(f"Effect: {it.effect_text}")
+                input('Press Enter to continue...')
+        elif category.startswith('loc'):
+            entries = sorted(self.location_lookup.values(), key=lambda l: l['Name'])
+            print(f"Location Index ({len(entries)} locations)")
+            for loc in entries:
+                print(color(loc['Name'], 'bold'))
+                print(loc['Description'])
+                effect = loc.get('Effect')
+                if effect:
+                    print(f"Effect: {effect}")
+                input('Press Enter to continue...')
+        else:
+            print("Unknown index category. Use 'encounter', 'item', or 'location'.")
+
     def format_stats(self, player: Player, inv_width: int = 10) -> str:
         items = ', '.join(shorten_name(it.name, inv_width) for it in player.inventory)
         if not items:
@@ -2417,7 +2473,7 @@ class Game:
         buffer.append('')
 
         # Command options
-        buffer.append('Commands: w/a/s/d, rest, use, trade, pass, end, items <player>, discovered, lookup <name>, help')
+        buffer.append('Commands: w/a/s/d, rest, use, trade, pass, end, items <player>, discovered, lookup <name>, index [type], help')
         buffer.append('')
 
         # Prompt
@@ -2426,9 +2482,9 @@ class Game:
         return input('> ').strip().lower()
 
     def perform_lookup(self, category: str, name: str):
-        key = name.lower()
+        key = name.lower().strip()
         if category in ('any', 'auto'):
-            if key in self.item_registry:
+            if key in self.item_registry or (key.startswith('the ') and key[4:] in self.item_registry):
                 self.perform_lookup('item', name)
                 return
             if key in self.encounter_lookup:
@@ -2441,11 +2497,24 @@ class Game:
             return
         if category == 'item':
             item = self.item_registry.get(key)
+            if not item and key.startswith('the '):
+                item = self.item_registry.get(key[4:])
             if item:
                 print(color(f"\U0001F4D8 ITEM: {item.name}", 'bold'))
                 print(f"{item.description}")
                 if item.effect_text:
                     print(f"Effect: {item.effect_text}")
+                return
+            names = list(self.item_registry.keys())
+            suggestions = sorted(names, key=lambda n: levenshtein(key, n))[:3]
+            if suggestions:
+                print(f"Item '{name}' not found. Did you mean:")
+                for idx, s in enumerate(suggestions, 1):
+                    print(f" {idx}. {self.item_registry[s].name}")
+                choice = input('Choose number or press Enter to cancel: ').strip()
+                if choice.isdigit() and 1 <= int(choice) <= len(suggestions):
+                    sel = self.item_registry[suggestions[int(choice)-1]].name
+                    self.perform_lookup('item', sel)
                 return
         elif category in ('encounter', 'card'):
             card = self.encounter_lookup.get(key)
@@ -2471,18 +2540,6 @@ class Game:
             print(f"Item '{name}' not found in your world.")
         else:
             print('Nothing found with that name.')
-        if category == 'item':
-            names = sorted(self.item_registry.keys())
-        elif category in ('encounter', 'card'):
-            names = sorted(self.encounter_lookup.keys())
-        elif category == 'location':
-            names = sorted(self.location_lookup.keys())
-        else:
-            names = []
-        if names:
-            print('Available options:')
-            for n in names:
-                print(f' - {n}')
 
     def show_help(self):
         """Display basic instructions for playing."""
@@ -2714,6 +2771,11 @@ class Game:
                     input('Press Enter to continue...')
                 else:
                     print('Usage: lookup <name>')
+                continue
+            if action.startswith('index'):
+                parts = action.split(maxsplit=1)
+                cat = parts[1] if len(parts) == 2 else 'encounter'
+                self.show_index(cat)
                 continue
             if action in ('help', 'commands'):
                 self.show_help()
