@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Factory Protocol: Nightwatch</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <p class="eyebrow">Factory Protocol // Nightwatch Simulation</p>
+        <h1>Factory: The Last Shift</h1>
+        <p class="subhead">
+          Survive the night against the adaptive machine stalking the factory. Watch the rooms, ration your tools,
+          and build the escape schematic before it learns your every move.
+        </p>
+      </div>
+      <div class="status-block">
+        <div class="status">
+          <span>Threat Level</span>
+          <strong id="threatLevel">Low</strong>
+        </div>
+        <div class="status">
+          <span>Shift</span>
+          <strong id="shiftCounter">00</strong>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="room-view">
+        <div class="room-media" id="roomMedia">
+          <div class="room-overlay">
+            <p id="roomLabel">Room View</p>
+            <p id="roomDetails">Select a room camera or move to explore.</p>
+          </div>
+        </div>
+        <div class="room-meta">
+          <div>
+            <h2 id="currentRoom">Control Bay</h2>
+            <p id="roomDescription">Your only safe room is a lie. The machine is always listening.</p>
+          </div>
+          <div class="tags">
+            <span id="playerState">Status: Exposed</span>
+            <span id="robotState">Robot: Searching</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="control-panel">
+        <div class="panel">
+          <h3>Actions</h3>
+          <div class="actions">
+            <button id="hideBtn">Hide</button>
+            <button id="scanBtn">Pulse Scanner</button>
+            <button id="noiseBtn">Noise Lure</button>
+            <button id="buildBtn" class="primary" disabled>Build Escape Schematic</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Inventory</h3>
+          <ul id="inventoryList" class="list"></ul>
+        </div>
+
+        <div class="panel">
+          <h3>Required Components</h3>
+          <ul id="schematicList" class="list"></ul>
+        </div>
+
+        <div class="panel">
+          <h3>Room Network (14)</h3>
+          <div id="roomGrid" class="room-grid"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="deathScreen" class="death-screen" aria-hidden="true">
+    <div class="death-video">
+      <p>Signal Lost</p>
+      <span>Death animation playing...</span>
+    </div>
+  </div>
+
+  <div id="victoryScreen" class="victory-screen" aria-hidden="true">
+    <div class="victory-card">
+      <h2>Escape Protocol Complete</h2>
+      <p>You rebuilt the schematic and shorted the facility. The factory shuts down behind you.</p>
+      <button id="restartBtn" class="primary">Restart Shift</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
