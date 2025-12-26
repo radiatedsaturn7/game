@@ -228,13 +228,15 @@ const state = {
   robotLookTurns: 0,
   robotScanTarget: null,
   sawPlayerHide: false,
-  robotDisabled: false,
+  robotDisabled: true,
   selectedSchematic: null,
   requiredEscapeSchematic: null,
   escapeReady: false,
+  alertTicks: 0,
   playerPath: [],
   playerTravelTicks: 0,
   playerTravelMode: "sneak",
+  playerTravelTotal: 0,
   robotPath: [],
   robotTravelTicks: 0,
   dayCount: 1,
@@ -249,6 +251,9 @@ const dom = {
   roomMedia: document.getElementById("roomMedia"),
   currentRooms: document.querySelectorAll(".current-room"),
   robotStatuses: document.querySelectorAll(".robot-status"),
+  objectiveText: document.getElementById("objectiveText"),
+  alertText: document.getElementById("alertText"),
+  travelStatus: document.getElementById("travelStatus"),
   roomActions: document.getElementById("roomActions"),
   inventoryList: document.getElementById("inventoryList"),
   schematicInventory: document.getElementById("schematicInventory"),
@@ -345,6 +350,13 @@ function updateUI() {
   dom.robotStatuses.forEach((node) => {
     node.textContent = robotStatusLabel();
   });
+  dom.objectiveText.textContent = state.requiredEscapeSchematic
+    ? `Objective: Build ${state.requiredEscapeSchematic}`
+    : "Objective: Inspect the Escape Workshop console.";
+  dom.objectiveText.classList.toggle("hidden", false);
+  dom.alertText.textContent = state.alertTicks > 0 ? "Warning: Robot online." : "";
+  dom.alertText.classList.toggle("hidden", state.alertTicks === 0);
+  updateTravelStatus();
   dom.threatLevel.textContent = threatLabel();
   dom.dateLabel.textContent = formatDate(state.baseDate, state.dayCount);
   dom.selectedRoom.textContent = state.selectedRoom === null
@@ -361,6 +373,7 @@ function updateUI() {
   updateMap();
   updateBuildButton();
   updateMoveButtons();
+  dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
 }
 
 function updateInventoryList() {
@@ -393,6 +406,9 @@ function updateSchematicsInventory() {
     button.addEventListener("click", () => selectSchematic(item));
     if (state.selectedSchematic === item) {
       button.classList.add("primary");
+    }
+    if (state.requiredEscapeSchematic === item) {
+      button.classList.add("objective-highlight");
     }
     li.appendChild(button);
     dom.schematicInventory.appendChild(li);
@@ -608,11 +624,26 @@ function updateEscapeButton() {
   dom.escapeBtn.classList.toggle("hidden", !canEscape);
 }
 
+function updateTravelStatus() {
+  const total = state.playerTravelTotal;
+  const remaining = state.playerPath.length;
+  if (total > 0 && remaining > 0) {
+    const completed = total - remaining;
+    dom.travelStatus.textContent = `Traveling: ${completed}/${total}`;
+    dom.travelStatus.classList.remove("hidden");
+  } else {
+    dom.travelStatus.textContent = "";
+    dom.travelStatus.classList.add("hidden");
+  }
+}
+
 function revealEscapeSchematic() {
   if (state.requiredEscapeSchematic) return;
   const options = craftableItems.map((item) => item.name);
   state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
   state.selectedSchematic = state.requiredEscapeSchematic;
+  state.robotDisabled = false;
+  state.alertTicks = 6;
   updateUI();
 }
 
@@ -624,6 +655,7 @@ function movePlayer(roomId, isRun) {
   state.playerPath = path.slice(1);
   state.playerTravelMode = isRun ? "run" : "sneak";
   state.playerTravelTicks = isRun ? 1 : 2;
+  state.playerTravelTotal = state.playerPath.length;
   state.selectedRoom = roomId;
   updateUI();
 }
@@ -849,8 +881,7 @@ function triggerDeath() {
 
 function buildEscape() {
   if (!state.isAlive || state.hasEscaped) return;
-  const hasAllParts = requiredParts.every((part) => state.inventory.has(part));
-  if (!rooms[state.playerRoom].isExit || !hasAllParts) return;
+  if (!rooms[state.playerRoom].isExit || !state.escapeReady) return;
   state.hasEscaped = true;
   state.dayCount += 1;
   state.threat = Math.min(5, state.threat + 0.4);
@@ -889,10 +920,12 @@ function resetGame() {
   state.robotLookTurns = 0;
   state.robotScanTarget = null;
   state.sawPlayerHide = false;
-  state.robotDisabled = false;
+  state.robotDisabled = true;
+  state.alertTicks = 0;
   state.playerPath = [];
   state.playerTravelTicks = 0;
   state.playerTravelMode = "sneak";
+  state.playerTravelTotal = 0;
   state.robotPath = [];
   state.robotTravelTicks = 0;
   state.dayCount = 1;
@@ -1329,6 +1362,9 @@ function startGameLoop() {
     if (state.trailTurns > 0) {
       state.trailTurns -= 1;
     }
+    if (state.alertTicks > 0) {
+      state.alertTicks -= 1;
+    }
     tickPlayerTravel();
     tickRobotTravel();
     decaySignals();
@@ -1425,6 +1461,7 @@ function tickPlayerTravel() {
   state.turn += 1;
   if (state.playerPath.length === 0) {
     clearSelectedRoom();
+    state.playerTravelTotal = 0;
   } else {
     state.playerTravelTicks = isRun ? 1 : 2;
   }

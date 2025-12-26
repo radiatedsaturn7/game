@@ -150,6 +150,24 @@ main {
   font-size: 0.85rem;
 }
 
+.objective-text {
+  margin-top: 8px;
+  color: #6bff9f;
+  font-weight: 600;
+}
+
+.alert-text {
+  margin-top: 6px;
+  color: #ff7c7c;
+  font-weight: 600;
+}
+
+.travel-status {
+  margin-top: 6px;
+  color: #a8c5ff;
+  font-size: 0.85rem;
+}
+
 .room-actions-overlay {
   position: absolute;
   inset: 16px 16px 80px;
@@ -507,6 +525,11 @@ main {
   margin: 0 0 6px;
   font-size: 0.85rem;
   color: #9fb2de;
+}
+
+.objective-highlight {
+  border: 1px solid rgba(107, 255, 159, 0.8);
+  box-shadow: 0 0 0 1px rgba(107, 255, 159, 0.4);
 }
 
 .component-details {
