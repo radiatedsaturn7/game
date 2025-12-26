@@ -106,6 +106,23 @@ const deviceTypes = {
   noise: { name: "Noise Lure", cooldown: 0, uses: [] },
 };
 
+const roomConnections = {
+  0: [1, 3],
+  1: [0, 2, 4],
+  2: [1, 5, 8],
+  3: [0, 4, 6],
+  4: [1, 3, 7],
+  5: [2, 6, 9],
+  6: [3, 5, 10],
+  7: [4, 8, 11],
+  8: [2, 7, 12],
+  9: [5, 10, 13],
+  10: [6, 9, 12],
+  11: [7, 12],
+  12: [8, 10, 11, 13],
+  13: [9, 12],
+};
+
 const state = {
   playerRoom: 0,
   robotRoom: 9,
@@ -117,6 +134,8 @@ const state = {
   inventory: new Set(),
   usedDevices: new Map(),
   robotFocus: null,
+  lastKnownPlayerRoom: null,
+  trailTurns: 0,
   isAlive: true,
   hasEscaped: false,
 };
@@ -173,12 +192,15 @@ function renderRoomButtons() {
 function updateUI() {
   const room = rooms[state.playerRoom];
   const dangerRoom = state.robotRoom === state.playerRoom;
+  const connections = roomConnections[state.playerRoom]
+    .map((id) => rooms[id].name)
+    .join(", ");
   dom.currentRoom.textContent = room.name;
   dom.roomDescription.textContent = room.description;
   dom.roomLabel.textContent = dangerRoom ? "Robot Detected" : "Camera Feed";
   dom.roomDetails.textContent = dangerRoom
     ? "Metal steps are right outside your hiding spot."
-    : "Static rolls across the feed. The robot is never far.";
+    : `Connected: ${connections}. Static rolls across the feed. The robot is never far.`;
   dom.roomMedia.style.background = room.theme;
   dom.playerState.textContent = state.hidden ? "Status: Hidden" : "Status: Exposed";
   dom.robotState.textContent = state.robotFocus
@@ -230,12 +252,15 @@ function updateRoomButtons() {
     const roomId = Number(button.dataset.roomId);
     button.classList.toggle("active", roomId === state.playerRoom);
     button.classList.toggle("alert", roomId === state.robotRoom);
+    const canMove = roomConnections[state.playerRoom].includes(roomId);
+    button.disabled = roomId !== state.playerRoom && !canMove;
   });
 }
 
 function movePlayer(roomId) {
   if (!state.isAlive || state.hasEscaped) return;
   if (roomId === state.playerRoom) return;
+  if (!roomConnections[state.playerRoom].includes(roomId)) return;
   state.playerRoom = roomId;
   state.hidden = false;
   collectItem(roomId);
@@ -301,16 +326,21 @@ function handleTurn(action) {
 }
 
 function advanceRobot(action) {
-  const robotTarget = state.robotFocus ?? state.playerRoom;
-  const aggressive = state.threat >= 3;
-  const willMoveToward = aggressive || Math.random() > 0.2;
+  if (action === "move") {
+    state.lastKnownPlayerRoom = state.playerRoom;
+    state.trailTurns = 2;
+  } else if (state.trailTurns > 0) {
+    state.trailTurns -= 1;
+  }
 
-  if (willMoveToward) {
-    state.robotRoom = robotTarget;
+  const robotTarget = state.robotFocus ?? state.lastKnownPlayerRoom;
+  const aggressive = state.threat >= 3;
+  const willMoveToward = robotTarget !== null && (aggressive || Math.random() > 0.35);
+
+  if (willMoveToward && robotTarget !== null) {
+    state.robotRoom = nextStepToward(state.robotRoom, robotTarget);
   } else {
-    const roamRooms = rooms
-      .map((room) => room.id)
-      .filter((id) => id !== state.robotRoom);
+    const roamRooms = roomConnections[state.robotRoom].filter((id) => id !== state.robotRoom);
     state.robotRoom = roamRooms[Math.floor(Math.random() * roamRooms.length)];
   }
 
@@ -362,6 +392,8 @@ function resetGame() {
   state.inventory.clear();
   state.usedDevices.clear();
   state.robotFocus = null;
+  state.lastKnownPlayerRoom = null;
+  state.trailTurns = 0;
   state.isAlive = true;
   state.hasEscaped = false;
   dom.deathScreen.classList.remove("active");
@@ -376,6 +408,31 @@ function threatLabel() {
   if (state.threat < 3) return "Elevated";
   if (state.threat < 4) return "Severe";
   return "Critical";
+}
+
+function nextStepToward(start, target) {
+  if (start === target) return start;
+  const queue = [start];
+  const visited = new Set([start]);
+  const parent = new Map();
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (current === target) break;
+    for (const neighbor of roomConnections[current]) {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor);
+        parent.set(neighbor, current);
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  let step = target;
+  while (parent.has(step) && parent.get(step) !== start) {
+    step = parent.get(step);
+  }
+  return parent.has(step) ? step : start;
 }
 
 init();
