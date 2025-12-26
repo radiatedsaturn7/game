@@ -210,6 +210,7 @@ const state = {
   routePreviewRoom: null,
   selectedRoom: null,
   roomSignals: new Map(),
+  checkedRooms: new Set(),
   robotLinger: 0,
   robotDormant: 0,
   robotSearchTurns: 0,
@@ -379,8 +380,9 @@ function updateCraftButton() {
 function updateMoveButtons() {
   const canMove = state.selectedRoom !== null &&
     roomConnections[state.playerRoom].includes(state.selectedRoom);
-  dom.goBtn.disabled = !canMove || !state.isAlive || state.hasEscaped;
-  dom.runBtn.disabled = !canMove || !state.isAlive || state.hasEscaped;
+  const blocked = !canMove || !state.isAlive || state.hasEscaped || state.hidden;
+  dom.goBtn.disabled = blocked;
+  dom.runBtn.disabled = blocked;
 }
 
 function openMenu() {
@@ -397,6 +399,14 @@ function updateRoomActions() {
   dom.roomActions.innerHTML = "";
   const room = rooms[state.playerRoom];
   const actions = [];
+
+  if (state.hidden) {
+    actions.push({
+      label: "Unhide",
+      onClick: () => setHidden(null),
+      disabled: false,
+    });
+  }
 
   if (room.item && !state.inventory.has(room.item)) {
     actions.push({
@@ -449,6 +459,7 @@ function updateRoomActions() {
 
 function movePlayer(roomId, isRun) {
   if (!state.isAlive || state.hasEscaped) return;
+  if (state.hidden) return;
   if (roomId === state.playerRoom) return;
   if (!roomConnections[state.playerRoom].includes(roomId)) return;
   state.playerRoom = roomId;
@@ -500,6 +511,12 @@ function collectSchematic(roomId) {
 
 function setHidden(spot) {
   if (!state.isAlive || state.hasEscaped) return;
+  if (!spot) {
+    state.hidden = false;
+    state.hiddenSpot = null;
+    updateUI();
+    return;
+  }
   state.hidden = true;
   state.hiddenSpot = spot;
   const hideCount = state.hideHistory.get(state.playerRoom) || 0;
@@ -567,7 +584,7 @@ function advanceRobot() {
     return;
   }
 
-  if (state.robotRoom === state.playerRoom && state.hidden) {
+  if (state.robotRoom === state.playerRoom && state.hidden && getRoomConfidence(state.playerRoom) >= 0.8) {
     startSearchCycle();
   }
 
@@ -581,7 +598,7 @@ function advanceRobot() {
 
   const target = pickRobotTarget();
   const aggressive = state.threat >= 3;
-  const willMoveToward = target !== null && (aggressive || Math.random() > 0.6);
+  const willMoveToward = target !== null && (aggressive || Math.random() > 0.7);
 
   if (willMoveToward && target !== null) {
     state.robotRoom = nextStepToward(state.robotRoom, target);
@@ -593,6 +610,8 @@ function advanceRobot() {
   if (state.robotRoom === state.playerRoom && state.robotFocus) {
     state.robotFocus = null;
   }
+
+  state.checkedRooms.add(state.robotRoom);
 }
 
 function checkThreat() {
@@ -665,6 +684,7 @@ function resetGame() {
   state.routePreviewRoom = null;
   state.selectedRoom = null;
   state.roomSignals.clear();
+  state.checkedRooms.clear();
   state.robotLinger = 0;
   state.robotDormant = 0;
   state.robotSearchTurns = 0;
@@ -708,21 +728,25 @@ function decaySignals() {
 
 function pickRobotTarget() {
   if (state.robotFocus !== null) return state.robotFocus;
-  let bestRoom = null;
-  let bestSignal = 0;
-  state.roomSignals.forEach((value, roomId) => {
-    if (value > bestSignal) {
-      bestSignal = value;
-      bestRoom = roomId;
-    }
-  });
-  if (bestRoom !== null && bestSignal > 0.2) {
-    return bestRoom;
+  const signals = Array.from(state.roomSignals.entries()).sort((a, b) => b[1] - a[1]);
+  for (const [roomId, value] of signals) {
+    if (value <= 0.2) continue;
+    if (!state.checkedRooms.has(roomId)) return roomId;
+    if (value >= 0.7) return roomId;
   }
+
   if (state.trailTurns > 0 && state.lastKnownPlayerRoom !== null) {
-    return state.lastKnownPlayerRoom;
+    const confidence = getRoomConfidence(state.lastKnownPlayerRoom);
+    if (!state.checkedRooms.has(state.lastKnownPlayerRoom) || confidence >= 0.7) {
+      return state.lastKnownPlayerRoom;
+    }
   }
+
   return null;
+}
+
+function getRoomConfidence(roomId) {
+  return state.roomSignals.get(roomId) || 0;
 }
 
 function startSearchCycle() {
