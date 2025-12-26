@@ -152,6 +152,15 @@ const craftableItems = [
   { name: "Override Key", parts: ["Power Cell", "Microcontroller"] },
 ];
 
+const componentDescriptions = {
+  Resistors: "Limits electrical current and stabilizes fragile circuits.",
+  Capacitors: "Stores charge to buffer power spikes and short bursts.",
+  Microcontroller: "Coordinates logic and safety overrides in the schematic.",
+  "Servo Motor": "Drives precision movement for locking mechanisms.",
+  "Copper Wire": "Routes power between subsystems and anchors the circuit.",
+  "Power Cell": "Main power source required to energize the escape build.",
+};
+
 const deviceTypes = {
   scan: { name: "Pulse Scanner", cooldown: 0, uses: [] },
   noise: { name: "Noise Lure", cooldown: 0, uses: [] },
@@ -221,6 +230,8 @@ const state = {
   sawPlayerHide: false,
   robotDisabled: false,
   selectedSchematic: null,
+  requiredEscapeSchematic: null,
+  escapeReady: false,
   playerPath: [],
   playerTravelTicks: 0,
   playerTravelMode: "sneak",
@@ -257,12 +268,18 @@ const dom = {
   mapPanel: document.getElementById("mapPanel"),
   usePanel: document.getElementById("usePanel"),
   useList: document.getElementById("useList"),
+  componentPanel: document.getElementById("componentPanel"),
+  componentTitle: document.getElementById("componentTitle"),
+  componentDetails: document.getElementById("componentDetails"),
+  componentCount: document.getElementById("componentCount"),
+  closeComponentBtn: document.getElementById("closeComponentBtn"),
   buildBtn: document.getElementById("buildBtn"),
   goBtn: document.getElementById("goBtn"),
   runBtn: document.getElementById("runBtn"),
   cancelBtn: document.getElementById("cancelBtn"),
   movementControls: document.getElementById("movementControls"),
   adjacentMoves: document.getElementById("adjacentMoves"),
+  escapeBtn: document.getElementById("escapeBtn"),
   deathScreen: document.getElementById("deathScreen"),
   victoryScreen: document.getElementById("victoryScreen"),
   restartBtn: document.getElementById("restartBtn"),
@@ -292,6 +309,8 @@ function attachEvents() {
   dom.closeMenuBtn.addEventListener("click", closeMenu);
   dom.closeMapBtn.addEventListener("click", closeMap);
   dom.closeUseBtn.addEventListener("click", closeUse);
+  dom.closeComponentBtn.addEventListener("click", closeComponent);
+  dom.escapeBtn.addEventListener("click", handleEscape);
   dom.menuPanel.addEventListener("click", (event) => {
     if (event.target === dom.menuPanel) {
       closeMenu();
@@ -305,6 +324,11 @@ function attachEvents() {
   dom.usePanel.addEventListener("click", (event) => {
     if (event.target === dom.usePanel) {
       closeUse();
+    }
+  });
+  dom.componentPanel.addEventListener("click", (event) => {
+    if (event.target === dom.componentPanel) {
+      closeComponent();
     }
   });
 }
@@ -333,6 +357,7 @@ function updateUI() {
   updateRoomActions();
   updatePanels();
   updateAdjacentMoves();
+  updateEscapeButton();
   updateMap();
   updateBuildButton();
   updateMoveButtons();
@@ -383,10 +408,22 @@ function updateSchematicList() {
     dom.schematicList.appendChild(empty);
     return;
   }
+  if (state.requiredEscapeSchematic && selected.name !== state.requiredEscapeSchematic) {
+    const warning = document.createElement("li");
+    warning.textContent = `Escape requires ${state.requiredEscapeSchematic}.`;
+    dom.schematicList.appendChild(warning);
+  }
   selected.parts.forEach((part) => {
     const count = countInventory(part);
     const li = document.createElement("li");
-    li.textContent = part;
+    const label = document.createElement("span");
+    label.textContent = part;
+    li.appendChild(label);
+    const info = document.createElement("button");
+    info.type = "button";
+    info.textContent = "Help";
+    info.addEventListener("click", () => openComponent(part));
+    li.appendChild(info);
     const tally = document.createElement("span");
     tally.textContent = `${count}x`;
     li.appendChild(tally);
@@ -402,8 +439,9 @@ function updateBuildButton() {
     dom.buildBtn.textContent = "Select a Schematic";
     return;
   }
+  const matchesEscape = !state.requiredEscapeSchematic || selected.name === state.requiredEscapeSchematic;
   const hasAllParts = selected.parts.every((part) => state.inventory.has(part));
-  dom.buildBtn.disabled = !(hasAllParts && state.isAlive && !state.hasEscaped);
+  dom.buildBtn.disabled = !(matchesEscape && hasAllParts && state.isAlive && !state.hasEscaped);
   dom.buildBtn.textContent = hasAllParts
     ? `Build ${selected.name}`
     : "Need More Components";
@@ -453,6 +491,19 @@ function closeUse() {
   dom.usePanel.setAttribute("aria-hidden", "true");
 }
 
+function openComponent(part) {
+  dom.componentTitle.textContent = part;
+  dom.componentDetails.textContent = componentDescriptions[part] || "Critical component.";
+  dom.componentCount.textContent = `You have ${countInventory(part)}.`;
+  dom.componentPanel.classList.add("active");
+  dom.componentPanel.setAttribute("aria-hidden", "false");
+}
+
+function closeComponent() {
+  dom.componentPanel.classList.remove("active");
+  dom.componentPanel.setAttribute("aria-hidden", "true");
+}
+
 function updateRoomActions() {
   dom.roomActions.innerHTML = "";
   const room = rooms[state.playerRoom];
@@ -478,6 +529,14 @@ function updateRoomActions() {
     actions.push({
       label: `Scan Schematic: ${room.schematic}`,
       onClick: () => collectSchematic(room.id),
+      disabled: state.hidden,
+    });
+  }
+
+  if (room.isExit && !state.requiredEscapeSchematic) {
+    actions.push({
+      label: "Inspect Escape Console",
+      onClick: () => revealEscapeSchematic(),
       disabled: state.hidden,
     });
   }
@@ -547,6 +606,18 @@ function countInventory(item) {
     if (entry === item) count += 1;
   });
   return count;
+}
+
+function updateEscapeButton() {
+  const canEscape = state.escapeReady && rooms[state.playerRoom].isExit && state.isAlive;
+  dom.escapeBtn.classList.toggle("hidden", !canEscape);
+}
+
+function revealEscapeSchematic() {
+  if (state.requiredEscapeSchematic) return;
+  const options = craftableItems.map((item) => item.name);
+  state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
+  updateUI();
 }
 
 function movePlayer(roomId, isRun) {
@@ -810,6 +881,8 @@ function resetGame() {
   state.routePreviewRoom = null;
   state.selectedRoom = null;
   state.selectedSchematic = null;
+  state.requiredEscapeSchematic = null;
+  state.escapeReady = false;
   state.roomSignals.clear();
   state.checkedRooms.clear();
   state.robotLinger = 0;
@@ -1245,6 +1318,9 @@ function craftItem() {
   if (!craftable.parts.every((part) => state.inventory.has(part))) return;
   craftable.parts.forEach((part) => state.inventory.delete(part));
   state.craftedItems.add(craftable.name);
+  if (state.requiredEscapeSchematic === craftable.name) {
+    state.escapeReady = true;
+  }
   updateUI();
 }
 
@@ -1292,6 +1368,29 @@ function updateUseList() {
     li.appendChild(button);
     dom.useList.appendChild(li);
   });
+}
+
+function useCraftedItem(name) {
+  if (!state.craftedItems.has(name)) return;
+  if (name === "Signal Scrambler") {
+    state.roomSignals.clear();
+    state.threat = Math.max(1, state.threat - 0.6);
+  }
+  if (name === "Motion Dampener") {
+    state.robotLinger = Math.max(state.robotLinger, 2);
+  }
+  if (name === "Override Key") {
+    state.threat = Math.max(1, state.threat - 1);
+  }
+  state.craftedItems.delete(name);
+  closeUse();
+  updateUI();
+}
+
+function handleEscape() {
+  if (!state.escapeReady) return;
+  if (!rooms[state.playerRoom].isExit) return;
+  buildEscape();
 }
 
 function useCraftedItem(name) {

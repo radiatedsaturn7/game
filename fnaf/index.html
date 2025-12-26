@@ -23,6 +23,7 @@
             <button id="menuBtn">Bag</button>
             <button id="mapBtn">Map</button>
             <button id="useBtn">Use</button>
+            <button id="escapeBtn" class="primary hidden">Escape</button>
           </div>
         </div>
       </section>
@@ -117,6 +118,19 @@
       </div>
       <div class="menu-content">
         <ul id="useList" class="list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="componentPanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3 id="componentTitle">Component</h3>
+        <button id="closeComponentBtn">Close</button>
+      </div>
+      <div class="menu-content">
+        <p id="componentDetails" class="component-details"></p>
+        <p id="componentCount" class="component-count"></p>
       </div>
     </div>
   </div>
