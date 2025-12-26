@@ -171,6 +171,11 @@ main {
   gap: 12px;
 }
 
+.quick-actions.compact {
+  align-items: flex-start;
+  gap: 16px;
+}
+
 .quick-target {
   display: flex;
   flex-direction: column;
@@ -277,6 +282,81 @@ main {
   margin: 12px 0 0;
   font-size: 0.85rem;
   color: #c7d5f3;
+}
+
+.floorplan-controls {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.room-actions h4 {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #8ca9ff;
+}
+
+.map-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.menu-panel {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 5, 10, 0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+}
+
+.menu-panel.active {
+  display: flex;
+}
+
+.menu-card {
+  background: rgba(12, 20, 35, 0.95);
+  border: 1px solid rgba(140, 169, 255, 0.35);
+  border-radius: 20px;
+  padding: 24px;
+  width: min(520px, 90vw);
+  display: grid;
+  gap: 16px;
+}
+
+.menu-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.menu-header h3 {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.9rem;
+  color: #8ca9ff;
+}
+
+.menu-content {
+  display: grid;
+  gap: 12px;
+}
+
+.menu-content h4 {
+  margin: 0 0 6px;
+  font-size: 0.85rem;
+  color: #9fb2de;
+}
+
+.menu-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .actions {
@@ -445,5 +525,9 @@ button.primary {
   .quick-actions {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .menu-actions {
+    grid-template-columns: 1fr;
   }
 }

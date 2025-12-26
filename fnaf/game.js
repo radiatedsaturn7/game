@@ -232,12 +232,13 @@ const dom = {
   inventoryList: document.getElementById("inventoryList"),
   schematicInventory: document.getElementById("schematicInventory"),
   schematicList: document.getElementById("schematicList"),
-  roomGrid: document.getElementById("roomGrid"),
   floorplanMap: document.getElementById("floorplanMap"),
   routeInfo: document.getElementById("routeInfo"),
   randomizeBtn: document.getElementById("randomizeBtn"),
   selectedRoom: document.getElementById("selectedRoom"),
-  hideBtn: document.getElementById("hideBtn"),
+  menuBtn: document.getElementById("menuBtn"),
+  closeMenuBtn: document.getElementById("closeMenuBtn"),
+  menuPanel: document.getElementById("menuPanel"),
   scanBtn: document.getElementById("scanBtn"),
   noiseBtn: document.getElementById("noiseBtn"),
   craftBtn: document.getElementById("craftBtn"),
@@ -252,7 +253,6 @@ const dom = {
 let gameLoopId = null;
 
 function init() {
-  renderRoomButtons();
   renderMap();
   updateSchematicList();
   updateUI();
@@ -261,7 +261,6 @@ function init() {
 }
 
 function attachEvents() {
-  dom.hideBtn.addEventListener("click", () => handleAction("hide"));
   dom.scanBtn.addEventListener("click", () => handleAction("scan"));
   dom.noiseBtn.addEventListener("click", () => handleAction("noise"));
   dom.craftBtn.addEventListener("click", craftItem);
@@ -270,17 +269,12 @@ function attachEvents() {
   dom.randomizeBtn.addEventListener("click", randomizeLayout);
   dom.goBtn.addEventListener("click", () => moveSelected(false));
   dom.runBtn.addEventListener("click", () => moveSelected(true));
-}
-
-function renderRoomButtons() {
-  dom.roomGrid.innerHTML = "";
-  rooms.forEach((room) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = room.name;
-    button.addEventListener("click", () => setSelectedRoom(room.id));
-    button.dataset.roomId = room.id;
-    dom.roomGrid.appendChild(button);
+  dom.menuBtn.addEventListener("click", openMenu);
+  dom.closeMenuBtn.addEventListener("click", closeMenu);
+  dom.menuPanel.addEventListener("click", (event) => {
+    if (event.target === dom.menuPanel) {
+      closeMenu();
+    }
   });
 }
 
@@ -308,7 +302,6 @@ function updateUI() {
     : rooms[state.selectedRoom].name;
   updateInventoryList();
   updateSchematicsInventory();
-  updateRoomButtons();
   updateRoomActions();
   updateMap();
   updateBuildButton();
@@ -386,15 +379,14 @@ function updateMoveButtons() {
   dom.runBtn.disabled = !canMove || !state.isAlive || state.hasEscaped;
 }
 
-function updateRoomButtons() {
-  dom.roomGrid.querySelectorAll("button").forEach((button) => {
-    const roomId = Number(button.dataset.roomId);
-    button.classList.toggle("active", roomId === state.playerRoom);
-    button.classList.toggle("alert", roomId === state.robotRoom);
-    button.classList.toggle("preview", roomId === state.selectedRoom);
-    const canMove = roomConnections[state.playerRoom].includes(roomId);
-    button.disabled = roomId !== state.playerRoom && !canMove;
-  });
+function openMenu() {
+  dom.menuPanel.classList.add("active");
+  dom.menuPanel.setAttribute("aria-hidden", "false");
+}
+
+function closeMenu() {
+  dom.menuPanel.classList.remove("active");
+  dom.menuPanel.setAttribute("aria-hidden", "true");
 }
 
 function updateRoomActions() {
