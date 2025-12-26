@@ -256,6 +256,10 @@ main {
   gap: 10px;
 }
 
+.actions.compact {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
 button {
   border: none;
   padding: 10px 12px;
@@ -299,6 +303,11 @@ button.primary {
   color: #d6def0;
   display: flex;
   justify-content: space-between;
+}
+
+.list li span {
+  color: #8ca9ff;
+  font-size: 0.8rem;
 }
 
 .room-grid {
