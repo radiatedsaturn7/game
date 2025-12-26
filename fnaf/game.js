@@ -159,6 +159,11 @@ const componentDescriptions = {
   "Servo Motor": "Drives precision movement for locking mechanisms.",
   "Copper Wire": "Routes power between subsystems and anchors the circuit.",
   "Power Cell": "Main power source required to energize the escape build.",
+  "Signal Scrambler": "Jams the robot's sensors and clears accumulated signals.",
+  "Motion Dampener": "Buys time by slowing the robot's movement for a short while.",
+  "Override Key": "Overrides local locks and reduces the robot's alertness.",
+  "Pulse Scanner": "Pings the area to reveal robot attention and nearby threats.",
+  "Noise Lure": "Creates a loud distraction to pull the robot off your trail.",
 };
 
 const deviceTypes = {
@@ -234,12 +239,14 @@ const state = {
   escapeReady: false,
   alertTicks: 0,
   objectiveBlocked: false,
+  escapeConsoleInspected: false,
   playerPath: [],
   playerTravelTicks: 0,
   playerTravelMode: "sneak",
   playerTravelTotal: 0,
   robotPath: [],
   robotTravelTicks: 0,
+  robotTravelStepTotal: 0,
   dayCount: 1,
   baseDate: new Date("2326-12-25T00:00:00Z"),
   isAlive: true,
@@ -302,10 +309,12 @@ let gameLoopId = null;
 
 function init() {
   renderMap();
+  assignRoomFinds();
   updateSchematicList();
   updateUI();
   attachEvents();
   startGameLoop();
+  showObjectiveModal(getObjectiveText());
 }
 
 function attachEvents() {
@@ -473,6 +482,7 @@ function updateBuildButton() {
   dom.buildBtn.textContent = hasAllParts
     ? `Build ${selected.name}`
     : "Need More Components";
+  dom.buildBtn.classList.toggle("objective-highlight", matchesEscape);
 }
 
 function updateMoveButtons() {
@@ -489,6 +499,7 @@ function updatePanels() {
 }
 
 function openMenu() {
+  if (state.objectiveBlocked) return;
   dom.menuPanel.classList.add("active");
   dom.menuPanel.setAttribute("aria-hidden", "false");
 }
@@ -499,6 +510,7 @@ function closeMenu() {
 }
 
 function openMap() {
+  if (state.objectiveBlocked) return;
   dom.mapPanel.classList.add("active");
   dom.mapPanel.setAttribute("aria-hidden", "false");
 }
@@ -510,6 +522,7 @@ function closeMap() {
 }
 
 function openUse() {
+  if (state.objectiveBlocked) return;
   dom.usePanel.classList.add("active");
   dom.usePanel.setAttribute("aria-hidden", "false");
 }
@@ -533,6 +546,7 @@ function closeComponent() {
 }
 
 function openTasks() {
+  if (state.objectiveBlocked) return;
   dom.tasksPanel.classList.add("active");
   dom.tasksPanel.setAttribute("aria-hidden", "false");
 }
@@ -559,28 +573,29 @@ function updateRoomActions() {
   dom.roomActions.innerHTML = "";
   const room = rooms[state.playerRoom];
   const actions = [];
+  const blocked = state.objectiveBlocked;
 
   if (state.hidden) {
     actions.push({
       label: "Unhide",
       onClick: () => setHidden(null),
-      disabled: false,
+      disabled: blocked,
     });
   }
 
-  if (room.item && !state.inventory.has(room.item)) {
+  if (state.escapeConsoleInspected && room.item && !state.inventory.has(room.item)) {
     actions.push({
       label: `Collect ${room.item}`,
       onClick: () => collectItem(room.id),
-      disabled: state.hidden,
+      disabled: state.hidden || blocked,
     });
   }
 
-  if (room.schematic && !state.foundSchematics.has(room.schematic)) {
+  if (state.escapeConsoleInspected && room.schematic && !state.foundSchematics.has(room.schematic)) {
     actions.push({
       label: `Scan Schematic: ${room.schematic}`,
       onClick: () => collectSchematic(room.id),
-      disabled: state.hidden,
+      disabled: state.hidden || blocked,
     });
   }
 
@@ -588,7 +603,7 @@ function updateRoomActions() {
     actions.push({
       label: "Inspect Escape Console",
       onClick: () => revealEscapeSchematic(),
-      disabled: state.hidden,
+      disabled: state.hidden || blocked,
       highlight: true,
     });
   }
@@ -597,7 +612,7 @@ function updateRoomActions() {
     actions.push({
       label: `Hide: ${spot}`,
       onClick: () => setHidden(spot),
-      disabled: state.hidden && state.hiddenSpot === spot,
+      disabled: blocked || (state.hidden && state.hiddenSpot === spot),
     });
   });
 
@@ -605,7 +620,7 @@ function updateRoomActions() {
     actions.push({
       label: `Trigger ${room.siren}`,
       onClick: () => triggerSiren(room.id),
-      disabled: false,
+      disabled: blocked,
     });
   }
 
@@ -688,7 +703,42 @@ function revealEscapeSchematic() {
   state.selectedSchematic = state.requiredEscapeSchematic;
   state.robotDisabled = false;
   state.alertTicks = 6;
+  state.escapeConsoleInspected = true;
+  showObjectiveModal(`Objective unlocked: Build ${state.requiredEscapeSchematic}.`);
   updateUI();
+}
+
+function assignRoomFinds() {
+  rooms.forEach((room) => {
+    room.item = undefined;
+    room.schematic = undefined;
+  });
+  const availableRooms = rooms.filter((room) => !room.isExit);
+  const shuffled = [...availableRooms].sort(() => Math.random() - 0.5);
+  requiredParts.forEach((part, index) => {
+    if (shuffled[index]) {
+      shuffled[index].item = part;
+    }
+  });
+  const schematicRooms = shuffled.slice(requiredParts.length);
+  craftableItems.forEach((item, index) => {
+    if (schematicRooms[index]) {
+      schematicRooms[index].schematic = item.name;
+    }
+  });
+}
+
+function getObjectiveText() {
+  if (!state.escapeConsoleInspected) {
+    return "Inspect the Escape Workshop console to learn which schematic is required.";
+  }
+  if (!state.escapeReady && state.requiredEscapeSchematic) {
+    return `Find and build the ${state.requiredEscapeSchematic} schematic, then escape.`;
+  }
+  if (state.escapeReady) {
+    return "Return to the Escape Workshop and press Escape.";
+  }
+  return "Explore the factory and collect components.";
 }
 
 function movePlayer(roomId, isRun) {
@@ -769,6 +819,7 @@ function setHidden(spot) {
 
 function handleAction(action) {
   if (!state.isAlive || state.hasEscaped) return;
+  if (state.objectiveBlocked) return;
   if (action === "hide") {
     const room = rooms[state.playerRoom];
     setHidden(room.hideSpots[0]);
@@ -857,6 +908,7 @@ function advanceRobot() {
     state.robotPlannedTarget = target;
     state.robotPath = getShortestPath(state.robotRoom, target).slice(1);
     state.robotTravelTicks = Math.floor(Math.random() * 2) + 2;
+    state.robotTravelStepTotal = state.robotTravelTicks;
     state.robotLookTurns = Math.floor(Math.random() * 3) + 2;
     state.robotScanTarget = null;
   } else {
@@ -866,6 +918,7 @@ function advanceRobot() {
       const roamTarget = roamRooms[Math.floor(Math.random() * roamRooms.length)];
       state.robotPath = [roamTarget];
       state.robotTravelTicks = Math.floor(Math.random() * 2) + 2;
+      state.robotTravelStepTotal = state.robotTravelTicks;
     }
     state.robotLinger = Math.floor(Math.random() * 9) + 8;
     state.robotScanTarget = null;
@@ -936,7 +989,7 @@ function buildEscape() {
 
 function resetGame() {
   state.playerRoom = 0;
-  state.robotRoom = 13;
+  state.robotRoom = 0;
   state.hidden = false;
   state.hiddenSpot = null;
   state.learnedHidingSpots.clear();
@@ -955,6 +1008,7 @@ function resetGame() {
   state.selectedSchematic = null;
   state.requiredEscapeSchematic = null;
   state.escapeReady = false;
+  state.escapeConsoleInspected = false;
   state.roomSignals.clear();
   state.checkedRooms.clear();
   state.robotLinger = 0;
@@ -973,14 +1027,17 @@ function resetGame() {
   state.playerTravelTotal = 0;
   state.robotPath = [];
   state.robotTravelTicks = 0;
+  state.robotTravelStepTotal = 0;
   state.dayCount = 1;
   state.isAlive = true;
   state.hasEscaped = false;
+  assignRoomFinds();
   dom.deathScreen.classList.remove("active");
   dom.deathScreen.setAttribute("aria-hidden", "true");
   dom.victoryScreen.classList.remove("active");
   dom.victoryScreen.setAttribute("aria-hidden", "true");
   updateUI();
+  showObjectiveModal(getObjectiveText());
 }
 
 function threatLabel() {
@@ -1178,6 +1235,7 @@ function updateMap() {
     line.classList.toggle("robot-plan", robotEdges.has(edge));
     line.classList.toggle("player-travel", playerTravelEdges.has(edge));
     line.classList.toggle("robot-travel", robotTravelEdges.has(edge));
+    applyTravelProgress(line, edge);
   });
 
   const playerAdjacents = new Set(roomConnections[state.playerRoom]);
@@ -1197,6 +1255,50 @@ function updateMap() {
   });
 
   updateRouteInfo(path);
+}
+
+function applyTravelProgress(line, edgeKey) {
+  line.style.strokeDasharray = "";
+  line.style.strokeDashoffset = "";
+  const playerEdge = currentTravelEdge(state.playerRoom, state.playerPath);
+  if (playerEdge && edgeKey === playerEdge.key) {
+    const progress = getProgress(state.playerTravelTicks, state.playerTravelMode === "run" ? 1 : 2);
+    setLineProgress(line, playerEdge.length, progress);
+  }
+  const robotEdge = currentTravelEdge(state.robotRoom, state.robotPath);
+  if (robotEdge && edgeKey === robotEdge.key) {
+    const progress = getProgress(state.robotTravelTicks, state.robotTravelStepTotal);
+    setLineProgress(line, robotEdge.length, progress);
+  }
+}
+
+function currentTravelEdge(startRoom, path) {
+  if (!path || path.length === 0) return null;
+  const nextRoom = path[0];
+  const a = Math.min(startRoom, nextRoom);
+  const b = Math.max(startRoom, nextRoom);
+  const length = edgeLength(startRoom, nextRoom);
+  return { key: `${a}-${b}`, length };
+}
+
+function edgeLength(startRoom, endRoom) {
+  const start = mapPositions[startRoom];
+  const end = mapPositions[endRoom];
+  const dx = start.x - end.x;
+  const dy = start.y - end.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function getProgress(ticksRemaining, ticksTotal) {
+  if (!ticksTotal) return 1;
+  const remaining = Math.max(0, ticksRemaining);
+  return Math.min(1, Math.max(0, 1 - remaining / ticksTotal));
+}
+
+function setLineProgress(line, length, progress) {
+  const activeLength = Math.max(2, length * progress);
+  line.style.strokeDasharray = `${activeLength} ${length}`;
+  line.style.strokeDashoffset = "0";
 }
 
 function updateRouteInfo(path) {
@@ -1404,6 +1506,7 @@ function startGameLoop() {
   }
   gameLoopId = setInterval(() => {
     if (!state.isAlive || state.hasEscaped) return;
+    if (state.objectiveBlocked) return;
     if (state.trailTurns > 0) {
       state.trailTurns -= 1;
     }
@@ -1423,11 +1526,11 @@ function startGameLoop() {
 function updateUseList() {
   dom.useList.innerHTML = "";
   const options = [
-    { label: "Pulse Scanner", action: () => handleAction("scan") },
-    { label: "Noise Lure", action: () => handleAction("noise") },
+    { label: "Pulse Scanner", action: () => handleAction("scan"), help: "Pulse Scanner" },
+    { label: "Noise Lure", action: () => handleAction("noise"), help: "Noise Lure" },
   ];
   state.craftedItems.forEach((item) => {
-    options.push({ label: item, action: () => useCraftedItem(item) });
+    options.push({ label: item, action: () => useCraftedItem(item), help: item });
   });
 
   if (options.length === 0) {
@@ -1443,6 +1546,10 @@ function updateUseList() {
     button.textContent = `Use ${item.label}`;
     button.addEventListener("click", item.action);
     li.appendChild(button);
+    const help = document.createElement("button");
+    help.textContent = "Help";
+    help.addEventListener("click", () => openComponent(item.help));
+    li.appendChild(help);
     dom.useList.appendChild(li);
   });
 }
@@ -1459,7 +1566,6 @@ function useCraftedItem(name) {
   if (name === "Override Key") {
     state.threat = Math.max(1, state.threat - 1);
   }
-  state.craftedItems.delete(name);
   closeUse();
   updateUI();
 }
@@ -1468,23 +1574,6 @@ function handleEscape() {
   if (!state.escapeReady) return;
   if (!rooms[state.playerRoom].isExit) return;
   buildEscape();
-}
-
-function useCraftedItem(name) {
-  if (!state.craftedItems.has(name)) return;
-  if (name === "Signal Scrambler") {
-    state.roomSignals.clear();
-    state.threat = Math.max(1, state.threat - 0.6);
-  }
-  if (name === "Motion Dampener") {
-    state.robotLinger = Math.max(state.robotLinger, 2);
-  }
-  if (name === "Override Key") {
-    state.threat = Math.max(1, state.threat - 1);
-  }
-  state.craftedItems.delete(name);
-  closeUse();
-  updateUI();
 }
 
 function tickPlayerTravel() {
@@ -1522,8 +1611,10 @@ function tickRobotTravel() {
   state.checkedRooms.add(state.robotRoom);
   if (state.robotPath.length === 0) {
     state.robotTravelTicks = 0;
+    state.robotTravelStepTotal = 0;
   } else {
     state.robotTravelTicks = 1;
+    state.robotTravelStepTotal = state.robotTravelTicks;
   }
 }
 
