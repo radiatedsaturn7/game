@@ -230,7 +230,6 @@ const state = {
 
 const dom = {
   threatLevel: document.getElementById("threatLevel"),
-  dayCounter: document.getElementById("dayCounter"),
   dateLabel: document.getElementById("dateLabel"),
   roomLabel: document.getElementById("roomLabel"),
   roomDetails: document.getElementById("roomDetails"),
@@ -316,7 +315,6 @@ function updateUI() {
     node.textContent = robotStatusLabel();
   });
   dom.threatLevel.textContent = threatLabel();
-  dom.dayCounter.textContent = `Day ${String(state.dayCount).padStart(2, "0")}`;
   dom.dateLabel.textContent = formatDate(state.baseDate, state.dayCount);
   dom.selectedRoom.textContent = state.selectedRoom === null
     ? "None"
