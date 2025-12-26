@@ -231,8 +231,6 @@ const state = {
 const dom = {
   threatLevel: document.getElementById("threatLevel"),
   dateLabel: document.getElementById("dateLabel"),
-  roomLabel: document.getElementById("roomLabel"),
-  roomDetails: document.getElementById("roomDetails"),
   roomMedia: document.getElementById("roomMedia"),
   currentRooms: document.querySelectorAll(".current-room"),
   roomDescription: document.getElementById("roomDescription"),
@@ -305,17 +303,11 @@ function attachEvents() {
 function updateUI() {
   const room = rooms[state.playerRoom];
   const dangerRoom = state.robotRoom === state.playerRoom;
-  const connections = roomConnections[state.playerRoom]
-    .map((id) => rooms[id].name)
-    .join(", ");
   dom.currentRooms.forEach((node) => {
     node.textContent = room.name;
   });
   dom.roomDescription.textContent = room.description;
-  dom.roomLabel.textContent = dangerRoom ? "Robot Detected" : "Camera Feed";
-  dom.roomDetails.textContent = dangerRoom
-    ? "Metal steps are right outside your hiding spot."
-    : `Connected: ${connections}. Static rolls across the feed. The robot is never far.`;
+  dom.roomMedia.classList.toggle("threat-nearby", dangerRoom);
   dom.roomMedia.style.background = "transparent";
   document.body.style.setProperty("--room-theme", room.theme);
   dom.playerState.textContent = state.hidden
