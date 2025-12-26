@@ -233,8 +233,6 @@ const dom = {
   dateLabel: document.getElementById("dateLabel"),
   roomMedia: document.getElementById("roomMedia"),
   currentRooms: document.querySelectorAll(".current-room"),
-  roomDescription: document.getElementById("roomDescription"),
-  playerState: document.getElementById("playerState"),
   robotStatuses: document.querySelectorAll(".robot-status"),
   roomActions: document.getElementById("roomActions"),
   inventoryList: document.getElementById("inventoryList"),
@@ -306,13 +304,9 @@ function updateUI() {
   dom.currentRooms.forEach((node) => {
     node.textContent = room.name;
   });
-  dom.roomDescription.textContent = room.description;
   dom.roomMedia.classList.toggle("threat-nearby", dangerRoom);
   dom.roomMedia.style.background = "transparent";
   document.body.style.setProperty("--room-theme", room.theme);
-  dom.playerState.textContent = state.hidden
-    ? `Status: Hidden (${state.hiddenSpot ?? "Unknown"}).`
-    : "Status: Exposed";
   dom.robotStatuses.forEach((node) => {
     node.textContent = robotStatusLabel();
   });
