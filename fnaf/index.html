@@ -17,48 +17,13 @@
             <p id="roomDescription" class="room-description"></p>
             <p id="playerState" class="room-status"></p>
           </div>
-        </div>
-      </section>
-
-      <section class="control-panel">
-        <div class="panel">
-          <div class="floorplan-header">
-            <div class="floorplan-status">
-              <span>Threat</span>
-              <strong id="threatLevel">Low</strong>
-              <small id="dateLabel">Dec 25 2326</small>
-            </div>
-            <div class="floorplan-room">
-              <strong class="current-room">Control Bay</strong>
-              <span class="robot-status">Robot: Searching</span>
-            </div>
+          <div class="room-actions-overlay">
+            <div id="roomActions" class="actions overlay-actions"></div>
+            <div id="adjacentMoves" class="actions overlay-actions"></div>
           </div>
-          <div class="map-shell">
-            <svg id="floorplanMap" viewBox="0 0 520 420" width="520" height="420" role="img" aria-label="Factory floorplan"></svg>
-          </div>
-          <div class="floorplan-controls">
-            <div class="movement-controls hidden" id="movementControls">
-              <div class="quick-actions compact">
-                <div class="quick-target">
-                  <span>Selected</span>
-                  <strong id="selectedRoom">None</strong>
-                </div>
-                <div class="quick-buttons">
-                  <button id="goBtn">Sneak</button>
-                  <button id="runBtn">Run</button>
-                  <button id="cancelBtn">Cancel</button>
-                </div>
-              </div>
-            </div>
-            <div class="room-actions" id="roomActionsPanel">
-              <h4>Room Actions</h4>
-              <div id="roomActions" class="actions"></div>
-            </div>
-          </div>
-          <p id="routeInfo" class="route-info"></p>
-          <div class="map-buttons">
+          <div class="overlay-footer">
             <button id="menuBtn">Menu</button>
-            <button id="randomizeBtn">Randomize Layout</button>
+            <button id="mapBtn">Map</button>
           </div>
         </div>
       </section>
@@ -105,6 +70,46 @@
         <button id="noiseBtn">Noise Lure</button>
         <button id="craftBtn">Craft Item</button>
         <button id="buildBtn" class="primary" disabled>Build Escape Schematic</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mapPanel" class="map-panel" aria-hidden="true">
+    <div class="map-card">
+      <div class="menu-header">
+        <h3>Floor Plan</h3>
+        <button id="closeMapBtn">Close</button>
+      </div>
+      <div class="floorplan-header">
+        <div class="floorplan-status">
+          <span>Threat</span>
+          <strong id="threatLevel">Low</strong>
+          <small id="dateLabel">Dec 25 2326</small>
+        </div>
+        <div class="floorplan-room">
+          <strong class="current-room">Control Bay</strong>
+          <span class="robot-status">Robot: Searching</span>
+        </div>
+      </div>
+      <div class="map-shell">
+        <svg id="floorplanMap" viewBox="0 0 520 420" width="520" height="420" role="img" aria-label="Factory floorplan"></svg>
+      </div>
+      <div class="movement-controls hidden" id="movementControls">
+        <div class="quick-actions compact">
+          <div class="quick-target">
+            <span>Selected</span>
+            <strong id="selectedRoom">None</strong>
+          </div>
+          <div class="quick-buttons">
+            <button id="goBtn">Sneak</button>
+            <button id="runBtn">Run</button>
+            <button id="cancelBtn">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <p id="routeInfo" class="route-info"></p>
+      <div class="map-buttons">
+        <button id="randomizeBtn">Randomize Layout</button>
       </div>
     </div>
   </div>

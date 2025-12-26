@@ -247,8 +247,11 @@ const dom = {
   randomizeBtn: document.getElementById("randomizeBtn"),
   selectedRoom: document.getElementById("selectedRoom"),
   menuBtn: document.getElementById("menuBtn"),
+  mapBtn: document.getElementById("mapBtn"),
   closeMenuBtn: document.getElementById("closeMenuBtn"),
+  closeMapBtn: document.getElementById("closeMapBtn"),
   menuPanel: document.getElementById("menuPanel"),
+  mapPanel: document.getElementById("mapPanel"),
   scanBtn: document.getElementById("scanBtn"),
   noiseBtn: document.getElementById("noiseBtn"),
   craftBtn: document.getElementById("craftBtn"),
@@ -257,7 +260,7 @@ const dom = {
   runBtn: document.getElementById("runBtn"),
   cancelBtn: document.getElementById("cancelBtn"),
   movementControls: document.getElementById("movementControls"),
-  roomActionsPanel: document.getElementById("roomActionsPanel"),
+  adjacentMoves: document.getElementById("adjacentMoves"),
   deathScreen: document.getElementById("deathScreen"),
   victoryScreen: document.getElementById("victoryScreen"),
   restartBtn: document.getElementById("restartBtn"),
@@ -284,10 +287,17 @@ function attachEvents() {
   dom.runBtn.addEventListener("click", () => moveSelected(true));
   dom.cancelBtn.addEventListener("click", clearSelectedRoom);
   dom.menuBtn.addEventListener("click", openMenu);
+  dom.mapBtn.addEventListener("click", openMap);
   dom.closeMenuBtn.addEventListener("click", closeMenu);
+  dom.closeMapBtn.addEventListener("click", closeMap);
   dom.menuPanel.addEventListener("click", (event) => {
     if (event.target === dom.menuPanel) {
       closeMenu();
+    }
+  });
+  dom.mapPanel.addEventListener("click", (event) => {
+    if (event.target === dom.mapPanel) {
+      closeMap();
     }
   });
 }
@@ -323,6 +333,7 @@ function updateUI() {
   updateSchematicsInventory();
   updateRoomActions();
   updatePanels();
+  updateAdjacentMoves();
   updateMap();
   updateBuildButton();
   updateCraftButton();
@@ -403,7 +414,6 @@ function updateMoveButtons() {
 function updatePanels() {
   const showMovement = state.selectedRoom !== null;
   dom.movementControls.classList.toggle("hidden", !showMovement);
-  dom.roomActionsPanel.classList.toggle("hidden", showMovement);
 }
 
 function openMenu() {
@@ -414,6 +424,17 @@ function openMenu() {
 function closeMenu() {
   dom.menuPanel.classList.remove("active");
   dom.menuPanel.setAttribute("aria-hidden", "true");
+}
+
+function openMap() {
+  dom.mapPanel.classList.add("active");
+  dom.mapPanel.setAttribute("aria-hidden", "false");
+}
+
+function closeMap() {
+  dom.mapPanel.classList.remove("active");
+  dom.mapPanel.setAttribute("aria-hidden", "true");
+  clearSelectedRoom();
 }
 
 function updateRoomActions() {
@@ -475,6 +496,18 @@ function updateRoomActions() {
     button.disabled = action.disabled;
     button.addEventListener("click", action.onClick);
     dom.roomActions.appendChild(button);
+  });
+}
+
+function updateAdjacentMoves() {
+  dom.adjacentMoves.innerHTML = "";
+  const adjacent = roomConnections[state.playerRoom];
+  adjacent.forEach((roomId) => {
+    const button = document.createElement("button");
+    button.textContent = `Move: ${rooms[roomId].name}`;
+    button.disabled = state.playerTravelTicks > 0;
+    button.addEventListener("click", () => movePlayer(roomId, false));
+    dom.adjacentMoves.appendChild(button);
   });
 }
 
