@@ -232,7 +232,7 @@ main {
 
 #floorplanMap {
   width: 100%;
-  height: 360px;
+  height: 300px;
   display: block;
 }
 
@@ -288,6 +288,51 @@ main {
   margin-top: 12px;
   display: grid;
   gap: 12px;
+}
+
+.floorplan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.floorplan-status {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: #9fb2de;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.floorplan-status strong {
+  font-size: 1.1rem;
+  color: #ffffff;
+}
+
+.floorplan-status small {
+  text-transform: none;
+  letter-spacing: 0;
+  color: #c6d3f3;
+}
+
+.floorplan-room {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.floorplan-room strong {
+  font-size: 1rem;
+}
+
+.floorplan-room span {
+  font-size: 0.85rem;
+  color: #c6d3f3;
 }
 
 .room-actions h4 {

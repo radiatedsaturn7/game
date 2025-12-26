@@ -10,22 +10,7 @@
   <div class="app">
     <header>
       <div>
-        <p class="eyebrow">Factory Protocol // Nightwatch Simulation</p>
         <h1>Factory: The Last Shift</h1>
-        <p class="subhead">
-          Survive the night against the adaptive machine stalking the factory. Watch the rooms, ration your tools,
-          and build the escape schematic before it learns your every move.
-        </p>
-      </div>
-      <div class="status-block">
-        <div class="status">
-          <span>Threat Level</span>
-          <strong id="threatLevel">Low</strong>
-        </div>
-        <div class="status">
-          <span>Shift</span>
-          <strong id="shiftCounter">00</strong>
-        </div>
       </div>
     </header>
 
@@ -39,19 +24,29 @@
         </div>
         <div class="room-meta">
           <div>
-            <h2 id="currentRoom">Control Bay</h2>
+            <h2 class="current-room">Control Bay</h2>
             <p id="roomDescription">Your only safe room is a lie. The machine is always listening.</p>
           </div>
           <div class="tags">
             <span id="playerState">Status: Exposed</span>
-            <span id="robotState">Robot: Searching</span>
+            <span class="robot-status">Robot: Searching</span>
           </div>
         </div>
       </section>
 
       <section class="control-panel">
         <div class="panel">
-          <h3>Floorplan Map</h3>
+          <div class="floorplan-header">
+            <div class="floorplan-status">
+              <span>Threat</span>
+              <strong id="threatLevel">Low</strong>
+              <small>Shift <span id="shiftCounter">00</span></small>
+            </div>
+            <div class="floorplan-room">
+              <strong class="current-room">Control Bay</strong>
+              <span class="robot-status">Robot: Searching</span>
+            </div>
+          </div>
           <p class="map-hint">Tap a room on the map to preview the route from your current location.</p>
           <div class="map-shell">
             <svg id="floorplanMap" viewBox="0 0 520 420" width="520" height="420" role="img" aria-label="Factory floorplan"></svg>

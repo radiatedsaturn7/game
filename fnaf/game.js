@@ -224,10 +224,10 @@ const dom = {
   roomLabel: document.getElementById("roomLabel"),
   roomDetails: document.getElementById("roomDetails"),
   roomMedia: document.getElementById("roomMedia"),
-  currentRoom: document.getElementById("currentRoom"),
+  currentRooms: document.querySelectorAll(".current-room"),
   roomDescription: document.getElementById("roomDescription"),
   playerState: document.getElementById("playerState"),
-  robotState: document.getElementById("robotState"),
+  robotStatuses: document.querySelectorAll(".robot-status"),
   roomActions: document.getElementById("roomActions"),
   inventoryList: document.getElementById("inventoryList"),
   schematicInventory: document.getElementById("schematicInventory"),
@@ -284,7 +284,9 @@ function updateUI() {
   const connections = roomConnections[state.playerRoom]
     .map((id) => rooms[id].name)
     .join(", ");
-  dom.currentRoom.textContent = room.name;
+  dom.currentRooms.forEach((node) => {
+    node.textContent = room.name;
+  });
   dom.roomDescription.textContent = room.description;
   dom.roomLabel.textContent = dangerRoom ? "Robot Detected" : "Camera Feed";
   dom.roomDetails.textContent = dangerRoom
@@ -294,7 +296,9 @@ function updateUI() {
   dom.playerState.textContent = state.hidden
     ? `Status: Hidden (${state.hiddenSpot ?? "Unknown"}).`
     : "Status: Exposed";
-  dom.robotState.textContent = robotStatusLabel();
+  dom.robotStatuses.forEach((node) => {
+    node.textContent = robotStatusLabel();
+  });
   dom.threatLevel.textContent = threatLabel();
   dom.shiftCounter.textContent = String(state.turn).padStart(2, "0");
   dom.selectedRoom.textContent = state.selectedRoom === null
