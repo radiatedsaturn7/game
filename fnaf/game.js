@@ -1262,7 +1262,7 @@ function tickRobotTravel() {
 function tickDormantState() {
   if (state.robotDormant > 0) return;
   if (Math.random() < 0.05) {
-    state.robotDormant = Math.floor(Math.random() * 3) + 2;
+    state.robotDormant = Math.floor(Math.random() * 76) + 25;
     state.robotLinger = 0;
     state.robotSearchTurns = 0;
     state.robotSearchSpot = null;
