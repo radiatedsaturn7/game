@@ -202,7 +202,7 @@ let roomConnections = {
 
 const state = {
   playerRoom: 0,
-  robotRoom: 13,
+  robotRoom: 0,
   hidden: false,
   hiddenSpot: null,
   learnedHidingSpots: new Set(),
@@ -233,6 +233,7 @@ const state = {
   requiredEscapeSchematic: null,
   escapeReady: false,
   alertTicks: 0,
+  objectiveBlocked: false,
   playerPath: [],
   playerTravelTicks: 0,
   playerTravelMode: "sneak",
@@ -264,6 +265,7 @@ const dom = {
   selectedRoom: document.getElementById("selectedRoom"),
   menuBtn: document.getElementById("menuBtn"),
   mapBtn: document.getElementById("mapBtn"),
+  tasksBtn: document.getElementById("tasksBtn"),
   useBtn: document.getElementById("useBtn"),
   toggleRobotBtn: document.getElementById("toggleRobotBtn"),
   closeMenuBtn: document.getElementById("closeMenuBtn"),
@@ -278,6 +280,12 @@ const dom = {
   componentDetails: document.getElementById("componentDetails"),
   componentCount: document.getElementById("componentCount"),
   closeComponentBtn: document.getElementById("closeComponentBtn"),
+  tasksPanel: document.getElementById("tasksPanel"),
+  tasksText: document.getElementById("tasksText"),
+  closeTasksBtn: document.getElementById("closeTasksBtn"),
+  objectiveModal: document.getElementById("objectiveModal"),
+  objectiveModalText: document.getElementById("objectiveModalText"),
+  ackObjectiveBtn: document.getElementById("ackObjectiveBtn"),
   buildBtn: document.getElementById("buildBtn"),
   goBtn: document.getElementById("goBtn"),
   runBtn: document.getElementById("runBtn"),
@@ -309,12 +317,15 @@ function attachEvents() {
   dom.cancelBtn.addEventListener("click", clearSelectedRoom);
   dom.menuBtn.addEventListener("click", openMenu);
   dom.mapBtn.addEventListener("click", openMap);
+  dom.tasksBtn.addEventListener("click", openTasks);
   dom.useBtn.addEventListener("click", openUse);
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
   dom.closeMenuBtn.addEventListener("click", closeMenu);
   dom.closeMapBtn.addEventListener("click", closeMap);
   dom.closeUseBtn.addEventListener("click", closeUse);
   dom.closeComponentBtn.addEventListener("click", closeComponent);
+  dom.closeTasksBtn.addEventListener("click", closeTasks);
+  dom.ackObjectiveBtn.addEventListener("click", acknowledgeObjective);
   dom.escapeBtn.addEventListener("click", handleEscape);
   dom.menuPanel.addEventListener("click", (event) => {
     if (event.target === dom.menuPanel) {
@@ -334,6 +345,11 @@ function attachEvents() {
   dom.componentPanel.addEventListener("click", (event) => {
     if (event.target === dom.componentPanel) {
       closeComponent();
+    }
+  });
+  dom.tasksPanel.addEventListener("click", (event) => {
+    if (event.target === dom.tasksPanel) {
+      closeTasks();
     }
   });
 }
@@ -374,6 +390,7 @@ function updateUI() {
   updateBuildButton();
   updateMoveButtons();
   dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
+  dom.tasksText.textContent = getObjectiveText();
 }
 
 function updateInventoryList() {
@@ -515,6 +532,29 @@ function closeComponent() {
   dom.componentPanel.setAttribute("aria-hidden", "true");
 }
 
+function openTasks() {
+  dom.tasksPanel.classList.add("active");
+  dom.tasksPanel.setAttribute("aria-hidden", "false");
+}
+
+function closeTasks() {
+  dom.tasksPanel.classList.remove("active");
+  dom.tasksPanel.setAttribute("aria-hidden", "true");
+}
+
+function showObjectiveModal(text) {
+  dom.objectiveModalText.textContent = text;
+  dom.objectiveModal.classList.add("active");
+  dom.objectiveModal.setAttribute("aria-hidden", "false");
+  state.objectiveBlocked = true;
+}
+
+function acknowledgeObjective() {
+  dom.objectiveModal.classList.remove("active");
+  dom.objectiveModal.setAttribute("aria-hidden", "true");
+  state.objectiveBlocked = false;
+}
+
 function updateRoomActions() {
   dom.roomActions.innerHTML = "";
   const room = rooms[state.playerRoom];
@@ -549,6 +589,7 @@ function updateRoomActions() {
       label: "Inspect Escape Console",
       onClick: () => revealEscapeSchematic(),
       disabled: state.hidden,
+      highlight: true,
     });
   }
 
@@ -580,6 +621,9 @@ function updateRoomActions() {
     const button = document.createElement("button");
     button.textContent = action.label;
     button.disabled = action.disabled;
+    if (action.highlight) {
+      button.classList.add("objective-highlight");
+    }
     button.addEventListener("click", action.onClick);
     dom.roomActions.appendChild(button);
   });
@@ -649,6 +693,7 @@ function revealEscapeSchematic() {
 
 function movePlayer(roomId, isRun) {
   if (!state.isAlive || state.hasEscaped) return;
+  if (state.objectiveBlocked) return;
   if (roomId === state.playerRoom) return;
   const path = getShortestPath(state.playerRoom, roomId);
   if (path.length <= 1) return;

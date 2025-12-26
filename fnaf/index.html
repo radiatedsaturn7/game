@@ -25,6 +25,7 @@
           <div class="overlay-footer">
             <button id="menuBtn">Bag</button>
             <button id="mapBtn">Map</button>
+            <button id="tasksBtn">Tasks</button>
             <button id="useBtn">Use</button>
             <button id="escapeBtn" class="primary hidden">Escape</button>
           </div>
@@ -134,6 +135,30 @@
       <div class="menu-content">
         <p id="componentDetails" class="component-details"></p>
         <p id="componentCount" class="component-count"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="tasksPanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Tasks</h3>
+        <button id="closeTasksBtn">Close</button>
+      </div>
+      <div class="menu-content">
+        <p id="tasksText" class="component-details"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="objectiveModal" class="menu-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Objective Updated</h3>
+        <button id="ackObjectiveBtn">OK</button>
+      </div>
+      <div class="menu-content">
+        <p id="objectiveModalText" class="component-details"></p>
       </div>
     </div>
   </div>
