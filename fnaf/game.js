@@ -215,6 +215,7 @@ const state = {
   robotDormant: 0,
   robotSearchTurns: 0,
   robotSearchSpot: null,
+  robotPlannedTarget: null,
   isAlive: true,
   hasEscaped: false,
 };
@@ -607,7 +608,7 @@ function advanceRobot() {
 
   if (state.robotSearchTurns > 0) {
     state.robotSearchTurns -= 1;
-    if (Math.random() < 0.35) {
+    if (Math.random() < 0.25) {
       state.robotSearchSpot = pickSearchSpot();
     }
     return;
@@ -615,13 +616,18 @@ function advanceRobot() {
 
   const target = pickRobotTarget();
   const aggressive = state.threat >= 3;
-  const willMoveToward = target !== null && (aggressive || Math.random() > 0.7);
+  const willMoveToward = target !== null && (aggressive || Math.random() > 0.8);
 
   if (willMoveToward && target !== null) {
+    state.robotPlannedTarget = target;
     state.robotRoom = nextStepToward(state.robotRoom, target);
   } else {
+    state.robotPlannedTarget = null;
     const roamRooms = roomConnections[state.robotRoom].filter((id) => id !== state.robotRoom);
-    state.robotRoom = roamRooms[Math.floor(Math.random() * roamRooms.length)];
+    if (Math.random() < 0.4 && roamRooms.length > 0) {
+      state.robotRoom = roamRooms[Math.floor(Math.random() * roamRooms.length)];
+    }
+    state.robotLinger = Math.floor(Math.random() * 9) + 8;
   }
 
   if (state.robotRoom === state.playerRoom && state.robotFocus) {
@@ -706,6 +712,7 @@ function resetGame() {
   state.robotDormant = 0;
   state.robotSearchTurns = 0;
   state.robotSearchSpot = null;
+  state.robotPlannedTarget = null;
   state.isAlive = true;
   state.hasEscaped = false;
   dom.deathScreen.classList.remove("active");
@@ -729,6 +736,9 @@ function registerSignal(roomId, strength) {
   if (Math.random() < next) {
     state.lastKnownPlayerRoom = roomId;
     state.trailTurns = 2;
+  }
+  if (roomId !== state.robotRoom && next >= 0.4) {
+    interruptRobotTask(roomId);
   }
 }
 
@@ -767,7 +777,7 @@ function getRoomConfidence(roomId) {
 }
 
 function startSearchCycle() {
-  state.robotSearchTurns = Math.floor(Math.random() * 3) + 2;
+  state.robotSearchTurns = Math.floor(Math.random() * 4) + 5;
   state.robotSearchSpot = pickSearchSpot();
 }
 
@@ -783,6 +793,13 @@ function triggerSiren(roomId) {
   registerSignal(roomId, 0.6);
   state.turn += 1;
   updateUI();
+}
+
+function interruptRobotTask(roomId) {
+  state.robotLinger = 0;
+  state.robotSearchTurns = 0;
+  state.robotSearchSpot = null;
+  state.robotFocus = roomId;
 }
 
 function robotStatusLabel() {
@@ -846,23 +863,37 @@ function updateMap() {
   const path = state.routePreviewRoom === null
     ? []
     : getShortestPath(state.playerRoom, state.routePreviewRoom);
+  const robotPath = state.robotPlannedTarget === null
+    ? []
+    : getShortestPath(state.robotRoom, state.robotPlannedTarget);
   const edges = new Set();
   for (let i = 0; i < path.length - 1; i += 1) {
     const a = Math.min(path[i], path[i + 1]);
     const b = Math.max(path[i], path[i + 1]);
     edges.add(`${a}-${b}`);
   }
+  const robotEdges = new Set();
+  for (let i = 0; i < robotPath.length - 1; i += 1) {
+    const a = Math.min(robotPath[i], robotPath[i + 1]);
+    const b = Math.max(robotPath[i], robotPath[i + 1]);
+    robotEdges.add(`${a}-${b}`);
+  }
 
   dom.floorplanMap.querySelectorAll(".map-link").forEach((line) => {
     const edge = line.getAttribute("data-edge");
     line.classList.toggle("active", edges.has(edge));
+    line.classList.toggle("robot-plan", robotEdges.has(edge));
   });
 
+  const playerAdjacents = new Set(roomConnections[state.playerRoom]);
+  const robotAdjacents = new Set(roomConnections[state.robotRoom]);
   dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
     const roomId = Number(node.getAttribute("data-room-id"));
     node.classList.toggle("active", roomId === state.playerRoom);
     node.classList.toggle("alert", roomId === state.robotRoom && state.robotDormant === 0);
     node.classList.toggle("preview", roomId === state.routePreviewRoom);
+    node.classList.toggle("adjacent", playerAdjacents.has(roomId));
+    node.classList.toggle("robot-adjacent", robotAdjacents.has(roomId));
   });
 
   updateRouteInfo(path);
