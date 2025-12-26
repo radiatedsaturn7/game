@@ -106,7 +106,24 @@ const deviceTypes = {
   noise: { name: "Noise Lure", cooldown: 0, uses: [] },
 };
 
-const roomConnections = {
+const mapPositions = {
+  0: { x: 70, y: 60 },
+  1: { x: 190, y: 50 },
+  2: { x: 320, y: 60 },
+  3: { x: 70, y: 160 },
+  4: { x: 190, y: 160 },
+  5: { x: 320, y: 150 },
+  6: { x: 430, y: 150 },
+  7: { x: 120, y: 260 },
+  8: { x: 240, y: 260 },
+  9: { x: 360, y: 240 },
+  10: { x: 470, y: 240 },
+  11: { x: 140, y: 350 },
+  12: { x: 300, y: 340 },
+  13: { x: 420, y: 340 },
+};
+
+let roomConnections = {
   0: [1, 3],
   1: [0, 2, 4],
   2: [1, 5, 8],
@@ -136,6 +153,7 @@ const state = {
   robotFocus: null,
   lastKnownPlayerRoom: null,
   trailTurns: 0,
+  routePreviewRoom: null,
   isAlive: true,
   hasEscaped: false,
 };
@@ -153,6 +171,9 @@ const dom = {
   inventoryList: document.getElementById("inventoryList"),
   schematicList: document.getElementById("schematicList"),
   roomGrid: document.getElementById("roomGrid"),
+  floorplanMap: document.getElementById("floorplanMap"),
+  routeInfo: document.getElementById("routeInfo"),
+  randomizeBtn: document.getElementById("randomizeBtn"),
   hideBtn: document.getElementById("hideBtn"),
   scanBtn: document.getElementById("scanBtn"),
   noiseBtn: document.getElementById("noiseBtn"),
@@ -164,6 +185,7 @@ const dom = {
 
 function init() {
   renderRoomButtons();
+  renderMap();
   updateSchematicList();
   updateUI();
   attachEvents();
@@ -175,6 +197,7 @@ function attachEvents() {
   dom.noiseBtn.addEventListener("click", () => handleAction("noise"));
   dom.buildBtn.addEventListener("click", buildEscape);
   dom.restartBtn.addEventListener("click", resetGame);
+  dom.randomizeBtn.addEventListener("click", randomizeLayout);
 }
 
 function renderRoomButtons() {
@@ -210,6 +233,7 @@ function updateUI() {
   dom.shiftCounter.textContent = String(state.turn).padStart(2, "0");
   updateInventoryList();
   updateRoomButtons();
+  updateMap();
   updateBuildButton();
 }
 
@@ -265,6 +289,12 @@ function movePlayer(roomId) {
   state.hidden = false;
   collectItem(roomId);
   handleTurn("move");
+}
+
+function setRoutePreview(roomId) {
+  if (!state.isAlive || state.hasEscaped) return;
+  state.routePreviewRoom = roomId;
+  updateMap();
 }
 
 function collectItem(roomId) {
@@ -394,6 +424,7 @@ function resetGame() {
   state.robotFocus = null;
   state.lastKnownPlayerRoom = null;
   state.trailTurns = 0;
+  state.routePreviewRoom = null;
   state.isAlive = true;
   state.hasEscaped = false;
   dom.deathScreen.classList.remove("active");
@@ -408,6 +439,130 @@ function threatLabel() {
   if (state.threat < 3) return "Elevated";
   if (state.threat < 4) return "Severe";
   return "Critical";
+}
+
+function renderMap() {
+  dom.floorplanMap.innerHTML = "";
+  const svg = dom.floorplanMap;
+
+  rooms.forEach((room) => {
+    roomConnections[room.id].forEach((neighbor) => {
+      if (neighbor < room.id) return;
+      const line = createSvgElement("line", {
+        x1: mapPositions[room.id].x,
+        y1: mapPositions[room.id].y,
+        x2: mapPositions[neighbor].x,
+        y2: mapPositions[neighbor].y,
+        class: "map-link",
+        "data-edge": `${room.id}-${neighbor}`,
+      });
+      svg.appendChild(line);
+    });
+  });
+
+  rooms.forEach((room) => {
+    const group = createSvgElement("g", {
+      class: "map-node",
+      "data-room-id": room.id,
+    });
+    const circle = createSvgElement("circle", {
+      cx: mapPositions[room.id].x,
+      cy: mapPositions[room.id].y,
+      r: 18,
+    });
+    const text = createSvgElement("text", {
+      x: mapPositions[room.id].x,
+      y: mapPositions[room.id].y - 4,
+    });
+    const title = room.name.split(" ")[0];
+    text.appendChild(createSvgElement("tspan", { x: mapPositions[room.id].x, dy: 4 }, title));
+    group.appendChild(circle);
+    group.appendChild(text);
+    group.addEventListener("click", () => setRoutePreview(room.id));
+    svg.appendChild(group);
+  });
+}
+
+function updateMap() {
+  const path = state.routePreviewRoom === null
+    ? []
+    : getShortestPath(state.playerRoom, state.routePreviewRoom);
+  const edges = new Set();
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const a = Math.min(path[i], path[i + 1]);
+    const b = Math.max(path[i], path[i + 1]);
+    edges.add(`${a}-${b}`);
+  }
+
+  dom.floorplanMap.querySelectorAll(".map-link").forEach((line) => {
+    const edge = line.getAttribute("data-edge");
+    line.classList.toggle("active", edges.has(edge));
+  });
+
+  dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
+    const roomId = Number(node.getAttribute("data-room-id"));
+    node.classList.toggle("active", roomId === state.playerRoom);
+    node.classList.toggle("alert", roomId === state.robotRoom);
+    node.classList.toggle("preview", roomId === state.routePreviewRoom);
+  });
+
+  updateRouteInfo(path);
+}
+
+function updateRouteInfo(path) {
+  if (state.routePreviewRoom === null) {
+    dom.routeInfo.textContent = "Select a destination to view the shortest path.";
+    return;
+  }
+  if (state.routePreviewRoom === state.playerRoom) {
+    dom.routeInfo.textContent = "You are already here. Select another room for a route.";
+    return;
+  }
+  if (path.length === 0) {
+    dom.routeInfo.textContent = "No route found. Randomize the layout to regenerate paths.";
+    return;
+  }
+  const routeNames = path.map((id) => rooms[id].name).join(" → ");
+  dom.routeInfo.textContent = `Route: ${routeNames}`;
+}
+
+function createSvgElement(tag, attrs, text) {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  Object.entries(attrs || {}).forEach(([key, value]) => {
+    el.setAttribute(key, value);
+  });
+  if (text) {
+    el.textContent = text;
+  }
+  return el;
+}
+
+function getShortestPath(start, target) {
+  if (start === target) return [start];
+  const queue = [start];
+  const visited = new Set([start]);
+  const parent = new Map();
+
+  while (queue.length) {
+    const current = queue.shift();
+    if (current === target) break;
+    roomConnections[current].forEach((neighbor) => {
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor);
+        parent.set(neighbor, current);
+        queue.push(neighbor);
+      }
+    });
+  }
+
+  if (!visited.has(target)) return [];
+  const path = [];
+  let step = target;
+  while (step !== undefined) {
+    path.unshift(step);
+    step = parent.get(step);
+  }
+  return path;
 }
 
 function nextStepToward(start, target) {
@@ -433,6 +588,54 @@ function nextStepToward(start, target) {
     step = parent.get(step);
   }
   return parent.has(step) ? step : start;
+}
+
+function randomizeLayout() {
+  roomConnections = generateRandomConnections();
+  state.routePreviewRoom = null;
+  renderMap();
+  updateUI();
+}
+
+function generateRandomConnections() {
+  const connections = {};
+  const ids = rooms.map((room) => room.id);
+  ids.forEach((id) => {
+    connections[id] = [];
+  });
+
+  const shuffled = [...ids].sort(() => Math.random() - 0.5);
+  shuffled.slice(1).forEach((id, index) => {
+    const attachTo = shuffled[Math.floor(Math.random() * (index + 1))];
+    addConnection(connections, id, attachTo);
+  });
+
+  const extraEdges = 8;
+  for (let i = 0; i < extraEdges; i += 1) {
+    const a = ids[Math.floor(Math.random() * ids.length)];
+    const b = ids[Math.floor(Math.random() * ids.length)];
+    if (a === b) continue;
+    if (connections[a].length >= 4 || connections[b].length >= 4) continue;
+    addConnection(connections, a, b);
+  }
+
+  ids.forEach((id) => {
+    if (connections[id].length === 0) {
+      const neighbor = ids.find((candidate) => candidate !== id) ?? 0;
+      addConnection(connections, id, neighbor);
+    }
+  });
+
+  return connections;
+}
+
+function addConnection(connections, a, b) {
+  if (!connections[a].includes(b)) {
+    connections[a].push(b);
+  }
+  if (!connections[b].includes(a)) {
+    connections[b].push(a);
+  }
 }
 
 init();
