@@ -246,6 +246,9 @@ const dom = {
   buildBtn: document.getElementById("buildBtn"),
   goBtn: document.getElementById("goBtn"),
   runBtn: document.getElementById("runBtn"),
+  cancelBtn: document.getElementById("cancelBtn"),
+  movementControls: document.getElementById("movementControls"),
+  roomActionsPanel: document.getElementById("roomActionsPanel"),
   deathScreen: document.getElementById("deathScreen"),
   victoryScreen: document.getElementById("victoryScreen"),
   restartBtn: document.getElementById("restartBtn"),
@@ -270,6 +273,7 @@ function attachEvents() {
   dom.randomizeBtn.addEventListener("click", randomizeLayout);
   dom.goBtn.addEventListener("click", () => moveSelected(false));
   dom.runBtn.addEventListener("click", () => moveSelected(true));
+  dom.cancelBtn.addEventListener("click", clearSelectedRoom);
   dom.menuBtn.addEventListener("click", openMenu);
   dom.closeMenuBtn.addEventListener("click", closeMenu);
   dom.menuPanel.addEventListener("click", (event) => {
@@ -293,7 +297,8 @@ function updateUI() {
   dom.roomDetails.textContent = dangerRoom
     ? "Metal steps are right outside your hiding spot."
     : `Connected: ${connections}. Static rolls across the feed. The robot is never far.`;
-  dom.roomMedia.style.background = room.theme;
+  dom.roomMedia.style.background = "transparent";
+  document.body.style.setProperty("--room-theme", room.theme);
   dom.playerState.textContent = state.hidden
     ? `Status: Hidden (${state.hiddenSpot ?? "Unknown"}).`
     : "Status: Exposed";
@@ -308,6 +313,7 @@ function updateUI() {
   updateInventoryList();
   updateSchematicsInventory();
   updateRoomActions();
+  updatePanels();
   updateMap();
   updateBuildButton();
   updateCraftButton();
@@ -383,6 +389,12 @@ function updateMoveButtons() {
   const blocked = !canMove || !state.isAlive || state.hasEscaped || state.hidden;
   dom.goBtn.disabled = blocked;
   dom.runBtn.disabled = blocked;
+}
+
+function updatePanels() {
+  const showMovement = state.selectedRoom !== null;
+  dom.movementControls.classList.toggle("hidden", !showMovement);
+  dom.roomActionsPanel.classList.toggle("hidden", showMovement);
 }
 
 function openMenu() {
@@ -489,6 +501,11 @@ function setSelectedRoom(roomId) {
 function moveSelected(isRun) {
   if (state.selectedRoom === null) return;
   movePlayer(state.selectedRoom, isRun);
+}
+
+function clearSelectedRoom() {
+  state.selectedRoom = null;
+  updateUI();
 }
 
 function collectItem(roomId) {

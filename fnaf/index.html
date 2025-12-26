@@ -4,32 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Factory Protocol: Nightwatch</title>
-  <link rel="stylesheet" href="style.css?v=5" />
+  <link rel="stylesheet" href="style.css?v=6" />
 </head>
 <body>
   <div class="app">
-    <header>
-      <div>
-        <h1>Factory: The Last Shift</h1>
-      </div>
-    </header>
-
     <main>
       <section class="room-view">
         <div class="room-media" id="roomMedia">
           <div class="room-overlay">
             <p id="roomLabel">Room View</p>
             <p id="roomDetails">Select a room camera or move to explore.</p>
-          </div>
-        </div>
-        <div class="room-meta">
-          <div>
-            <h2 class="current-room">Control Bay</h2>
-            <p id="roomDescription">Your only safe room is a lie. The machine is always listening.</p>
-          </div>
-          <div class="tags">
-            <span id="playerState">Status: Exposed</span>
-            <span class="robot-status">Robot: Searching</span>
+            <p id="roomDescription" class="room-description"></p>
+            <p id="playerState" class="room-status"></p>
           </div>
         </div>
       </section>
@@ -47,22 +33,24 @@
               <span class="robot-status">Robot: Searching</span>
             </div>
           </div>
-          <p class="map-hint">Tap a room on the map to preview the route from your current location.</p>
           <div class="map-shell">
             <svg id="floorplanMap" viewBox="0 0 520 420" width="520" height="420" role="img" aria-label="Factory floorplan"></svg>
           </div>
           <div class="floorplan-controls">
-            <div class="quick-actions compact">
-              <div class="quick-target">
-                <span>Selected</span>
-                <strong id="selectedRoom">None</strong>
-              </div>
-              <div class="quick-buttons">
-                <button id="goBtn">Go</button>
-                <button id="runBtn">Run</button>
+            <div class="movement-controls hidden" id="movementControls">
+              <div class="quick-actions compact">
+                <div class="quick-target">
+                  <span>Selected</span>
+                  <strong id="selectedRoom">None</strong>
+                </div>
+                <div class="quick-buttons">
+                  <button id="goBtn">Sneak</button>
+                  <button id="runBtn">Run</button>
+                  <button id="cancelBtn">Cancel</button>
+                </div>
               </div>
             </div>
-            <div class="room-actions">
+            <div class="room-actions" id="roomActionsPanel">
               <h4>Room Actions</h4>
               <div id="roomActions" class="actions"></div>
             </div>
@@ -121,6 +109,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=5"></script>
+  <script src="game.js?v=6"></script>
 </body>
 </html>
