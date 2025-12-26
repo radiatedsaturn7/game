@@ -220,6 +220,7 @@ const state = {
   robotScanTarget: null,
   sawPlayerHide: false,
   robotDisabled: false,
+  selectedSchematic: null,
   playerPath: [],
   playerTravelTicks: 0,
   playerTravelMode: "sneak",
@@ -247,14 +248,15 @@ const dom = {
   selectedRoom: document.getElementById("selectedRoom"),
   menuBtn: document.getElementById("menuBtn"),
   mapBtn: document.getElementById("mapBtn"),
+  useBtn: document.getElementById("useBtn"),
   toggleRobotBtn: document.getElementById("toggleRobotBtn"),
   closeMenuBtn: document.getElementById("closeMenuBtn"),
   closeMapBtn: document.getElementById("closeMapBtn"),
+  closeUseBtn: document.getElementById("closeUseBtn"),
   menuPanel: document.getElementById("menuPanel"),
   mapPanel: document.getElementById("mapPanel"),
-  scanBtn: document.getElementById("scanBtn"),
-  noiseBtn: document.getElementById("noiseBtn"),
-  craftBtn: document.getElementById("craftBtn"),
+  usePanel: document.getElementById("usePanel"),
+  useList: document.getElementById("useList"),
   buildBtn: document.getElementById("buildBtn"),
   goBtn: document.getElementById("goBtn"),
   runBtn: document.getElementById("runBtn"),
@@ -277,10 +279,7 @@ function init() {
 }
 
 function attachEvents() {
-  dom.scanBtn.addEventListener("click", () => handleAction("scan"));
-  dom.noiseBtn.addEventListener("click", () => handleAction("noise"));
-  dom.craftBtn.addEventListener("click", craftItem);
-  dom.buildBtn.addEventListener("click", buildEscape);
+  dom.buildBtn.addEventListener("click", craftItem);
   dom.restartBtn.addEventListener("click", resetGame);
   dom.randomizeBtn.addEventListener("click", randomizeLayout);
   dom.goBtn.addEventListener("click", () => moveSelected(false));
@@ -288,9 +287,11 @@ function attachEvents() {
   dom.cancelBtn.addEventListener("click", clearSelectedRoom);
   dom.menuBtn.addEventListener("click", openMenu);
   dom.mapBtn.addEventListener("click", openMap);
+  dom.useBtn.addEventListener("click", openUse);
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
   dom.closeMenuBtn.addEventListener("click", closeMenu);
   dom.closeMapBtn.addEventListener("click", closeMap);
+  dom.closeUseBtn.addEventListener("click", closeUse);
   dom.menuPanel.addEventListener("click", (event) => {
     if (event.target === dom.menuPanel) {
       closeMenu();
@@ -299,6 +300,11 @@ function attachEvents() {
   dom.mapPanel.addEventListener("click", (event) => {
     if (event.target === dom.mapPanel) {
       closeMap();
+    }
+  });
+  dom.usePanel.addEventListener("click", (event) => {
+    if (event.target === dom.usePanel) {
+      closeUse();
     }
   });
 }
@@ -322,12 +328,13 @@ function updateUI() {
     : rooms[state.selectedRoom].name;
   updateInventoryList();
   updateSchematicsInventory();
+  updateRequiredComponents();
+  updateUseList();
   updateRoomActions();
   updatePanels();
   updateAdjacentMoves();
   updateMap();
   updateBuildButton();
-  updateCraftButton();
   updateMoveButtons();
 }
 
@@ -356,42 +363,50 @@ function updateSchematicsInventory() {
   }
   state.foundSchematics.forEach((item) => {
     const li = document.createElement("li");
-    const label = document.createElement("span");
-    label.textContent = "Schematic";
-    li.textContent = item;
-    li.appendChild(label);
+    const button = document.createElement("button");
+    button.textContent = item;
+    button.addEventListener("click", () => selectSchematic(item));
+    if (state.selectedSchematic === item) {
+      button.classList.add("primary");
+    }
+    li.appendChild(button);
     dom.schematicInventory.appendChild(li);
   });
 }
 
 function updateSchematicList() {
   dom.schematicList.innerHTML = "";
-  requiredParts.forEach((part) => {
+  const selected = getSelectedSchematic();
+  if (!selected) {
+    const empty = document.createElement("li");
+    empty.textContent = "Select a schematic to view required components.";
+    dom.schematicList.appendChild(empty);
+    return;
+  }
+  selected.parts.forEach((part) => {
+    const count = countInventory(part);
     const li = document.createElement("li");
     li.textContent = part;
+    const tally = document.createElement("span");
+    tally.textContent = `${count}x`;
+    li.appendChild(tally);
     li.dataset.part = part;
     dom.schematicList.appendChild(li);
   });
 }
 
 function updateBuildButton() {
-  const isExit = rooms[state.playerRoom].isExit;
-  const hasAllParts = requiredParts.every((part) => state.inventory.has(part));
-  dom.buildBtn.disabled = !(isExit && hasAllParts && state.isAlive && !state.hasEscaped);
+  const selected = getSelectedSchematic();
+  if (!selected) {
+    dom.buildBtn.disabled = true;
+    dom.buildBtn.textContent = "Select a Schematic";
+    return;
+  }
+  const hasAllParts = selected.parts.every((part) => state.inventory.has(part));
+  dom.buildBtn.disabled = !(hasAllParts && state.isAlive && !state.hasEscaped);
   dom.buildBtn.textContent = hasAllParts
-    ? "Build Escape Schematic"
+    ? `Build ${selected.name}`
     : "Need More Components";
-}
-
-function updateCraftButton() {
-  const craftable = craftableItems.some(
-    (item) =>
-      state.foundSchematics.has(item.name) &&
-      !state.craftedItems.has(item.name) &&
-      item.parts.every((part) => state.inventory.has(part))
-  );
-  dom.craftBtn.disabled = !craftable || !state.isAlive || state.hasEscaped;
-  dom.craftBtn.textContent = craftable ? "Craft Item" : "Need Schematic + Parts";
 }
 
 function updateMoveButtons() {
@@ -426,6 +441,16 @@ function closeMap() {
   dom.mapPanel.classList.remove("active");
   dom.mapPanel.setAttribute("aria-hidden", "true");
   clearSelectedRoom();
+}
+
+function openUse() {
+  dom.usePanel.classList.add("active");
+  dom.usePanel.setAttribute("aria-hidden", "false");
+}
+
+function closeUse() {
+  dom.usePanel.classList.remove("active");
+  dom.usePanel.setAttribute("aria-hidden", "true");
 }
 
 function updateRoomActions() {
@@ -500,6 +525,28 @@ function updateAdjacentMoves() {
     button.addEventListener("click", () => movePlayer(roomId, false));
     dom.adjacentMoves.appendChild(button);
   });
+}
+
+function updateRequiredComponents() {
+  updateSchematicList();
+}
+
+function selectSchematic(name) {
+  state.selectedSchematic = name;
+  updateUI();
+}
+
+function getSelectedSchematic() {
+  if (!state.selectedSchematic) return null;
+  return craftableItems.find((item) => item.name === state.selectedSchematic) ?? null;
+}
+
+function countInventory(item) {
+  let count = 0;
+  state.inventory.forEach((entry) => {
+    if (entry === item) count += 1;
+  });
+  return count;
 }
 
 function movePlayer(roomId, isRun) {
@@ -762,6 +809,7 @@ function resetGame() {
   state.trailTurns = 0;
   state.routePreviewRoom = null;
   state.selectedRoom = null;
+  state.selectedSchematic = null;
   state.roomSignals.clear();
   state.checkedRooms.clear();
   state.robotLinger = 0;
@@ -991,7 +1039,11 @@ function updateMap() {
   dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
     const roomId = Number(node.getAttribute("data-room-id"));
     node.classList.toggle("active", roomId === state.playerRoom);
-    node.classList.toggle("alert", roomId === state.robotRoom && state.robotDormant === 0);
+    node.classList.toggle(
+      "alert",
+      roomId === state.robotRoom && state.robotDormant === 0 && !state.robotDisabled
+    );
+    node.classList.toggle("robot-disabled", state.robotDisabled && roomId === state.robotRoom);
     node.classList.toggle("preview", roomId === state.routePreviewRoom);
     node.classList.toggle("adjacent", playerAdjacents.has(roomId));
     node.classList.toggle("robot-adjacent", showRobotVision && roomId === state.robotScanTarget);
@@ -1186,25 +1238,13 @@ function pickTwo(ids) {
 
 function craftItem() {
   if (!state.isAlive || state.hasEscaped) return;
-  const craftable = craftableItems.find(
-    (item) =>
-      state.foundSchematics.has(item.name) &&
-      !state.craftedItems.has(item.name) &&
-      item.parts.every((part) => state.inventory.has(part))
-  );
+  const craftable = getSelectedSchematic();
   if (!craftable) return;
+  if (!state.foundSchematics.has(craftable.name)) return;
+  if (state.craftedItems.has(craftable.name)) return;
+  if (!craftable.parts.every((part) => state.inventory.has(part))) return;
   craftable.parts.forEach((part) => state.inventory.delete(part));
   state.craftedItems.add(craftable.name);
-  if (craftable.name === "Signal Scrambler") {
-    state.roomSignals.clear();
-    state.threat = Math.max(1, state.threat - 0.6);
-  }
-  if (craftable.name === "Motion Dampener") {
-    state.robotLinger = Math.max(state.robotLinger, 2);
-  }
-  if (craftable.name === "Override Key") {
-    state.threat = Math.max(1, state.threat - 1);
-  }
   updateUI();
 }
 
@@ -1225,6 +1265,50 @@ function startGameLoop() {
     tickDormantState();
     updateUI();
   }, 1200);
+}
+
+function updateUseList() {
+  dom.useList.innerHTML = "";
+  const options = [
+    { label: "Pulse Scanner", action: () => handleAction("scan") },
+    { label: "Noise Lure", action: () => handleAction("noise") },
+  ];
+  state.craftedItems.forEach((item) => {
+    options.push({ label: item, action: () => useCraftedItem(item) });
+  });
+
+  if (options.length === 0) {
+    const empty = document.createElement("li");
+    empty.textContent = "No usable items.";
+    dom.useList.appendChild(empty);
+    return;
+  }
+
+  options.forEach((item) => {
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+    button.textContent = `Use ${item.label}`;
+    button.addEventListener("click", item.action);
+    li.appendChild(button);
+    dom.useList.appendChild(li);
+  });
+}
+
+function useCraftedItem(name) {
+  if (!state.craftedItems.has(name)) return;
+  if (name === "Signal Scrambler") {
+    state.roomSignals.clear();
+    state.threat = Math.max(1, state.threat - 0.6);
+  }
+  if (name === "Motion Dampener") {
+    state.robotLinger = Math.max(state.robotLinger, 2);
+  }
+  if (name === "Override Key") {
+    state.threat = Math.max(1, state.threat - 1);
+  }
+  state.craftedItems.delete(name);
+  closeUse();
+  updateUI();
 }
 
 function tickPlayerTravel() {

@@ -20,8 +20,9 @@
             <div id="adjacentMoves" class="actions overlay-actions"></div>
           </div>
           <div class="overlay-footer">
-            <button id="menuBtn">Menu</button>
+            <button id="menuBtn">Bag</button>
             <button id="mapBtn">Map</button>
+            <button id="useBtn">Use</button>
           </div>
         </div>
       </section>
@@ -46,28 +47,23 @@
   <div id="menuPanel" class="menu-panel" aria-hidden="true">
     <div class="menu-card">
       <div class="menu-header">
-        <h3>Field Kit</h3>
+        <h3>Inventory</h3>
         <button id="closeMenuBtn">Close</button>
       </div>
       <div class="menu-content">
+        <div>
+          <h4>Schematics</h4>
+          <ul id="schematicInventory" class="list"></ul>
+        </div>
         <div>
           <h4>Inventory</h4>
           <ul id="inventoryList" class="list"></ul>
         </div>
         <div>
-          <h4>Found Schematics</h4>
-          <ul id="schematicInventory" class="list"></ul>
-        </div>
-        <div>
           <h4>Required Components</h4>
           <ul id="schematicList" class="list"></ul>
+          <button id="buildBtn" class="primary" disabled>Build Selected Schematic</button>
         </div>
-      </div>
-      <div class="menu-actions">
-        <button id="scanBtn">Pulse Scanner</button>
-        <button id="noiseBtn">Noise Lure</button>
-        <button id="craftBtn">Craft Item</button>
-        <button id="buildBtn" class="primary" disabled>Build Escape Schematic</button>
       </div>
     </div>
   </div>
@@ -109,6 +105,18 @@
       <div class="map-buttons">
         <button id="randomizeBtn">Randomize Layout</button>
         <button id="toggleRobotBtn">Disable Robot</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="usePanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Use Items</h3>
+        <button id="closeUseBtn">Close</button>
+      </div>
+      <div class="menu-content">
+        <ul id="useList" class="list"></ul>
       </div>
     </div>
   </div>

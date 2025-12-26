@@ -355,6 +355,11 @@ main {
   stroke: rgba(255, 128, 128, 0.7);
 }
 
+.map-node.robot-disabled circle {
+  fill: rgba(90, 96, 110, 0.7);
+  stroke: rgba(190, 190, 190, 0.8);
+}
+
 .route-info {
   margin: 12px 0 0;
   font-size: 0.85rem;
