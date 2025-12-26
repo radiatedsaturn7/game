@@ -217,6 +217,11 @@ const state = {
   robotSearchSpot: null,
   robotPlannedTarget: null,
   robotLookTurns: 0,
+  playerPath: [],
+  playerTravelTicks: 0,
+  playerTravelMode: "sneak",
+  robotPath: [],
+  robotTravelTicks: 0,
   isAlive: true,
   hasEscaped: false,
 };
@@ -387,8 +392,8 @@ function updateCraftButton() {
 
 function updateMoveButtons() {
   const canMove = state.selectedRoom !== null &&
-    roomConnections[state.playerRoom].includes(state.selectedRoom);
-  const blocked = !canMove || !state.isAlive || state.hasEscaped || state.hidden;
+    getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
+  const blocked = !canMove || !state.isAlive || state.hasEscaped || state.playerTravelTicks > 0;
   dom.goBtn.disabled = blocked;
   dom.runBtn.disabled = blocked;
 }
@@ -473,19 +478,14 @@ function updateRoomActions() {
 
 function movePlayer(roomId, isRun) {
   if (!state.isAlive || state.hasEscaped) return;
-  if (state.hidden) return;
   if (roomId === state.playerRoom) return;
   if (!roomConnections[state.playerRoom].includes(roomId)) return;
-  state.playerRoom = roomId;
-  state.hidden = false;
-  state.hiddenSpot = null;
-  registerSignal(roomId, isRun ? 0.9 : 0.6);
-  const noiseBoost = rooms[roomId].noiseRisk ?? 0.2;
-  if (isRun) {
-    registerSignal(roomId, noiseBoost);
-  }
-  state.turn += 1;
-  clearSelectedRoom();
+  const path = getShortestPath(state.playerRoom, roomId);
+  if (path.length <= 1) return;
+  state.playerPath = path.slice(1);
+  state.playerTravelMode = isRun ? "run" : "sneak";
+  state.playerTravelTicks = isRun ? 1 : 2;
+  state.selectedRoom = roomId;
   updateUI();
 }
 
@@ -599,6 +599,11 @@ function advanceRobot() {
     return;
   }
 
+  if (state.robotTravelTicks > 0) {
+    state.robotTravelTicks -= 1;
+    return;
+  }
+
   if (state.robotLinger > 0) {
     state.robotLinger -= 1;
     return;
@@ -627,13 +632,16 @@ function advanceRobot() {
 
   if (willMoveToward && target !== null) {
     state.robotPlannedTarget = target;
-    state.robotRoom = nextStepToward(state.robotRoom, target);
+    state.robotPath = getShortestPath(state.robotRoom, target).slice(1);
+    state.robotTravelTicks = Math.floor(Math.random() * 2) + 2;
     state.robotLookTurns = Math.floor(Math.random() * 3) + 2;
   } else {
     state.robotPlannedTarget = null;
     const roamRooms = roomConnections[state.robotRoom].filter((id) => id !== state.robotRoom);
     if (Math.random() < 0.4 && roamRooms.length > 0) {
-      state.robotRoom = roamRooms[Math.floor(Math.random() * roamRooms.length)];
+      const roamTarget = roamRooms[Math.floor(Math.random() * roamRooms.length)];
+      state.robotPath = [roamTarget];
+      state.robotTravelTicks = Math.floor(Math.random() * 2) + 2;
     }
     state.robotLinger = Math.floor(Math.random() * 9) + 8;
   }
@@ -722,6 +730,11 @@ function resetGame() {
   state.robotSearchSpot = null;
   state.robotPlannedTarget = null;
   state.robotLookTurns = 0;
+  state.playerPath = [];
+  state.playerTravelTicks = 0;
+  state.playerTravelMode = "sneak";
+  state.robotPath = [];
+  state.robotTravelTicks = 0;
   state.isAlive = true;
   state.hasEscaped = false;
   dom.deathScreen.classList.remove("active");
@@ -877,6 +890,12 @@ function updateMap() {
   const robotPath = state.robotPlannedTarget === null
     ? []
     : getShortestPath(state.robotRoom, state.robotPlannedTarget);
+  const playerTravelPath = state.playerPath.length > 0
+    ? [state.playerRoom, ...state.playerPath]
+    : [];
+  const robotTravelPath = state.robotPath.length > 0
+    ? [state.robotRoom, ...state.robotPath]
+    : [];
   const edges = new Set();
   for (let i = 0; i < path.length - 1; i += 1) {
     const a = Math.min(path[i], path[i + 1]);
@@ -889,11 +908,25 @@ function updateMap() {
     const b = Math.max(robotPath[i], robotPath[i + 1]);
     robotEdges.add(`${a}-${b}`);
   }
+  const playerTravelEdges = new Set();
+  for (let i = 0; i < playerTravelPath.length - 1; i += 1) {
+    const a = Math.min(playerTravelPath[i], playerTravelPath[i + 1]);
+    const b = Math.max(playerTravelPath[i], playerTravelPath[i + 1]);
+    playerTravelEdges.add(`${a}-${b}`);
+  }
+  const robotTravelEdges = new Set();
+  for (let i = 0; i < robotTravelPath.length - 1; i += 1) {
+    const a = Math.min(robotTravelPath[i], robotTravelPath[i + 1]);
+    const b = Math.max(robotTravelPath[i], robotTravelPath[i + 1]);
+    robotTravelEdges.add(`${a}-${b}`);
+  }
 
   dom.floorplanMap.querySelectorAll(".map-link").forEach((line) => {
     const edge = line.getAttribute("data-edge");
     line.classList.toggle("active", edges.has(edge));
     line.classList.toggle("robot-plan", robotEdges.has(edge));
+    line.classList.toggle("player-travel", playerTravelEdges.has(edge));
+    line.classList.toggle("robot-travel", robotTravelEdges.has(edge));
   });
 
   const playerAdjacents = new Set(roomConnections[state.playerRoom]);
@@ -913,7 +946,7 @@ function updateMap() {
 
 function updateRouteInfo(path) {
   if (state.routePreviewRoom === null) {
-    dom.routeInfo.textContent = "Select a destination to view the shortest path.";
+    dom.routeInfo.textContent = "Select a destination to view the shortest path. Threat shows how alert the robot is. Red dashed lines show the robot's planned route.";
     return;
   }
   if (state.routePreviewRoom === state.playerRoom) {
@@ -1129,12 +1162,53 @@ function startGameLoop() {
     if (state.trailTurns > 0) {
       state.trailTurns -= 1;
     }
+    tickPlayerTravel();
+    tickRobotTravel();
     decaySignals();
     advanceRobot();
     checkThreat();
     tickDormantState();
     updateUI();
   }, 1200);
+}
+
+function tickPlayerTravel() {
+  if (state.playerTravelTicks > 0) {
+    state.playerTravelTicks -= 1;
+    return;
+  }
+  if (state.playerPath.length === 0) return;
+  const nextRoom = state.playerPath.shift();
+  state.playerRoom = nextRoom;
+  state.hidden = false;
+  state.hiddenSpot = null;
+  const isRun = state.playerTravelMode === "run";
+  registerSignal(nextRoom, isRun ? 0.9 : 0.6);
+  const noiseBoost = rooms[nextRoom].noiseRisk ?? 0.2;
+  if (isRun) {
+    registerSignal(nextRoom, noiseBoost);
+  }
+  state.turn += 1;
+  if (state.playerPath.length === 0) {
+    clearSelectedRoom();
+  } else {
+    state.playerTravelTicks = isRun ? 1 : 2;
+  }
+}
+
+function tickRobotTravel() {
+  if (state.robotTravelTicks > 0) {
+    return;
+  }
+  if (state.robotPath.length === 0) return;
+  const nextRoom = state.robotPath.shift();
+  state.robotRoom = nextRoom;
+  state.checkedRooms.add(state.robotRoom);
+  if (state.robotPath.length === 0) {
+    state.robotTravelTicks = 0;
+  } else {
+    state.robotTravelTicks = 1;
+  }
 }
 
 function tickDormantState() {
