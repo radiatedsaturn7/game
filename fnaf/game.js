@@ -216,6 +216,7 @@ const state = {
   robotSearchTurns: 0,
   robotSearchSpot: null,
   robotPlannedTarget: null,
+  robotLookTurns: 0,
   isAlive: true,
   hasEscaped: false,
 };
@@ -484,6 +485,7 @@ function movePlayer(roomId, isRun) {
     registerSignal(roomId, noiseBoost);
   }
   state.turn += 1;
+  clearSelectedRoom();
   updateUI();
 }
 
@@ -614,6 +616,11 @@ function advanceRobot() {
     return;
   }
 
+  if (state.robotLookTurns > 0) {
+    state.robotLookTurns -= 1;
+    return;
+  }
+
   const target = pickRobotTarget();
   const aggressive = state.threat >= 3;
   const willMoveToward = target !== null && (aggressive || Math.random() > 0.8);
@@ -621,6 +628,7 @@ function advanceRobot() {
   if (willMoveToward && target !== null) {
     state.robotPlannedTarget = target;
     state.robotRoom = nextStepToward(state.robotRoom, target);
+    state.robotLookTurns = Math.floor(Math.random() * 3) + 2;
   } else {
     state.robotPlannedTarget = null;
     const roamRooms = roomConnections[state.robotRoom].filter((id) => id !== state.robotRoom);
@@ -713,6 +721,7 @@ function resetGame() {
   state.robotSearchTurns = 0;
   state.robotSearchSpot = null;
   state.robotPlannedTarget = null;
+  state.robotLookTurns = 0;
   state.isAlive = true;
   state.hasEscaped = false;
   dom.deathScreen.classList.remove("active");
@@ -799,16 +808,18 @@ function interruptRobotTask(roomId) {
   state.robotLinger = 0;
   state.robotSearchTurns = 0;
   state.robotSearchSpot = null;
+  state.robotLookTurns = 0;
   state.robotFocus = roomId;
 }
 
 function robotStatusLabel() {
-  if (state.robotDormant > 0) return "Robot: Dormant in vents";
+  if (state.robotDormant > 0) return "Robot: Powered down";
   if (state.robotSearchTurns > 0) {
     return state.robotSearchSpot
       ? `Robot: Searching ${state.robotSearchSpot}`
       : "Robot: Searching";
   }
+  if (state.robotLookTurns > 0) return "Robot: Scanning halls";
   if (state.robotLinger > 0) return "Robot: Lurking";
   if (state.robotFocus !== null) return `Robot: Distracted by ${rooms[state.robotFocus].name}`;
   return "Robot: Searching";
@@ -886,7 +897,8 @@ function updateMap() {
   });
 
   const playerAdjacents = new Set(roomConnections[state.playerRoom]);
-  const robotAdjacents = new Set(roomConnections[state.robotRoom]);
+  const showRobotVision = state.robotDormant === 0 && state.robotLookTurns > 0;
+  const robotAdjacents = showRobotVision ? new Set(roomConnections[state.robotRoom]) : new Set();
   dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
     const roomId = Number(node.getAttribute("data-room-id"));
     node.classList.toggle("active", roomId === state.playerRoom);
@@ -1132,6 +1144,7 @@ function tickDormantState() {
     state.robotLinger = 0;
     state.robotSearchTurns = 0;
     state.robotSearchSpot = null;
+    state.robotLookTurns = 0;
   }
 }
 
