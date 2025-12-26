@@ -408,11 +408,6 @@ function updateSchematicList() {
     dom.schematicList.appendChild(empty);
     return;
   }
-  if (state.requiredEscapeSchematic && selected.name !== state.requiredEscapeSchematic) {
-    const warning = document.createElement("li");
-    warning.textContent = `Escape requires ${state.requiredEscapeSchematic}.`;
-    dom.schematicList.appendChild(warning);
-  }
   selected.parts.forEach((part) => {
     const count = countInventory(part);
     const li = document.createElement("li");
@@ -617,6 +612,7 @@ function revealEscapeSchematic() {
   if (state.requiredEscapeSchematic) return;
   const options = craftableItems.map((item) => item.name);
   state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
+  state.selectedSchematic = state.requiredEscapeSchematic;
   updateUI();
 }
 
