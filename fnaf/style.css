@@ -160,6 +160,35 @@ main {
   color: #c6d3f3;
 }
 
+.quick-controls {
+  margin-top: 4px;
+}
+
+.quick-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.quick-target {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #9fb2de;
+  font-size: 0.85rem;
+}
+
+.quick-target strong {
+  color: #f4f4f4;
+  font-size: 1rem;
+}
+
+.quick-buttons {
+  display: flex;
+  gap: 8px;
+}
+
 .control-panel {
   display: flex;
   flex-direction: column;
@@ -331,6 +360,11 @@ button.primary {
   background: rgba(113, 34, 44, 0.9);
 }
 
+.room-grid button.preview {
+  border: 1px solid rgba(255, 194, 86, 0.8);
+  box-shadow: 0 0 0 1px rgba(255, 194, 86, 0.35);
+}
+
 .death-screen,
 .victory-screen {
   position: fixed;
@@ -406,5 +440,10 @@ button.primary {
 
   header {
     flex-direction: column;
+  }
+
+  .quick-actions {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

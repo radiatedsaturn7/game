@@ -5,6 +5,8 @@ const rooms = [
     description: "Camera consoles hum. The robot hates the light.",
     theme: "linear-gradient(135deg, rgba(73, 103, 146, 0.5), rgba(9, 16, 28, 0.9))",
     hideSpots: ["Console Shadow", "Cable Duct"],
+    siren: "Alarm Beacon",
+    noiseRisk: 0.2,
   },
   {
     id: 1,
@@ -13,6 +15,8 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(126, 98, 62, 0.55), rgba(15, 12, 8, 0.9))",
     item: "Copper Wire",
     hideSpots: ["Crate Stack", "Hydraulic Pit"],
+    siren: "Conveyor Siren",
+    noiseRisk: 0.3,
   },
   {
     id: 2,
@@ -21,6 +25,8 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(96, 151, 142, 0.55), rgba(10, 16, 18, 0.9))",
     item: "Power Cell",
     hideSpots: ["Breaker Alcove", "Voltage Cabinet"],
+    siren: "Surge Tone",
+    noiseRisk: 0.4,
   },
   {
     id: 3,
@@ -28,6 +34,8 @@ const rooms = [
     description: "Cold vapor hides footsteps but muffles sound.",
     theme: "linear-gradient(135deg, rgba(80, 135, 184, 0.45), rgba(6, 9, 15, 0.95))",
     hideSpots: ["Cryo Rack", "Frosted Duct"],
+    siren: "Coolant Alarm",
+    noiseRisk: 0.25,
   },
   {
     id: 4,
@@ -36,6 +44,8 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(67, 84, 115, 0.55), rgba(5, 7, 10, 0.9))",
     item: "Resistors",
     hideSpots: ["Tool Cage", "Vent Crawlspace"],
+    siren: "Service Klaxon",
+    noiseRisk: 0.35,
   },
   {
     id: 5,
@@ -44,6 +54,8 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(96, 66, 146, 0.5), rgba(12, 8, 18, 0.92))",
     schematic: "Signal Scrambler",
     hideSpots: ["Server Rack", "Data Alcove"],
+    siren: "Rack Resonator",
+    noiseRisk: 0.3,
   },
   {
     id: 6,
@@ -52,6 +64,8 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(112, 94, 124, 0.5), rgba(9, 7, 12, 0.92))",
     item: "Capacitors",
     hideSpots: ["Drone Cradle", "Workbench Shadow"],
+    siren: "Lab Chime",
+    noiseRisk: 0.28,
   },
   {
     id: 7,
@@ -59,6 +73,8 @@ const rooms = [
     description: "Crates are stacked in impossible patterns.",
     theme: "linear-gradient(135deg, rgba(92, 78, 66, 0.55), rgba(9, 7, 5, 0.9))",
     hideSpots: ["Crate Maze", "Lift Platform"],
+    siren: "Forklift Horn",
+    noiseRisk: 0.32,
   },
   {
     id: 8,
@@ -67,6 +83,8 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(86, 106, 88, 0.55), rgba(7, 10, 8, 0.9))",
     item: "Servo Motor",
     hideSpots: ["Fuse Closet", "Service Bay"],
+    siren: "Switch Alarm",
+    noiseRisk: 0.3,
   },
   {
     id: 9,
@@ -74,6 +92,8 @@ const rooms = [
     description: "Your vitals read on cold glass.",
     theme: "linear-gradient(135deg, rgba(61, 120, 140, 0.6), rgba(8, 12, 15, 0.95))",
     hideSpots: ["Scanner Bed", "Supply Locker"],
+    siren: "Vitals Ping",
+    noiseRisk: 0.22,
   },
   {
     id: 10,
@@ -82,6 +102,8 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(59, 99, 122, 0.55), rgba(6, 9, 13, 0.95))",
     schematic: "Motion Dampener",
     hideSpots: ["Dock Bay", "Cargo Net"],
+    siren: "Fog Horn",
+    noiseRisk: 0.3,
   },
   {
     id: 11,
@@ -90,6 +112,8 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(132, 82, 70, 0.55), rgba(13, 8, 8, 0.9))",
     item: "Microcontroller",
     hideSpots: ["Pump Alcove", "Oil Pit"],
+    siren: "Hydraulic Whistle",
+    noiseRisk: 0.4,
   },
   {
     id: 12,
@@ -98,6 +122,8 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(95, 89, 129, 0.55), rgba(9, 8, 13, 0.95))",
     schematic: "Override Key",
     hideSpots: ["Prototype Pod", "Blueprint Archive"],
+    siren: "Research Bell",
+    noiseRisk: 0.28,
   },
   {
     id: 13,
@@ -106,6 +132,8 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(147, 111, 75, 0.55), rgba(13, 9, 6, 0.9))",
     isExit: true,
     hideSpots: ["Assembly Pit", "Scrap Curtain"],
+    siren: "Exit Klaxon",
+    noiseRisk: 0.35,
   },
 ];
 
@@ -180,8 +208,12 @@ const state = {
   lastKnownPlayerRoom: null,
   trailTurns: 0,
   routePreviewRoom: null,
+  selectedRoom: null,
   roomSignals: new Map(),
   robotLinger: 0,
+  robotDormant: 0,
+  robotSearchTurns: 0,
+  robotSearchSpot: null,
   isAlive: true,
   hasEscaped: false,
 };
@@ -204,11 +236,14 @@ const dom = {
   floorplanMap: document.getElementById("floorplanMap"),
   routeInfo: document.getElementById("routeInfo"),
   randomizeBtn: document.getElementById("randomizeBtn"),
+  selectedRoom: document.getElementById("selectedRoom"),
   hideBtn: document.getElementById("hideBtn"),
   scanBtn: document.getElementById("scanBtn"),
   noiseBtn: document.getElementById("noiseBtn"),
   craftBtn: document.getElementById("craftBtn"),
   buildBtn: document.getElementById("buildBtn"),
+  goBtn: document.getElementById("goBtn"),
+  runBtn: document.getElementById("runBtn"),
   deathScreen: document.getElementById("deathScreen"),
   victoryScreen: document.getElementById("victoryScreen"),
   restartBtn: document.getElementById("restartBtn"),
@@ -233,6 +268,8 @@ function attachEvents() {
   dom.buildBtn.addEventListener("click", buildEscape);
   dom.restartBtn.addEventListener("click", resetGame);
   dom.randomizeBtn.addEventListener("click", randomizeLayout);
+  dom.goBtn.addEventListener("click", () => moveSelected(false));
+  dom.runBtn.addEventListener("click", () => moveSelected(true));
 }
 
 function renderRoomButtons() {
@@ -241,7 +278,7 @@ function renderRoomButtons() {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = room.name;
-    button.addEventListener("click", () => movePlayer(room.id));
+    button.addEventListener("click", () => setSelectedRoom(room.id));
     button.dataset.roomId = room.id;
     dom.roomGrid.appendChild(button);
   });
@@ -263,11 +300,12 @@ function updateUI() {
   dom.playerState.textContent = state.hidden
     ? `Status: Hidden (${state.hiddenSpot ?? "Unknown"}).`
     : "Status: Exposed";
-  dom.robotState.textContent = state.robotFocus
-    ? `Robot: Distracted by ${rooms[state.robotFocus].name}`
-    : "Robot: Searching";
+  dom.robotState.textContent = robotStatusLabel();
   dom.threatLevel.textContent = threatLabel();
   dom.shiftCounter.textContent = String(state.turn).padStart(2, "0");
+  dom.selectedRoom.textContent = state.selectedRoom === null
+    ? "None"
+    : rooms[state.selectedRoom].name;
   updateInventoryList();
   updateSchematicsInventory();
   updateRoomButtons();
@@ -275,6 +313,7 @@ function updateUI() {
   updateMap();
   updateBuildButton();
   updateCraftButton();
+  updateMoveButtons();
 }
 
 function updateInventoryList() {
@@ -340,11 +379,19 @@ function updateCraftButton() {
   dom.craftBtn.textContent = craftable ? "Craft Item" : "Need Schematic + Parts";
 }
 
+function updateMoveButtons() {
+  const canMove = state.selectedRoom !== null &&
+    roomConnections[state.playerRoom].includes(state.selectedRoom);
+  dom.goBtn.disabled = !canMove || !state.isAlive || state.hasEscaped;
+  dom.runBtn.disabled = !canMove || !state.isAlive || state.hasEscaped;
+}
+
 function updateRoomButtons() {
   dom.roomGrid.querySelectorAll("button").forEach((button) => {
     const roomId = Number(button.dataset.roomId);
     button.classList.toggle("active", roomId === state.playerRoom);
     button.classList.toggle("alert", roomId === state.robotRoom);
+    button.classList.toggle("preview", roomId === state.selectedRoom);
     const canMove = roomConnections[state.playerRoom].includes(roomId);
     button.disabled = roomId !== state.playerRoom && !canMove;
   });
@@ -379,6 +426,14 @@ function updateRoomActions() {
     });
   });
 
+  if (room.siren) {
+    actions.push({
+      label: `Trigger ${room.siren}`,
+      onClick: () => triggerSiren(room.id),
+      disabled: false,
+    });
+  }
+
   if (actions.length === 0) {
     const empty = document.createElement("button");
     empty.textContent = "No immediate actions here.";
@@ -396,14 +451,18 @@ function updateRoomActions() {
   });
 }
 
-function movePlayer(roomId) {
+function movePlayer(roomId, isRun) {
   if (!state.isAlive || state.hasEscaped) return;
   if (roomId === state.playerRoom) return;
   if (!roomConnections[state.playerRoom].includes(roomId)) return;
   state.playerRoom = roomId;
   state.hidden = false;
   state.hiddenSpot = null;
-  registerSignal(roomId, 0.6);
+  registerSignal(roomId, isRun ? 0.9 : 0.6);
+  const noiseBoost = rooms[roomId].noiseRisk ?? 0.2;
+  if (isRun) {
+    registerSignal(roomId, noiseBoost);
+  }
   state.turn += 1;
   updateUI();
 }
@@ -412,6 +471,17 @@ function setRoutePreview(roomId) {
   if (!state.isAlive || state.hasEscaped) return;
   state.routePreviewRoom = roomId;
   updateMap();
+}
+
+function setSelectedRoom(roomId) {
+  if (!state.isAlive || state.hasEscaped) return;
+  state.selectedRoom = roomId;
+  updateUI();
+}
+
+function moveSelected(isRun) {
+  if (state.selectedRoom === null) return;
+  movePlayer(state.selectedRoom, isRun);
 }
 
 function collectItem(roomId) {
@@ -491,14 +561,31 @@ function deviceLearned(type) {
 }
 
 function advanceRobot() {
+  if (state.robotDormant > 0) {
+    state.robotDormant -= 1;
+    return;
+  }
+
   if (state.robotLinger > 0) {
     state.robotLinger -= 1;
     return;
   }
 
+  if (state.robotRoom === state.playerRoom && state.hidden) {
+    startSearchCycle();
+  }
+
+  if (state.robotSearchTurns > 0) {
+    state.robotSearchTurns -= 1;
+    if (Math.random() < 0.35) {
+      state.robotSearchSpot = pickSearchSpot();
+    }
+    return;
+  }
+
   const target = pickRobotTarget();
   const aggressive = state.threat >= 3;
-  const willMoveToward = target !== null && (aggressive || Math.random() > 0.45);
+  const willMoveToward = target !== null && (aggressive || Math.random() > 0.6);
 
   if (willMoveToward && target !== null) {
     state.robotRoom = nextStepToward(state.robotRoom, target);
@@ -514,6 +601,12 @@ function advanceRobot() {
 
 function checkThreat() {
   if (state.robotRoom !== state.playerRoom) return;
+  if (state.robotSearchTurns > 0) {
+    if (!state.hidden || state.hiddenSpot === state.robotSearchSpot) {
+      attemptKill();
+    }
+    return;
+  }
 
   const learned = state.learnedHidingSpots.has(state.playerRoom);
   const signal = state.roomSignals.get(state.playerRoom) || 0;
@@ -527,6 +620,18 @@ function checkThreat() {
     if (Math.random() < 0.5) {
       state.robotLinger = Math.floor(Math.random() * 3) + 1;
     }
+  }
+}
+
+function attemptKill() {
+  const learned = state.learnedHidingSpots.has(state.playerRoom);
+  const signal = state.roomSignals.get(state.playerRoom) || 0;
+  const baseChance = state.hidden ? (learned ? 0.5 : 0.3) : 0.7;
+  const killChance = Math.min(0.85, baseChance + signal * 0.4);
+  if (Math.random() < killChance) {
+    triggerDeath();
+  } else if (Math.random() < 0.4) {
+    state.robotLinger = Math.floor(Math.random() * 2) + 1;
   }
 }
 
@@ -562,8 +667,12 @@ function resetGame() {
   state.lastKnownPlayerRoom = null;
   state.trailTurns = 0;
   state.routePreviewRoom = null;
+  state.selectedRoom = null;
   state.roomSignals.clear();
   state.robotLinger = 0;
+  state.robotDormant = 0;
+  state.robotSearchTurns = 0;
+  state.robotSearchSpot = null;
   state.isAlive = true;
   state.hasEscaped = false;
   dom.deathScreen.classList.remove("active");
@@ -592,7 +701,7 @@ function registerSignal(roomId, strength) {
 
 function decaySignals() {
   state.roomSignals.forEach((value, roomId) => {
-    const next = Math.max(0, value - 0.12);
+    const next = Math.max(0, value - 0.08);
     if (next === 0) {
       state.roomSignals.delete(roomId);
     } else {
@@ -618,6 +727,37 @@ function pickRobotTarget() {
     return state.lastKnownPlayerRoom;
   }
   return null;
+}
+
+function startSearchCycle() {
+  state.robotSearchTurns = Math.floor(Math.random() * 3) + 2;
+  state.robotSearchSpot = pickSearchSpot();
+}
+
+function pickSearchSpot() {
+  const spots = rooms[state.robotRoom].hideSpots;
+  if (!spots || spots.length === 0) return null;
+  return spots[Math.floor(Math.random() * spots.length)];
+}
+
+function triggerSiren(roomId) {
+  if (!state.isAlive || state.hasEscaped) return;
+  state.robotFocus = roomId;
+  registerSignal(roomId, 0.6);
+  state.turn += 1;
+  updateUI();
+}
+
+function robotStatusLabel() {
+  if (state.robotDormant > 0) return "Robot: Dormant in vents";
+  if (state.robotSearchTurns > 0) {
+    return state.robotSearchSpot
+      ? `Robot: Searching ${state.robotSearchSpot}`
+      : "Robot: Searching";
+  }
+  if (state.robotLinger > 0) return "Robot: Lurking";
+  if (state.robotFocus !== null) return `Robot: Distracted by ${rooms[state.robotFocus].name}`;
+  return "Robot: Searching";
 }
 
 function renderMap() {
@@ -657,7 +797,10 @@ function renderMap() {
     text.appendChild(createSvgElement("tspan", { x: mapPositions[room.id].x, dy: 4 }, title));
     group.appendChild(circle);
     group.appendChild(text);
-    group.addEventListener("click", () => setRoutePreview(room.id));
+    group.addEventListener("click", () => {
+      setRoutePreview(room.id);
+      setSelectedRoom(room.id);
+    });
     svg.appendChild(group);
   });
 }
@@ -681,7 +824,7 @@ function updateMap() {
   dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
     const roomId = Number(node.getAttribute("data-room-id"));
     node.classList.toggle("active", roomId === state.playerRoom);
-    node.classList.toggle("alert", roomId === state.robotRoom);
+    node.classList.toggle("alert", roomId === state.robotRoom && state.robotDormant === 0);
     node.classList.toggle("preview", roomId === state.routePreviewRoom);
   });
 
@@ -772,6 +915,7 @@ function nextStepToward(start, target) {
 function randomizeLayout() {
   roomConnections = generateRandomConnections();
   state.routePreviewRoom = null;
+  state.selectedRoom = null;
   optimizeLayout();
   renderMap();
   updateUI();
@@ -827,7 +971,7 @@ function optimizeLayout() {
   });
 
   let bestScore = layoutScore(placement);
-  for (let i = 0; i < 200; i += 1) {
+  for (let i = 0; i < 600; i += 1) {
     const [a, b] = pickTwo(ids);
     const temp = placement.get(a);
     placement.set(a, placement.get(b));
@@ -901,15 +1045,26 @@ function startGameLoop() {
   }
   gameLoopId = setInterval(() => {
     if (!state.isAlive || state.hasEscaped) return;
-    state.threat = Math.min(5, state.threat + 0.05);
+    state.threat = Math.min(5, state.threat + 0.03);
     if (state.trailTurns > 0) {
       state.trailTurns -= 1;
     }
     decaySignals();
     advanceRobot();
     checkThreat();
+    tickDormantState();
     updateUI();
-  }, 1000);
+  }, 1200);
+}
+
+function tickDormantState() {
+  if (state.robotDormant > 0) return;
+  if (Math.random() < 0.05) {
+    state.robotDormant = Math.floor(Math.random() * 3) + 2;
+    state.robotLinger = 0;
+    state.robotSearchTurns = 0;
+    state.robotSearchSpot = null;
+  }
 }
 
 init();
