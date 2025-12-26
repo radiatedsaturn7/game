@@ -193,7 +193,7 @@ let roomConnections = {
 
 const state = {
   playerRoom: 0,
-  robotRoom: 9,
+  robotRoom: 13,
   hidden: false,
   hiddenSpot: null,
   learnedHidingSpots: new Set(),
@@ -222,13 +222,16 @@ const state = {
   playerTravelMode: "sneak",
   robotPath: [],
   robotTravelTicks: 0,
+  dayCount: 1,
+  baseDate: new Date("2326-12-25T00:00:00Z"),
   isAlive: true,
   hasEscaped: false,
 };
 
 const dom = {
   threatLevel: document.getElementById("threatLevel"),
-  shiftCounter: document.getElementById("shiftCounter"),
+  dayCounter: document.getElementById("dayCounter"),
+  dateLabel: document.getElementById("dateLabel"),
   roomLabel: document.getElementById("roomLabel"),
   roomDetails: document.getElementById("roomDetails"),
   roomMedia: document.getElementById("roomMedia"),
@@ -313,7 +316,8 @@ function updateUI() {
     node.textContent = robotStatusLabel();
   });
   dom.threatLevel.textContent = threatLabel();
-  dom.shiftCounter.textContent = String(state.turn).padStart(2, "0");
+  dom.dayCounter.textContent = `Day ${String(state.dayCount).padStart(2, "0")}`;
+  dom.dateLabel.textContent = formatDate(state.baseDate, state.dayCount);
   dom.selectedRoom.textContent = state.selectedRoom === null
     ? "None"
     : rooms[state.selectedRoom].name;
@@ -479,7 +483,6 @@ function updateRoomActions() {
 function movePlayer(roomId, isRun) {
   if (!state.isAlive || state.hasEscaped) return;
   if (roomId === state.playerRoom) return;
-  if (!roomConnections[state.playerRoom].includes(roomId)) return;
   const path = getShortestPath(state.playerRoom, roomId);
   if (path.length <= 1) return;
   state.playerPath = path.slice(1);
@@ -700,13 +703,14 @@ function buildEscape() {
   const hasAllParts = requiredParts.every((part) => state.inventory.has(part));
   if (!rooms[state.playerRoom].isExit || !hasAllParts) return;
   state.hasEscaped = true;
+  state.dayCount += 1;
   dom.victoryScreen.classList.add("active");
   dom.victoryScreen.setAttribute("aria-hidden", "false");
 }
 
 function resetGame() {
   state.playerRoom = 0;
-  state.robotRoom = 9;
+  state.robotRoom = 13;
   state.hidden = false;
   state.hiddenSpot = null;
   state.learnedHidingSpots.clear();
@@ -735,6 +739,7 @@ function resetGame() {
   state.playerTravelMode = "sneak";
   state.robotPath = [];
   state.robotTravelTicks = 0;
+  state.dayCount = 1;
   state.isAlive = true;
   state.hasEscaped = false;
   dom.deathScreen.classList.remove("active");
@@ -749,6 +754,17 @@ function threatLabel() {
   if (state.threat < 3) return "Elevated";
   if (state.threat < 4) return "Severe";
   return "Critical";
+}
+
+function formatDate(baseDate, dayCount) {
+  const date = new Date(baseDate.getTime());
+  date.setUTCDate(date.getUTCDate() + (dayCount - 1));
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).replace(",", "");
 }
 
 function registerSignal(roomId, strength) {
@@ -946,7 +962,7 @@ function updateMap() {
 
 function updateRouteInfo(path) {
   if (state.routePreviewRoom === null) {
-    dom.routeInfo.textContent = "Select a destination to view the shortest path. Threat shows how alert the robot is. Red dashed lines show the robot's planned route.";
+    dom.routeInfo.textContent = "";
     return;
   }
   if (state.routePreviewRoom === state.playerRoom) {
