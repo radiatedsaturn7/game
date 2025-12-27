@@ -256,6 +256,8 @@ const state = {
   baseDate: new Date("2326-12-25T00:00:00Z"),
   isAlive: true,
   hasEscaped: false,
+  robotAlertQueued: false,
+  robotAlertText: "",
 };
 
 let travelAnimationId = null;
@@ -266,7 +268,6 @@ const dom = {
   roomMedia: document.getElementById("roomMedia"),
   currentRooms: document.querySelectorAll(".current-room"),
   robotStatuses: document.querySelectorAll(".robot-status"),
-  alertText: document.getElementById("alertText"),
   travelStatus: document.getElementById("travelStatus"),
   roomActions: document.getElementById("roomActions"),
   inventoryList: document.getElementById("inventoryList"),
@@ -299,6 +300,9 @@ const dom = {
   objectiveModal: document.getElementById("objectiveModal"),
   objectiveModalText: document.getElementById("objectiveModalText"),
   ackObjectiveBtn: document.getElementById("ackObjectiveBtn"),
+  robotAlertModal: document.getElementById("robotAlertModal"),
+  robotAlertText: document.getElementById("robotAlertText"),
+  ackRobotAlertBtn: document.getElementById("ackRobotAlertBtn"),
   buildBtn: document.getElementById("buildBtn"),
   goBtn: document.getElementById("goBtn"),
   runBtn: document.getElementById("runBtn"),
@@ -341,6 +345,7 @@ function attachEvents() {
   dom.closeComponentBtn.addEventListener("click", closeComponent);
   dom.closeTasksBtn.addEventListener("click", closeTasks);
   dom.ackObjectiveBtn.addEventListener("click", acknowledgeObjective);
+  dom.ackRobotAlertBtn.addEventListener("click", acknowledgeRobotAlert);
   dom.escapeBtn.addEventListener("click", handleEscape);
   dom.menuPanel.addEventListener("click", (event) => {
     if (event.target === dom.menuPanel) {
@@ -381,8 +386,6 @@ function updateUI() {
   dom.robotStatuses.forEach((node) => {
     node.textContent = robotStatusLabel();
   });
-  dom.alertText.textContent = state.alertTicks > 0 ? "Warning: Robot online." : "";
-  dom.alertText.classList.toggle("hidden", state.alertTicks === 0);
   updateTravelStatus();
   dom.threatLevel.textContent = threatLabel();
   dom.dateLabel.textContent = formatDate(state.baseDate, state.dayCount);
@@ -586,6 +589,32 @@ function acknowledgeObjective() {
   dom.objectiveModal.classList.remove("active");
   dom.objectiveModal.setAttribute("aria-hidden", "true");
   state.objectiveBlocked = false;
+  if (state.robotAlertQueued) {
+    showRobotAlert();
+  }
+}
+
+function queueRobotAlert(text) {
+  state.robotAlertText = text;
+  if (state.objectiveBlocked || dom.robotAlertModal.classList.contains("active")) {
+    state.robotAlertQueued = true;
+    return;
+  }
+  showRobotAlert();
+}
+
+function showRobotAlert() {
+  state.robotAlertQueued = false;
+  dom.robotAlertText.textContent = state.robotAlertText || "Warning: Robot online.";
+  dom.robotAlertModal.classList.add("active");
+  dom.robotAlertModal.setAttribute("aria-hidden", "false");
+  state.objectiveBlocked = true;
+}
+
+function acknowledgeRobotAlert() {
+  dom.robotAlertModal.classList.remove("active");
+  dom.robotAlertModal.setAttribute("aria-hidden", "true");
+  state.objectiveBlocked = false;
 }
 
 function updateRoomActions() {
@@ -721,9 +750,9 @@ function revealEscapeSchematic() {
   state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
   state.selectedSchematic = state.requiredEscapeSchematic;
   state.robotDisabled = false;
-  state.alertTicks = 6;
   state.escapeConsoleInspected = true;
   showObjectiveModal(`Objective unlocked: Build ${state.requiredEscapeSchematic}.`);
+  queueRobotAlert("Warning: Robot online.");
   updateUI();
 }
 
@@ -1076,11 +1105,15 @@ function resetGame() {
   state.dayCount = 1;
   state.isAlive = true;
   state.hasEscaped = false;
+  state.robotAlertQueued = false;
+  state.robotAlertText = "";
   assignRoomFinds();
   dom.deathScreen.classList.remove("active");
   dom.deathScreen.setAttribute("aria-hidden", "true");
   dom.victoryScreen.classList.remove("active");
   dom.victoryScreen.setAttribute("aria-hidden", "true");
+  dom.robotAlertModal.classList.remove("active");
+  dom.robotAlertModal.setAttribute("aria-hidden", "true");
   updateUI();
   showObjectiveModal(getObjectiveText());
 }
@@ -1736,6 +1769,9 @@ function tickDormantState() {
 function toggleRobot() {
   state.robotDisabled = !state.robotDisabled;
   dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
+  if (!state.robotDisabled) {
+    queueRobotAlert("Warning: Robot online.");
+  }
   if (state.robotDisabled) {
     state.robotLinger = 0;
     state.robotSearchTurns = 0;
