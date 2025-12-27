@@ -205,6 +205,8 @@ let roomConnections = {
   13: [9, 12],
 };
 
+const TICK_MS = 1200;
+
 const state = {
   playerRoom: 0,
   robotRoom: 0,
@@ -243,17 +245,20 @@ const state = {
   devicesUnlocked: true,
   noiseLures: 3,
   playerPath: [],
-  playerTravelTicks: 0,
   playerTravelMode: "sneak",
   playerTravelTotal: 0,
+  playerTravelStepStart: null,
+  playerTravelStepDuration: 0,
   robotPath: [],
-  robotTravelTicks: 0,
-  robotTravelStepTotal: 0,
+  robotTravelStepStart: null,
+  robotTravelStepDuration: 0,
   dayCount: 1,
   baseDate: new Date("2326-12-25T00:00:00Z"),
   isAlive: true,
   hasEscaped: false,
 };
+
+let travelAnimationId = null;
 
 const dom = {
   threatLevel: document.getElementById("threatLevel"),
@@ -393,10 +398,27 @@ function updateUI() {
   updateAdjacentMoves();
   updateEscapeButton();
   updateMap();
+  ensureTravelAnimation();
   updateBuildButton();
   updateMoveButtons();
   dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
   dom.tasksText.textContent = getObjectiveText();
+}
+
+function ensureTravelAnimation() {
+  if (travelAnimationId !== null) return;
+  if (isPlayerTraveling() || isRobotTraveling()) {
+    travelAnimationId = requestAnimationFrame(animateTravel);
+  }
+}
+
+function animateTravel() {
+  if (!isPlayerTraveling() && !isRobotTraveling()) {
+    travelAnimationId = null;
+    return;
+  }
+  updateMap();
+  travelAnimationId = requestAnimationFrame(animateTravel);
 }
 
 function updateInventoryList() {
@@ -485,7 +507,7 @@ function updateBuildButton() {
 function updateMoveButtons() {
   const canMove = state.selectedRoom !== null &&
     getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
-  const blocked = !canMove || !state.isAlive || state.hasEscaped || state.playerTravelTicks > 0;
+  const blocked = !canMove || !state.isAlive || state.hasEscaped || isPlayerTraveling();
   dom.goBtn.disabled = blocked;
   dom.runBtn.disabled = blocked;
 }
@@ -647,7 +669,7 @@ function updateAdjacentMoves() {
   adjacent.forEach((roomId) => {
     const button = document.createElement("button");
     button.textContent = `Sneak: ${rooms[roomId].name}`;
-    button.disabled = state.playerTravelTicks > 0;
+    button.disabled = isPlayerTraveling();
     button.addEventListener("click", () => movePlayer(roomId, false));
     dom.adjacentMoves.appendChild(button);
   });
@@ -738,6 +760,10 @@ function getObjectiveText() {
   return "Explore the factory and collect components.";
 }
 
+function isPlayerTraveling() {
+  return state.playerPath.length > 0 || state.playerTravelStepStart !== null;
+}
+
 function movePlayer(roomId, isRun) {
   if (!state.isAlive || state.hasEscaped) return;
   if (state.objectiveBlocked) return;
@@ -746,8 +772,8 @@ function movePlayer(roomId, isRun) {
   if (path.length <= 1) return;
   state.playerPath = path.slice(1);
   state.playerTravelMode = isRun ? "run" : "sneak";
-  state.playerTravelTicks = isRun ? 1 : 2;
   state.playerTravelTotal = state.playerPath.length;
+  startPlayerTravelStep();
   state.selectedRoom = roomId;
   updateUI();
 }
@@ -762,6 +788,18 @@ function setSelectedRoom(roomId) {
   if (!state.isAlive || state.hasEscaped) return;
   state.selectedRoom = roomId;
   updateUI();
+}
+
+function startPlayerTravelStep() {
+  const isRun = state.playerTravelMode === "run";
+  state.playerTravelStepStart = Date.now();
+  state.playerTravelStepDuration = (isRun ? 1 : 2) * TICK_MS;
+}
+
+function startRobotTravelStep() {
+  const ticks = Math.floor(Math.random() * 2) + 2;
+  state.robotTravelStepStart = Date.now();
+  state.robotTravelStepDuration = ticks * TICK_MS;
 }
 
 function moveSelected(isRun) {
@@ -865,6 +903,10 @@ function deviceLearned(type) {
   return recentUses.length >= 3;
 }
 
+function isRobotTraveling() {
+  return state.robotPath.length > 0 || state.robotTravelStepStart !== null;
+}
+
 function advanceRobot() {
   if (state.robotDisabled) return;
   if (state.robotDormant > 0) {
@@ -872,8 +914,7 @@ function advanceRobot() {
     return;
   }
 
-  if (state.robotTravelTicks > 0) {
-    state.robotTravelTicks -= 1;
+  if (isRobotTraveling()) {
     return;
   }
 
@@ -910,8 +951,7 @@ function advanceRobot() {
   if (willMoveToward && target !== null) {
     state.robotPlannedTarget = target;
     state.robotPath = getShortestPath(state.robotRoom, target).slice(1);
-    state.robotTravelTicks = Math.floor(Math.random() * 2) + 2;
-    state.robotTravelStepTotal = state.robotTravelTicks;
+    startRobotTravelStep();
     state.robotLookTurns = Math.floor(Math.random() * 3) + 2;
     state.robotScanTarget = null;
   } else {
@@ -920,8 +960,7 @@ function advanceRobot() {
     if (Math.random() < 0.4 && roamRooms.length > 0) {
       const roamTarget = roamRooms[Math.floor(Math.random() * roamRooms.length)];
       state.robotPath = [roamTarget];
-      state.robotTravelTicks = Math.floor(Math.random() * 2) + 2;
-      state.robotTravelStepTotal = state.robotTravelTicks;
+      startRobotTravelStep();
     }
     state.robotLinger = Math.floor(Math.random() * 9) + 8;
     state.robotScanTarget = null;
@@ -1027,12 +1066,13 @@ function resetGame() {
   state.robotDisabled = true;
   state.alertTicks = 0;
   state.playerPath = [];
-  state.playerTravelTicks = 0;
   state.playerTravelMode = "sneak";
   state.playerTravelTotal = 0;
+  state.playerTravelStepStart = null;
+  state.playerTravelStepDuration = 0;
   state.robotPath = [];
-  state.robotTravelTicks = 0;
-  state.robotTravelStepTotal = 0;
+  state.robotTravelStepStart = null;
+  state.robotTravelStepDuration = 0;
   state.dayCount = 1;
   state.isAlive = true;
   state.hasEscaped = false;
@@ -1286,14 +1326,14 @@ function applyTravelProgress(line, edgeKey) {
   line.style.opacity = "0";
   const playerEdge = currentTravelEdge(state.playerRoom, state.playerPath);
   if (playerEdge && edgeKey === playerEdge.key) {
-    const progress = getProgress(state.playerTravelTicks, state.playerTravelMode === "run" ? 1 : 2);
+    const progress = getProgress(state.playerTravelStepStart, state.playerTravelStepDuration);
     if (line.classList.contains("player-travel")) {
       setLineProgress(line, playerEdge.length, progress);
     }
   }
   const robotEdge = currentTravelEdge(state.robotRoom, state.robotPath);
   if (robotEdge && edgeKey === robotEdge.key) {
-    const progress = getProgress(state.robotTravelTicks, state.robotTravelStepTotal);
+    const progress = getProgress(state.robotTravelStepStart, state.robotTravelStepDuration);
     if (line.classList.contains("robot-travel")) {
       setLineProgress(line, robotEdge.length, progress);
     }
@@ -1317,10 +1357,10 @@ function edgeLength(startRoom, endRoom) {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-function getProgress(ticksRemaining, ticksTotal) {
-  if (!ticksTotal) return 1;
-  const remaining = Math.max(0, ticksRemaining);
-  return Math.min(1, Math.max(0, 1 - remaining / ticksTotal));
+function getProgress(startTime, duration) {
+  if (!startTime || !duration) return 1;
+  const elapsed = Date.now() - startTime;
+  return Math.min(1, Math.max(0, elapsed / duration));
 }
 
 function setLineProgress(line, length, progress) {
@@ -1556,7 +1596,7 @@ function startGameLoop() {
     checkThreat();
     tickDormantState();
     updateUI();
-  }, 1200);
+  }, TICK_MS);
 }
 
 function updateUseList() {
@@ -1616,11 +1656,17 @@ function handleEscape() {
 }
 
 function tickPlayerTravel() {
-  if (state.playerTravelTicks > 0) {
-    state.playerTravelTicks -= 1;
+  if (state.playerPath.length === 0) {
+    state.playerTravelStepStart = null;
+    state.playerTravelStepDuration = 0;
     return;
   }
-  if (state.playerPath.length === 0) return;
+  if (!state.playerTravelStepStart) {
+    startPlayerTravelStep();
+    return;
+  }
+  const elapsed = Date.now() - state.playerTravelStepStart;
+  if (elapsed < state.playerTravelStepDuration) return;
   const nextRoom = state.playerPath.shift();
   state.playerRoom = nextRoom;
   state.hidden = false;
@@ -1635,25 +1681,33 @@ function tickPlayerTravel() {
   if (state.playerPath.length === 0) {
     clearSelectedRoom();
     state.playerTravelTotal = 0;
+    state.playerTravelStepStart = null;
+    state.playerTravelStepDuration = 0;
   } else {
-    state.playerTravelTicks = isRun ? 1 : 2;
+    startPlayerTravelStep();
   }
 }
 
 function tickRobotTravel() {
-  if (state.robotTravelTicks > 0) {
+  if (state.robotPath.length === 0) {
+    state.robotTravelStepStart = null;
+    state.robotTravelStepDuration = 0;
     return;
   }
-  if (state.robotPath.length === 0) return;
+  if (!state.robotTravelStepStart) {
+    startRobotTravelStep();
+    return;
+  }
+  const elapsed = Date.now() - state.robotTravelStepStart;
+  if (elapsed < state.robotTravelStepDuration) return;
   const nextRoom = state.robotPath.shift();
   state.robotRoom = nextRoom;
   state.checkedRooms.add(state.robotRoom);
   if (state.robotPath.length === 0) {
-    state.robotTravelTicks = 0;
-    state.robotTravelStepTotal = 0;
+    state.robotTravelStepStart = null;
+    state.robotTravelStepDuration = 0;
   } else {
-    state.robotTravelTicks = 1;
-    state.robotTravelStepTotal = state.robotTravelTicks;
+    startRobotTravelStep();
   }
 }
 
@@ -1679,7 +1733,8 @@ function toggleRobot() {
     state.robotLookTurns = 0;
     state.robotFocus = null;
     state.robotPath = [];
-    state.robotTravelTicks = 0;
+    state.robotTravelStepStart = null;
+    state.robotTravelStepDuration = 0;
     state.robotPlannedTarget = null;
     state.robotScanTarget = null;
   }
