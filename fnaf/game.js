@@ -1321,21 +1321,19 @@ function updateMap() {
 }
 
 function applyTravelProgress(line, edgeKey) {
-  line.style.strokeDasharray = "";
-  line.style.strokeDashoffset = "";
   line.style.opacity = "0";
   const playerEdge = currentTravelEdge(state.playerRoom, state.playerPath);
   if (playerEdge && edgeKey === playerEdge.key) {
     const progress = getProgress(state.playerTravelStepStart, state.playerTravelStepDuration);
     if (line.classList.contains("player-travel")) {
-      setLineProgress(line, playerEdge.length, progress, playerEdge.reverse);
+      setLineProgress(line, playerEdge.startRoom, playerEdge.endRoom, progress);
     }
   }
   const robotEdge = currentTravelEdge(state.robotRoom, state.robotPath);
   if (robotEdge && edgeKey === robotEdge.key) {
     const progress = getProgress(state.robotTravelStepStart, state.robotTravelStepDuration);
     if (line.classList.contains("robot-travel")) {
-      setLineProgress(line, robotEdge.length, progress, robotEdge.reverse);
+      setLineProgress(line, robotEdge.startRoom, robotEdge.endRoom, progress);
     }
   }
 }
@@ -1346,7 +1344,12 @@ function currentTravelEdge(startRoom, path) {
   const a = Math.min(startRoom, nextRoom);
   const b = Math.max(startRoom, nextRoom);
   const length = edgeLength(startRoom, nextRoom);
-  return { key: `${a}-${b}`, length, reverse: startRoom > nextRoom };
+  return {
+    key: `${a}-${b}`,
+    length,
+    startRoom,
+    endRoom: nextRoom,
+  };
 }
 
 function edgeLength(startRoom, endRoom) {
@@ -1363,18 +1366,22 @@ function getProgress(startTime, duration) {
   return Math.min(1, Math.max(0, elapsed / duration));
 }
 
-function setLineProgress(line, length, progress, reverse) {
+function setLineProgress(line, startRoom, endRoom, progress) {
   const clamped = Math.min(1, Math.max(0, progress));
-  const remaining = Math.max(0, length * (1 - clamped));
-  if (remaining <= 0.5) {
+  const remaining = 1 - clamped;
+  if (remaining <= 0.02) {
     line.style.opacity = "0";
-    line.style.strokeDasharray = "";
-    line.style.strokeDashoffset = "";
     return;
   }
+  const start = mapPositions[startRoom];
+  const end = mapPositions[endRoom];
+  const x1 = start.x + (end.x - start.x) * clamped;
+  const y1 = start.y + (end.y - start.y) * clamped;
   line.style.opacity = "1";
-  line.style.strokeDasharray = `${remaining} ${length}`;
-  line.style.strokeDashoffset = reverse ? `${length - remaining}` : "0";
+  line.setAttribute("x1", x1);
+  line.setAttribute("y1", y1);
+  line.setAttribute("x2", end.x);
+  line.setAttribute("y2", end.y);
 }
 
 function updateRouteInfo(path) {
