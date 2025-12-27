@@ -321,16 +321,18 @@ main {
   stroke-dasharray: 6 6;
 }
 
-.map-link.player-travel {
-  stroke: rgba(120, 208, 255, 0.9);
+.map-travel {
   stroke-width: 3;
-  stroke-dasharray: 3 5;
+  stroke-linecap: round;
+  opacity: 0;
 }
 
-.map-link.robot-travel {
+.map-travel.player-travel {
+  stroke: rgba(120, 208, 255, 0.9);
+}
+
+.map-travel.robot-travel {
   stroke: rgba(255, 140, 140, 0.9);
-  stroke-width: 3;
-  stroke-dasharray: 2 4;
 }
 
 .map-node {

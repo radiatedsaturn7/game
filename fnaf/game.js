@@ -1167,6 +1167,24 @@ function renderMap() {
         "data-edge": `${room.id}-${neighbor}`,
       });
       svg.appendChild(line);
+      const playerLine = createSvgElement("line", {
+        x1: mapPositions[room.id].x,
+        y1: mapPositions[room.id].y,
+        x2: mapPositions[neighbor].x,
+        y2: mapPositions[neighbor].y,
+        class: "map-travel player-travel",
+        "data-edge": `${room.id}-${neighbor}`,
+      });
+      svg.appendChild(playerLine);
+      const robotLine = createSvgElement("line", {
+        x1: mapPositions[room.id].x,
+        y1: mapPositions[room.id].y,
+        x2: mapPositions[neighbor].x,
+        y2: mapPositions[neighbor].y,
+        class: "map-travel robot-travel",
+        "data-edge": `${room.id}-${neighbor}`,
+      });
+      svg.appendChild(robotLine);
     });
   });
 
@@ -1238,9 +1256,9 @@ function updateMap() {
     const edge = line.getAttribute("data-edge");
     line.classList.toggle("active", edges.has(edge));
     line.classList.toggle("robot-plan", robotEdges.has(edge));
-    line.classList.toggle("player-travel", playerTravelEdges.has(edge));
-    line.classList.toggle("robot-travel", robotTravelEdges.has(edge));
-    applyTravelProgress(line, edge);
+  });
+  dom.floorplanMap.querySelectorAll(".map-travel").forEach((line) => {
+    applyTravelProgress(line, line.getAttribute("data-edge"));
   });
 
   const playerAdjacents = new Set(roomConnections[state.playerRoom]);
@@ -1265,15 +1283,20 @@ function updateMap() {
 function applyTravelProgress(line, edgeKey) {
   line.style.strokeDasharray = "";
   line.style.strokeDashoffset = "";
+  line.style.opacity = "0";
   const playerEdge = currentTravelEdge(state.playerRoom, state.playerPath);
   if (playerEdge && edgeKey === playerEdge.key) {
     const progress = getProgress(state.playerTravelTicks, state.playerTravelMode === "run" ? 1 : 2);
-    setLineProgress(line, playerEdge.length, progress);
+    if (line.classList.contains("player-travel")) {
+      setLineProgress(line, playerEdge.length, progress);
+    }
   }
   const robotEdge = currentTravelEdge(state.robotRoom, state.robotPath);
   if (robotEdge && edgeKey === robotEdge.key) {
     const progress = getProgress(state.robotTravelTicks, state.robotTravelStepTotal);
-    setLineProgress(line, robotEdge.length, progress);
+    if (line.classList.contains("robot-travel")) {
+      setLineProgress(line, robotEdge.length, progress);
+    }
   }
 }
 
@@ -1302,9 +1325,10 @@ function getProgress(ticksRemaining, ticksTotal) {
 
 function setLineProgress(line, length, progress) {
   const clamped = Math.min(1, Math.max(0, progress));
-  const remaining = Math.max(1, length * (1 - clamped));
-  line.style.strokeDasharray = `${remaining} ${length}`;
-  line.style.strokeDashoffset = "0";
+  line.style.opacity = "1";
+  const dash = length;
+  line.style.strokeDasharray = `${dash} ${dash}`;
+  line.style.strokeDashoffset = `${length * clamped}`;
 }
 
 function updateRouteInfo(path) {
