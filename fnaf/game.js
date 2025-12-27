@@ -1328,14 +1328,14 @@ function applyTravelProgress(line, edgeKey) {
   if (playerEdge && edgeKey === playerEdge.key) {
     const progress = getProgress(state.playerTravelStepStart, state.playerTravelStepDuration);
     if (line.classList.contains("player-travel")) {
-      setLineProgress(line, playerEdge.length, progress);
+      setLineProgress(line, playerEdge.length, progress, playerEdge.reverse);
     }
   }
   const robotEdge = currentTravelEdge(state.robotRoom, state.robotPath);
   if (robotEdge && edgeKey === robotEdge.key) {
     const progress = getProgress(state.robotTravelStepStart, state.robotTravelStepDuration);
     if (line.classList.contains("robot-travel")) {
-      setLineProgress(line, robotEdge.length, progress);
+      setLineProgress(line, robotEdge.length, progress, robotEdge.reverse);
     }
   }
 }
@@ -1346,7 +1346,7 @@ function currentTravelEdge(startRoom, path) {
   const a = Math.min(startRoom, nextRoom);
   const b = Math.max(startRoom, nextRoom);
   const length = edgeLength(startRoom, nextRoom);
-  return { key: `${a}-${b}`, length };
+  return { key: `${a}-${b}`, length, reverse: startRoom > nextRoom };
 }
 
 function edgeLength(startRoom, endRoom) {
@@ -1363,7 +1363,7 @@ function getProgress(startTime, duration) {
   return Math.min(1, Math.max(0, elapsed / duration));
 }
 
-function setLineProgress(line, length, progress) {
+function setLineProgress(line, length, progress, reverse) {
   const clamped = Math.min(1, Math.max(0, progress));
   const remaining = Math.max(0, length * (1 - clamped));
   if (remaining <= 0.5) {
@@ -1374,7 +1374,7 @@ function setLineProgress(line, length, progress) {
   }
   line.style.opacity = "1";
   line.style.strokeDasharray = `${remaining} ${length}`;
-  line.style.strokeDashoffset = `${length * clamped}`;
+  line.style.strokeDashoffset = reverse ? `${length - remaining}` : "0";
 }
 
 function updateRouteInfo(path) {
