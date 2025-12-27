@@ -770,7 +770,6 @@ function movePlayer(roomId, isRun) {
   if (roomId === state.playerRoom) return;
   const path = getShortestPath(state.playerRoom, roomId);
   if (path.length <= 1) return;
-  state.routePreviewRoom = null;
   state.playerPath = path.slice(1);
   state.playerTravelMode = isRun ? "run" : "sneak";
   state.playerTravelTotal = state.playerPath.length;
@@ -1292,10 +1291,13 @@ function updateMap() {
     const b = Math.max(robotTravelPath[i], robotTravelPath[i + 1]);
     robotTravelEdges.add(`${a}-${b}`);
   }
+  const playerEdge = currentTravelEdge(state.playerRoom, state.playerPath);
+  const suppressPreviewEdge = playerEdge?.key ?? null;
 
   dom.floorplanMap.querySelectorAll(".map-link").forEach((line) => {
     const edge = line.getAttribute("data-edge");
-    line.classList.toggle("active", edges.has(edge));
+    const showPreview = edges.has(edge) && edge !== suppressPreviewEdge;
+    line.classList.toggle("active", showPreview);
     line.classList.toggle("robot-plan", robotEdges.has(edge));
   });
   dom.floorplanMap.querySelectorAll(".map-travel").forEach((line) => {
