@@ -252,12 +252,21 @@ const state = {
   robotPath: [],
   robotTravelStepStart: null,
   robotTravelStepDuration: 0,
+  robotInvestigateTurns: 0,
+  robotSweepQueue: [],
+  robotCheckedCooldown: new Map(),
+  robotPresenceHeat: new Map(),
+  robotMode: "idle",
+  robotTargetConfidence: 0,
   dayCount: 1,
   baseDate: new Date("2326-12-25T00:00:00Z"),
   isAlive: true,
   hasEscaped: false,
   robotAlertQueued: false,
   robotAlertText: "",
+  statusMessage: "",
+  statusTicks: 0,
+  playerTrail: [],
 };
 
 let travelAnimationId = null;
@@ -313,6 +322,7 @@ const dom = {
   deathScreen: document.getElementById("deathScreen"),
   victoryScreen: document.getElementById("victoryScreen"),
   restartBtn: document.getElementById("restartBtn"),
+  roomStatus: document.querySelector(".room-status"),
 };
 
 let gameLoopId = null;
@@ -321,6 +331,7 @@ function init() {
   renderMap();
   assignRoomFinds();
   updateSchematicList();
+  updatePlayerTrail(state.playerRoom);
   updateUI();
   attachEvents();
   startGameLoop();
@@ -381,11 +392,14 @@ function updateUI() {
     node.textContent = room.name;
   });
   dom.roomMedia.classList.toggle("threat-nearby", dangerRoom);
+  dom.roomMedia.classList.toggle("glitch", state.statusTicks > 0);
   dom.roomMedia.style.background = "transparent";
   document.body.style.setProperty("--room-theme", room.theme);
   dom.robotStatuses.forEach((node) => {
     node.textContent = robotStatusLabel();
   });
+  dom.roomStatus.textContent = state.statusMessage;
+  dom.roomStatus.classList.toggle("hidden", state.statusTicks <= 0);
   updateTravelStatus();
   dom.threatLevel.textContent = threatLabel();
   dom.dateLabel.textContent = formatDate(state.baseDate, state.dayCount);
@@ -511,13 +525,86 @@ function updateMoveButtons() {
   const canMove = state.selectedRoom !== null &&
     getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
   const blocked = !canMove || !state.isAlive || state.hasEscaped || isPlayerTraveling();
+  setButtonLabel(dom.goBtn, "Sneak", "Low noise");
+  setButtonLabel(dom.runBtn, "Run", "Leaves trace");
   dom.goBtn.disabled = blocked;
   dom.runBtn.disabled = blocked;
+}
+
+function setButtonLabel(button, text, risk) {
+  button.innerHTML = "";
+  const label = document.createElement("span");
+  label.textContent = text;
+  button.appendChild(label);
+  if (risk) {
+    const hint = document.createElement("span");
+    hint.textContent = risk;
+    hint.classList.add("risk-hint");
+    button.appendChild(hint);
+  }
 }
 
 function updatePanels() {
   const showMovement = state.selectedRoom !== null;
   dom.movementControls.classList.toggle("hidden", !showMovement);
+}
+
+function pushStatus(message, ticks = 3) {
+  state.statusMessage = message;
+  state.statusTicks = ticks;
+}
+
+function setRobotMode(mode) {
+  if (state.robotMode === mode) return;
+  state.robotMode = mode;
+  if (mode === "hunt") {
+    pushStatus("The air tightens. The robot shifts into a hunt.", 4);
+  } else if (mode === "search") {
+    pushStatus("Servos whirr as the robot sweeps the area.", 3);
+  } else if (mode === "investigate") {
+    pushStatus("Footsteps slow. The robot investigates.", 3);
+  } else if (mode === "sweep") {
+    pushStatus("The robot fans out to nearby halls.", 3);
+  }
+}
+
+function updatePlayerTrail(roomId) {
+  state.playerTrail.push(roomId);
+  if (state.playerTrail.length > 3) {
+    state.playerTrail.shift();
+  }
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function tickStatus() {
+  if (state.statusTicks > 0) {
+    state.statusTicks -= 1;
+    if (state.statusTicks <= 0) {
+      state.statusMessage = "";
+    }
+  }
+}
+
+function tickRobotMemory() {
+  state.robotCheckedCooldown.forEach((value, roomId) => {
+    const next = value - 1;
+    if (next <= 0) {
+      state.robotCheckedCooldown.delete(roomId);
+    } else {
+      state.robotCheckedCooldown.set(roomId, next);
+    }
+  });
+  state.robotPresenceHeat.forEach((value, roomId) => {
+    const next = Math.max(0, value - 0.08);
+    if (next <= 0.02) {
+      state.robotPresenceHeat.delete(roomId);
+    } else {
+      state.robotPresenceHeat.set(roomId, next);
+    }
+  });
 }
 
 function openMenu() {
@@ -636,6 +723,7 @@ function updateRoomActions() {
       label: `Collect ${room.item}`,
       onClick: () => collectItem(room.id),
       disabled: state.hidden || blocked,
+      risk: "Leaves trace",
     });
   }
 
@@ -644,6 +732,7 @@ function updateRoomActions() {
       label: `Scan Schematic: ${room.schematic}`,
       onClick: () => collectSchematic(room.id),
       disabled: state.hidden || blocked,
+      risk: "Low noise",
     });
   }
 
@@ -653,6 +742,7 @@ function updateRoomActions() {
       onClick: () => revealEscapeSchematic(),
       disabled: state.hidden || blocked,
       highlight: true,
+      risk: "High exposure",
     });
   }
 
@@ -661,6 +751,7 @@ function updateRoomActions() {
       label: `Hide: ${spot}`,
       onClick: () => setHidden(spot),
       disabled: blocked || (state.hidden && state.hiddenSpot === spot),
+      risk: "Low noise",
     });
   });
 
@@ -669,6 +760,7 @@ function updateRoomActions() {
       label: `Trigger ${room.siren}`,
       onClick: () => triggerSiren(room.id),
       disabled: blocked,
+      risk: "High exposure",
     });
   }
 
@@ -682,7 +774,15 @@ function updateRoomActions() {
 
   actions.forEach((action) => {
     const button = document.createElement("button");
-    button.textContent = action.label;
+    const label = document.createElement("span");
+    label.textContent = action.label;
+    button.appendChild(label);
+    if (action.risk) {
+      const risk = document.createElement("span");
+      risk.textContent = action.risk;
+      risk.classList.add("risk-hint");
+      button.appendChild(risk);
+    }
     button.disabled = action.disabled;
     if (action.highlight) {
       button.classList.add("objective-highlight");
@@ -697,7 +797,13 @@ function updateAdjacentMoves() {
   const adjacent = roomConnections[state.playerRoom];
   adjacent.forEach((roomId) => {
     const button = document.createElement("button");
-    button.textContent = `Sneak: ${rooms[roomId].name}`;
+    const label = document.createElement("span");
+    label.textContent = `Sneak: ${rooms[roomId].name}`;
+    button.appendChild(label);
+    const risk = document.createElement("span");
+    risk.textContent = "Low noise";
+    risk.classList.add("risk-hint");
+    button.appendChild(risk);
     button.disabled = isPlayerTraveling();
     button.addEventListener("click", () => movePlayer(roomId, false));
     dom.adjacentMoves.appendChild(button);
@@ -874,8 +980,9 @@ function setHidden(spot) {
   const hideCount = state.hideHistory.get(state.playerRoom) || 0;
   const nextCount = hideCount + 1;
   state.hideHistory.set(state.playerRoom, nextCount);
-  if (nextCount >= 3) {
+  if (nextCount >= 3 && !state.learnedHidingSpots.has(state.playerRoom)) {
     state.learnedHidingSpots.add(state.playerRoom);
+    pushStatus("The robot hesitates… then checks the console.", 4);
   }
   registerSignal(state.playerRoom, 0.2);
   updateUI();
@@ -917,6 +1024,7 @@ function useDevice(type) {
     .map((room) => room.id);
   const diversion = availableRooms[Math.floor(Math.random() * availableRooms.length)];
   state.robotFocus = diversion;
+  applyRobotPause("distract");
   if (type === "scan") {
     registerSignal(state.playerRoom, 0.3);
   }
@@ -947,8 +1055,15 @@ function advanceRobot() {
     return;
   }
 
+  if (state.robotInvestigateTurns > 0) {
+    state.robotInvestigateTurns -= 1;
+    setRobotMode("investigate");
+    return;
+  }
+
   if (state.robotLinger > 0) {
     state.robotLinger -= 1;
+    setRobotMode("hunt");
     return;
   }
 
@@ -961,6 +1076,10 @@ function advanceRobot() {
     if (Math.random() < 0.25) {
       state.robotSearchSpot = pickSearchSpot();
     }
+    if (state.robotSearchTurns === 0) {
+      applyRobotPause("failed");
+    }
+    setRobotMode("search");
     return;
   }
 
@@ -970,36 +1089,61 @@ function advanceRobot() {
       const options = roomConnections[state.robotRoom];
       state.robotScanTarget = options[Math.floor(Math.random() * options.length)];
     }
+    setRobotMode("search");
     return;
   }
 
+  if (state.robotSweepQueue.length > 0) {
+    const nextSweep = state.robotSweepQueue.shift();
+    if (nextSweep !== undefined) {
+      state.robotPath = [nextSweep];
+      startRobotTravelStep();
+      setRobotMode("sweep");
+      return;
+    }
+  }
+
   const target = pickRobotTarget();
+  const confidence = target === null ? 0 : getRoomConfidence(target);
   const aggressive = state.threat >= 3;
-  const willMoveToward = target !== null && (aggressive || Math.random() > 0.8);
+  const chance = confidence >= 0.4 ? 0.4 : 0.8;
+  const willMoveToward = target !== null && (aggressive || Math.random() > chance);
 
   if (willMoveToward && target !== null) {
+    if (target === state.robotRoom) {
+      state.robotInvestigateTurns = Math.floor(Math.random() * 3) + 3;
+      buildSweepQueue(state.robotRoom);
+      setRobotMode("investigate");
+      return;
+    }
     state.robotPlannedTarget = target;
+    state.robotTargetConfidence = confidence;
+    state.robotInvestigateTurns = 0;
+    state.robotSweepQueue = [];
     state.robotPath = getShortestPath(state.robotRoom, target).slice(1);
     startRobotTravelStep();
     state.robotLookTurns = Math.floor(Math.random() * 3) + 2;
     state.robotScanTarget = null;
+    setRobotMode(confidence >= 0.6 ? "hunt" : "investigate");
   } else {
     state.robotPlannedTarget = null;
+    state.robotTargetConfidence = 0;
     const roamRooms = roomConnections[state.robotRoom].filter((id) => id !== state.robotRoom);
     if (Math.random() < 0.4 && roamRooms.length > 0) {
       const roamTarget = roamRooms[Math.floor(Math.random() * roamRooms.length)];
       state.robotPath = [roamTarget];
       startRobotTravelStep();
     }
-    state.robotLinger = Math.floor(Math.random() * 9) + 8;
+    state.robotLinger = Math.floor(Math.random() * 6) + 4;
     state.robotScanTarget = null;
+    setRobotMode("hunt");
   }
 
   if (state.robotRoom === state.playerRoom && state.robotFocus) {
     state.robotFocus = null;
   }
 
-  state.checkedRooms.add(state.robotRoom);
+  markRoomChecked(state.robotRoom);
 }
 
 function checkThreat() {
@@ -1024,6 +1168,7 @@ function checkThreat() {
     if (Math.random() < 0.5) {
       state.robotLinger = Math.floor(Math.random() * 3) + 1;
     }
+    applyRobotPause("failed");
   }
 }
 
@@ -1038,6 +1183,7 @@ function attemptKill() {
     triggerDeath();
   } else if (Math.random() < 0.4) {
     state.robotLinger = Math.floor(Math.random() * 2) + 1;
+    applyRobotPause("failed");
   }
 }
 
@@ -1091,9 +1237,17 @@ function resetGame() {
   state.robotPlannedTarget = null;
   state.robotLookTurns = 0;
   state.robotScanTarget = null;
+  state.robotInvestigateTurns = 0;
+  state.robotSweepQueue = [];
+  state.robotCheckedCooldown.clear();
+  state.robotPresenceHeat.clear();
+  state.robotMode = "idle";
+  state.robotTargetConfidence = 0;
   state.sawPlayerHide = false;
   state.robotDisabled = true;
   state.alertTicks = 0;
+  state.statusMessage = "";
+  state.statusTicks = 0;
   state.playerPath = [];
   state.playerTravelMode = "sneak";
   state.playerTravelTotal = 0;
@@ -1107,6 +1261,7 @@ function resetGame() {
   state.hasEscaped = false;
   state.robotAlertQueued = false;
   state.robotAlertText = "";
+  state.playerTrail = [state.playerRoom];
   assignRoomFinds();
   dom.deathScreen.classList.remove("active");
   dom.deathScreen.setAttribute("aria-hidden", "true");
@@ -1140,6 +1295,9 @@ function registerSignal(roomId, strength) {
   const current = state.roomSignals.get(roomId) || 0;
   const next = Math.min(1, current + strength);
   state.roomSignals.set(roomId, next);
+  if (current < 0.6 && next >= 0.6) {
+    pushStatus("A pressure spike ripples through the halls.", 3);
+  }
   if (Math.random() < next) {
     state.lastKnownPlayerRoom = roomId;
     state.trailTurns = 2;
@@ -1157,7 +1315,50 @@ function decaySignals() {
     } else {
       state.roomSignals.set(roomId, next);
     }
+    if (roomId === state.lastKnownPlayerRoom && value >= 0.55 && next < 0.55) {
+      applyRobotPause("lost");
+    }
   });
+}
+
+function applyRobotPause(reason) {
+  if (state.robotDisabled) return;
+  const threatFactor = clamp(1 - (state.threat - 1) * 0.15, 0.4, 1);
+  const skipChance = state.threat >= 4 ? 0.5 : 0.2;
+  if (Math.random() < skipChance) return;
+  let base = 2;
+  if (reason === "failed") base = 3;
+  if (reason === "lost") base = 2;
+  if (reason === "distract") base = 2;
+  state.robotDormant = Math.max(state.robotDormant, Math.ceil(base * threatFactor));
+}
+
+function markRoomChecked(roomId) {
+  state.checkedRooms.add(roomId);
+  state.robotCheckedCooldown.set(roomId, 6);
+  state.robotPresenceHeat.set(roomId, 1);
+}
+
+function buildSweepQueue(roomId) {
+  const neighbors = roomConnections[roomId];
+  const available = neighbors.filter((neighbor) => !state.robotCheckedCooldown.has(neighbor));
+  const shuffled = [...available].sort(() => Math.random() - 0.5);
+  state.robotSweepQueue = shuffled;
+}
+
+function predictNextRoom() {
+  if (state.playerTrail.length < 2) return null;
+  const current = state.playerTrail[state.playerTrail.length - 1];
+  const previous = state.playerTrail[state.playerTrail.length - 2];
+  const neighbors = roomConnections[current] || [];
+  const forward = neighbors.filter((roomId) => roomId !== previous);
+  if (forward.length === 0) return previous;
+  const bySignal = [...forward].sort((a, b) => {
+    const signalA = state.roomSignals.get(a) || 0;
+    const signalB = state.roomSignals.get(b) || 0;
+    return signalB - signalA;
+  });
+  return bySignal[0];
 }
 
 function pickRobotTarget() {
@@ -1176,6 +1377,14 @@ function pickRobotTarget() {
     }
   }
 
+  const predicted = predictNextRoom();
+  if (predicted !== null && state.lastKnownPlayerRoom !== null) {
+    const confidence = getRoomConfidence(state.lastKnownPlayerRoom);
+    if (confidence >= 0.6 && Math.random() < 0.35) {
+      return predicted;
+    }
+  }
+
   return null;
 }
 
@@ -1186,6 +1395,7 @@ function getRoomConfidence(roomId) {
 function startSearchCycle() {
   state.robotSearchTurns = Math.floor(Math.random() * 4) + 5;
   state.robotSearchSpot = pickSearchSpot();
+  setRobotMode("search");
 }
 
 function pickSearchSpot() {
@@ -1207,17 +1417,22 @@ function interruptRobotTask(roomId) {
   state.robotSearchTurns = 0;
   state.robotSearchSpot = null;
   state.robotLookTurns = 0;
+  state.robotSweepQueue = [];
+  state.robotInvestigateTurns = 0;
   state.robotFocus = roomId;
+  setRobotMode("hunt");
 }
 
 function robotStatusLabel() {
   if (state.robotDisabled) return "Robot: Disabled";
-  if (state.robotDormant > 0) return "Robot: Powered down";
+  if (state.robotDormant > 0) return "Robot: Pausing";
   if (state.robotSearchTurns > 0) {
     return state.robotSearchSpot
       ? `Robot: Searching ${state.robotSearchSpot}`
       : "Robot: Searching";
   }
+  if (state.robotInvestigateTurns > 0) return "Robot: Investigating";
+  if (state.robotSweepQueue.length > 0) return "Robot: Sweeping halls";
   if (state.robotLookTurns > 0) return "Robot: Scanning halls";
   if (state.robotLinger > 0) return "Robot: Lurking";
   if (state.robotFocus !== null) return `Robot: Distracted by ${rooms[state.robotFocus].name}`;
@@ -1266,6 +1481,12 @@ function renderMap() {
       class: "map-node",
       "data-room-id": room.id,
     });
+    const pressure = createSvgElement("circle", {
+      cx: mapPositions[room.id].x,
+      cy: mapPositions[room.id].y,
+      r: 26,
+      class: "map-pressure",
+    });
     const circle = createSvgElement("circle", {
       cx: mapPositions[room.id].x,
       cy: mapPositions[room.id].y,
@@ -1277,6 +1498,7 @@ function renderMap() {
     });
     const title = room.name.split(" ")[0];
     text.appendChild(createSvgElement("tspan", { x: mapPositions[room.id].x, dy: 4 }, title));
+    group.appendChild(pressure);
     group.appendChild(circle);
     group.appendChild(text);
     group.addEventListener("click", () => {
@@ -1342,18 +1564,41 @@ function updateMap() {
   const robotAdjacents = showRobotVision ? new Set(roomConnections[state.robotRoom]) : new Set();
   dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
     const roomId = Number(node.getAttribute("data-room-id"));
+    const pressure = getRoomPressure(roomId);
+    const ring = node.querySelector(".map-pressure");
+    if (ring) {
+      ring.style.opacity = pressure > 0.05 ? (0.15 + pressure * 0.55).toFixed(2) : "0";
+      ring.setAttribute("r", `${24 + pressure * 10}`);
+    }
     node.classList.toggle("active", roomId === state.playerRoom);
     node.classList.toggle(
       "alert",
-      roomId === state.robotRoom && state.robotDormant === 0 && !state.robotDisabled
+      roomId === state.playerRoom &&
+        roomId === state.robotRoom &&
+        state.robotDormant === 0 &&
+        !state.robotDisabled
     );
-    node.classList.toggle("robot-disabled", state.robotDisabled && roomId === state.robotRoom);
+    node.classList.toggle(
+      "robot-disabled",
+      state.robotDisabled && roomId === state.playerRoom && roomId === state.robotRoom
+    );
     node.classList.toggle("preview", roomId === state.routePreviewRoom);
     node.classList.toggle("adjacent", playerAdjacents.has(roomId));
     node.classList.toggle("robot-adjacent", showRobotVision && roomId === state.robotScanTarget);
   });
 
   updateRouteInfo(path);
+}
+
+function getRoomPressure(roomId) {
+  const signal = state.roomSignals.get(roomId) || 0;
+  const visit = state.robotPresenceHeat.get(roomId) || 0;
+  const targetBoost = state.robotPlannedTarget === roomId ? 0.6 : 0;
+  const sweepBoost = state.robotSweepQueue.includes(roomId) ? 0.4 : 0;
+  const focusBoost = state.robotFocus === roomId ? 0.5 : 0;
+  const pressure = clamp(Math.max(signal, visit, targetBoost, sweepBoost, focusBoost), 0, 1);
+  if (state.robotDisabled && signal < 0.2) return 0;
+  return pressure;
 }
 
 function applyTravelProgress(line, edgeKey) {
@@ -1632,12 +1877,13 @@ function startGameLoop() {
     if (state.alertTicks > 0) {
       state.alertTicks -= 1;
     }
+    tickStatus();
     tickPlayerTravel();
     tickRobotTravel();
     decaySignals();
     advanceRobot();
     checkThreat();
-    tickDormantState();
+    tickRobotMemory();
     updateUI();
   }, TICK_MS);
 }
@@ -1714,6 +1960,7 @@ function tickPlayerTravel() {
   state.playerRoom = nextRoom;
   state.hidden = false;
   state.hiddenSpot = null;
+  updatePlayerTrail(nextRoom);
   const isRun = state.playerTravelMode === "run";
   registerSignal(nextRoom, isRun ? 0.9 : 0.6);
   const noiseBoost = rooms[nextRoom].noiseRisk ?? 0.2;
@@ -1745,10 +1992,22 @@ function tickRobotTravel() {
   if (elapsed < state.robotTravelStepDuration) return;
   const nextRoom = state.robotPath.shift();
   state.robotRoom = nextRoom;
-  state.checkedRooms.add(state.robotRoom);
+  markRoomChecked(state.robotRoom);
+  if (!state.robotDisabled) {
+    const adjacents = roomConnections[state.playerRoom] || [];
+    if (adjacents.includes(state.robotRoom) && state.robotRoom !== state.playerRoom) {
+      pushStatus("Metal steps echo nearby.", 3);
+    }
+  }
   if (state.robotPath.length === 0) {
     state.robotTravelStepStart = null;
     state.robotTravelStepDuration = 0;
+    if (state.robotPlannedTarget !== null && state.robotRoom === state.robotPlannedTarget) {
+      state.robotInvestigateTurns = Math.floor(Math.random() * 3) + 3;
+      buildSweepQueue(state.robotRoom);
+      state.robotPlannedTarget = null;
+      setRobotMode("investigate");
+    }
   } else {
     startRobotTravelStep();
   }
@@ -1783,6 +2042,8 @@ function toggleRobot() {
     state.robotTravelStepDuration = 0;
     state.robotPlannedTarget = null;
     state.robotScanTarget = null;
+    state.robotInvestigateTurns = 0;
+    state.robotSweepQueue = [];
   }
   updateUI();
 }
