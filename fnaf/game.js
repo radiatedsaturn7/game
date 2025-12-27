@@ -241,6 +241,7 @@ const state = {
   objectiveBlocked: false,
   escapeConsoleInspected: false,
   devicesUnlocked: true,
+  noiseLures: 3,
   playerPath: [],
   playerTravelTicks: 0,
   playerTravelMode: "sneak",
@@ -822,6 +823,11 @@ function handleAction(action) {
   }
 
   if (action === "scan" || action === "noise") {
+    if (action === "scan" && state.hidden && state.robotRoom === state.playerRoom) {
+      triggerDeath();
+      return;
+    }
+    if (action === "noise" && state.noiseLures <= 0) return;
     useDevice(action);
   }
   state.turn += 1;
@@ -848,6 +854,7 @@ function useDevice(type) {
     registerSignal(state.playerRoom, 0.3);
   }
   if (type === "noise") {
+    state.noiseLures = Math.max(0, state.noiseLures - 1);
     registerSignal(diversion, 0.4);
   }
 }
@@ -1006,6 +1013,7 @@ function resetGame() {
   state.escapeReady = false;
   state.escapeConsoleInspected = false;
   state.devicesUnlocked = true;
+  state.noiseLures = 3;
   state.roomSignals.clear();
   state.checkedRooms.clear();
   state.robotLinger = 0;
@@ -1525,8 +1533,8 @@ function updateUseList() {
   const options = [];
   if (state.devicesUnlocked) {
     options.push(
-      { label: "Pulse Scanner", action: () => handleAction("scan"), help: "Pulse Scanner" },
-      { label: "Noise Lure", action: () => handleAction("noise"), help: "Noise Lure" }
+      { label: "Pulse Scanner (∞)", action: () => handleAction("scan"), help: "Pulse Scanner" },
+      { label: `Noise Lure (${state.noiseLures})`, action: () => handleAction("noise"), help: "Noise Lure" }
     );
   }
   state.craftedItems.forEach((item) => {
