@@ -1325,9 +1325,15 @@ function getProgress(ticksRemaining, ticksTotal) {
 
 function setLineProgress(line, length, progress) {
   const clamped = Math.min(1, Math.max(0, progress));
+  const remaining = Math.max(0, length * (1 - clamped));
+  if (remaining <= 0.5) {
+    line.style.opacity = "0";
+    line.style.strokeDasharray = "";
+    line.style.strokeDashoffset = "";
+    return;
+  }
   line.style.opacity = "1";
-  const dash = length;
-  line.style.strokeDasharray = `${dash} ${dash}`;
+  line.style.strokeDasharray = `${remaining} ${length}`;
   line.style.strokeDashoffset = `${length * clamped}`;
 }
 
