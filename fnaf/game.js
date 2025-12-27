@@ -770,6 +770,7 @@ function movePlayer(roomId, isRun) {
   if (roomId === state.playerRoom) return;
   const path = getShortestPath(state.playerRoom, roomId);
   if (path.length <= 1) return;
+  state.routePreviewRoom = null;
   state.playerPath = path.slice(1);
   state.playerTravelMode = isRun ? "run" : "sneak";
   state.playerTravelTotal = state.playerPath.length;
