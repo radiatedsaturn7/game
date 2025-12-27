@@ -240,6 +240,7 @@ const state = {
   alertTicks: 0,
   objectiveBlocked: false,
   escapeConsoleInspected: false,
+  devicesUnlocked: true,
   playerPath: [],
   playerTravelTicks: 0,
   playerTravelMode: "sneak",
@@ -259,7 +260,6 @@ const dom = {
   roomMedia: document.getElementById("roomMedia"),
   currentRooms: document.querySelectorAll(".current-room"),
   robotStatuses: document.querySelectorAll(".robot-status"),
-  objectiveText: document.getElementById("objectiveText"),
   alertText: document.getElementById("alertText"),
   travelStatus: document.getElementById("travelStatus"),
   roomActions: document.getElementById("roomActions"),
@@ -375,10 +375,6 @@ function updateUI() {
   dom.robotStatuses.forEach((node) => {
     node.textContent = robotStatusLabel();
   });
-  dom.objectiveText.textContent = state.requiredEscapeSchematic
-    ? `Objective: Build ${state.requiredEscapeSchematic}`
-    : "Objective: Inspect the Escape Workshop console.";
-  dom.objectiveText.classList.toggle("hidden", false);
   dom.alertText.textContent = state.alertTicks > 0 ? "Warning: Robot online." : "";
   dom.alertText.classList.toggle("hidden", state.alertTicks === 0);
   updateTravelStatus();
@@ -1009,6 +1005,7 @@ function resetGame() {
   state.requiredEscapeSchematic = null;
   state.escapeReady = false;
   state.escapeConsoleInspected = false;
+  state.devicesUnlocked = true;
   state.roomSignals.clear();
   state.checkedRooms.clear();
   state.robotLinger = 0;
@@ -1525,10 +1522,13 @@ function startGameLoop() {
 
 function updateUseList() {
   dom.useList.innerHTML = "";
-  const options = [
-    { label: "Pulse Scanner", action: () => handleAction("scan"), help: "Pulse Scanner" },
-    { label: "Noise Lure", action: () => handleAction("noise"), help: "Noise Lure" },
-  ];
+  const options = [];
+  if (state.devicesUnlocked) {
+    options.push(
+      { label: "Pulse Scanner", action: () => handleAction("scan"), help: "Pulse Scanner" },
+      { label: "Noise Lure", action: () => handleAction("noise"), help: "Noise Lure" }
+    );
+  }
   state.craftedItems.forEach((item) => {
     options.push({ label: item, action: () => useCraftedItem(item), help: item });
   });
