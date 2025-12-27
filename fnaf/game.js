@@ -206,6 +206,7 @@ let roomConnections = {
 };
 
 const TICK_MS = 1200;
+const DEBUG_AI = false;
 
 const state = {
   playerRoom: 0,
@@ -258,6 +259,8 @@ const state = {
   robotPresenceHeat: new Map(),
   robotMode: "idle",
   robotTargetConfidence: 0,
+  robotSweepCooldown: 0,
+  robotPredictionCooldown: 0,
   dayCount: 1,
   baseDate: new Date("2326-12-25T00:00:00Z"),
   isAlive: true,
@@ -267,6 +270,10 @@ const state = {
   statusMessage: "",
   statusTicks: 0,
   playerTrail: [],
+  signalDecayBoost: new Map(),
+  lastStrongSignalTick: -999,
+  lastStrongSignalRoom: null,
+  sneakStepsWithoutSignal: 0,
 };
 
 let travelAnimationId = null;
@@ -525,8 +532,8 @@ function updateMoveButtons() {
   const canMove = state.selectedRoom !== null &&
     getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
   const blocked = !canMove || !state.isAlive || state.hasEscaped || isPlayerTraveling();
-  setButtonLabel(dom.goBtn, "Sneak", "Low noise");
-  setButtonLabel(dom.runBtn, "Run", "Leaves trace");
+  setButtonLabel(dom.goBtn, "Sneak", "Quiet");
+  setButtonLabel(dom.runBtn, "Run", "Trace");
   dom.goBtn.disabled = blocked;
   dom.runBtn.disabled = blocked;
 }
@@ -557,6 +564,7 @@ function pushStatus(message, ticks = 3) {
 function setRobotMode(mode) {
   if (state.robotMode === mode) return;
   state.robotMode = mode;
+  logDebug("robot-mode", { mode, confidence: state.robotTargetConfidence });
   if (mode === "hunt") {
     pushStatus("The air tightens. The robot shifts into a hunt.", 4);
   } else if (mode === "search") {
@@ -579,6 +587,11 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function logDebug(event, payload) {
+  if (!DEBUG_AI) return;
+  console.log(`[AI] ${event}`, payload);
+}
+
 function tickStatus() {
   if (state.statusTicks > 0) {
     state.statusTicks -= 1;
@@ -597,6 +610,12 @@ function tickRobotMemory() {
       state.robotCheckedCooldown.set(roomId, next);
     }
   });
+  if (state.robotSweepCooldown > 0) {
+    state.robotSweepCooldown -= 1;
+  }
+  if (state.robotPredictionCooldown > 0) {
+    state.robotPredictionCooldown -= 1;
+  }
   state.robotPresenceHeat.forEach((value, roomId) => {
     const next = Math.max(0, value - 0.08);
     if (next <= 0.02) {
@@ -723,7 +742,7 @@ function updateRoomActions() {
       label: `Collect ${room.item}`,
       onClick: () => collectItem(room.id),
       disabled: state.hidden || blocked,
-      risk: "Leaves trace",
+      risk: "Trace",
     });
   }
 
@@ -732,7 +751,7 @@ function updateRoomActions() {
       label: `Scan Schematic: ${room.schematic}`,
       onClick: () => collectSchematic(room.id),
       disabled: state.hidden || blocked,
-      risk: "Low noise",
+      risk: "Quiet",
     });
   }
 
@@ -742,7 +761,7 @@ function updateRoomActions() {
       onClick: () => revealEscapeSchematic(),
       disabled: state.hidden || blocked,
       highlight: true,
-      risk: "High exposure",
+      risk: "Exposed",
     });
   }
 
@@ -751,7 +770,7 @@ function updateRoomActions() {
       label: `Hide: ${spot}`,
       onClick: () => setHidden(spot),
       disabled: blocked || (state.hidden && state.hiddenSpot === spot),
-      risk: "Low noise",
+      risk: "Quiet",
     });
   });
 
@@ -760,7 +779,7 @@ function updateRoomActions() {
       label: `Trigger ${room.siren}`,
       onClick: () => triggerSiren(room.id),
       disabled: blocked,
-      risk: "High exposure",
+      risk: "Distract",
     });
   }
 
@@ -801,7 +820,7 @@ function updateAdjacentMoves() {
     label.textContent = `Sneak: ${rooms[roomId].name}`;
     button.appendChild(label);
     const risk = document.createElement("span");
-    risk.textContent = "Low noise";
+    risk.textContent = "Quiet";
     risk.classList.add("risk-hint");
     button.appendChild(risk);
     button.disabled = isPlayerTraveling();
@@ -1093,6 +1112,8 @@ function advanceRobot() {
     return;
   }
 
+  const hasRecentStrongSignal = state.turn - state.lastStrongSignalTick <= 4;
+  const commitAllowed = state.robotTargetConfidence >= 0.7 && hasRecentStrongSignal;
   if (state.robotSweepQueue.length > 0) {
     const nextSweep = state.robotSweepQueue.shift();
     if (nextSweep !== undefined) {
@@ -1106,7 +1127,7 @@ function advanceRobot() {
   const target = pickRobotTarget();
   const confidence = target === null ? 0 : getRoomConfidence(target);
   const aggressive = state.threat >= 3;
-  const chance = confidence >= 0.4 ? 0.4 : 0.8;
+  const chance = confidence >= 0.4 ? 0.5 : 0.85;
   const willMoveToward = target !== null && (aggressive || Math.random() > chance);
 
   if (willMoveToward && target !== null) {
@@ -1121,10 +1142,14 @@ function advanceRobot() {
     state.robotInvestigateTurns = 0;
     state.robotSweepQueue = [];
     state.robotPath = getShortestPath(state.robotRoom, target).slice(1);
-    startRobotTravelStep();
+    if (commitAllowed) {
+      startRobotTravelStep();
+    } else {
+      state.robotLinger = Math.floor(Math.random() * 3) + 2;
+    }
     state.robotLookTurns = Math.floor(Math.random() * 3) + 2;
     state.robotScanTarget = null;
-    setRobotMode(confidence >= 0.6 ? "hunt" : "investigate");
+    setRobotMode(commitAllowed ? "hunt" : "investigate");
   } else {
     state.robotPlannedTarget = null;
     state.robotTargetConfidence = 0;
@@ -1243,6 +1268,8 @@ function resetGame() {
   state.robotPresenceHeat.clear();
   state.robotMode = "idle";
   state.robotTargetConfidence = 0;
+  state.robotSweepCooldown = 0;
+  state.robotPredictionCooldown = 0;
   state.sawPlayerHide = false;
   state.robotDisabled = true;
   state.alertTicks = 0;
@@ -1262,6 +1289,10 @@ function resetGame() {
   state.robotAlertQueued = false;
   state.robotAlertText = "";
   state.playerTrail = [state.playerRoom];
+  state.signalDecayBoost.clear();
+  state.lastStrongSignalTick = -999;
+  state.lastStrongSignalRoom = null;
+  state.sneakStepsWithoutSignal = 0;
   assignRoomFinds();
   dom.deathScreen.classList.remove("active");
   dom.deathScreen.setAttribute("aria-hidden", "true");
@@ -1291,17 +1322,34 @@ function formatDate(baseDate, dayCount) {
   }).replace(",", "");
 }
 
-function registerSignal(roomId, strength) {
+function registerSignal(roomId, strength, options = {}) {
+  const { type = "ambient", forceLastKnown = false, lastKnownChance = null } = options;
   const current = state.roomSignals.get(roomId) || 0;
   const next = Math.min(1, current + strength);
   state.roomSignals.set(roomId, next);
+  if (type === "sneak") {
+    state.signalDecayBoost.set(roomId, Math.max(state.signalDecayBoost.get(roomId) || 0, 0.05));
+  }
   if (current < 0.6 && next >= 0.6) {
     pushStatus("A pressure spike ripples through the halls.", 3);
   }
-  if (Math.random() < next) {
+  const updateChance = lastKnownChance ?? next;
+  if (forceLastKnown || Math.random() < updateChance) {
     state.lastKnownPlayerRoom = roomId;
     state.trailTurns = 2;
   }
+  if (strength >= 0.6 || next >= 0.7) {
+    state.lastStrongSignalTick = state.turn;
+    state.lastStrongSignalRoom = roomId;
+  }
+  logDebug("signal", {
+    roomId,
+    strength,
+    next,
+    type,
+    lastKnown: state.lastKnownPlayerRoom,
+    forceLastKnown,
+  });
   if (roomId !== state.robotRoom && next >= 0.4) {
     interruptRobotTask(roomId);
   }
@@ -1309,7 +1357,16 @@ function registerSignal(roomId, strength) {
 
 function decaySignals() {
   state.roomSignals.forEach((value, roomId) => {
-    const next = Math.max(0, value - 0.08);
+    const boost = state.signalDecayBoost.get(roomId) || 0;
+    const next = Math.max(0, value - 0.08 - boost);
+    if (boost > 0) {
+      const nextBoost = Math.max(0, boost - 0.02);
+      if (nextBoost <= 0) {
+        state.signalDecayBoost.delete(roomId);
+      } else {
+        state.signalDecayBoost.set(roomId, nextBoost);
+      }
+    }
     if (next === 0) {
       state.roomSignals.delete(roomId);
     } else {
@@ -1340,10 +1397,21 @@ function markRoomChecked(roomId) {
 }
 
 function buildSweepQueue(roomId) {
+  if (state.robotSweepCooldown > 0) return;
   const neighbors = roomConnections[roomId];
   const available = neighbors.filter((neighbor) => !state.robotCheckedCooldown.has(neighbor));
+  const confidence = getRoomConfidence(roomId);
+  let count = 1;
+  if (confidence >= 0.75 || state.threat >= 4) {
+    count = Math.min(available.length, 3);
+  } else if (confidence >= 0.5 || state.threat >= 3) {
+    count = Math.min(available.length, 2);
+  } else {
+    count = Math.min(available.length, 1);
+  }
   const shuffled = [...available].sort(() => Math.random() - 0.5);
-  state.robotSweepQueue = shuffled;
+  state.robotSweepQueue = shuffled.slice(0, count);
+  state.robotSweepCooldown = 4;
 }
 
 function predictNextRoom() {
@@ -1378,9 +1446,16 @@ function pickRobotTarget() {
   }
 
   const predicted = predictNextRoom();
-  if (predicted !== null && state.lastKnownPlayerRoom !== null) {
+  if (
+    predicted !== null &&
+    state.lastKnownPlayerRoom !== null &&
+    state.robotPredictionCooldown === 0
+  ) {
     const confidence = getRoomConfidence(state.lastKnownPlayerRoom);
-    if (confidence >= 0.6 && Math.random() < 0.35) {
+    const lastSignal = state.roomSignals.get(state.lastKnownPlayerRoom) || 0;
+    if (confidence >= 0.7 && lastSignal >= 0.65 && Math.random() < 0.25) {
+      state.robotPredictionCooldown = 5;
+      logDebug("predict", { predicted, confidence, lastSignal });
       return predicted;
     }
   }
@@ -1962,12 +2037,37 @@ function tickPlayerTravel() {
   state.hiddenSpot = null;
   updatePlayerTrail(nextRoom);
   const isRun = state.playerTravelMode === "run";
-  registerSignal(nextRoom, isRun ? 0.9 : 0.6);
-  const noiseBoost = rooms[nextRoom].noiseRisk ?? 0.2;
   if (isRun) {
-    registerSignal(nextRoom, noiseBoost);
+    registerSignal(nextRoom, 0.95, { type: "run", forceLastKnown: true });
+    const noiseBoost = rooms[nextRoom].noiseRisk ?? 0.2;
+    registerSignal(nextRoom, Math.max(0.35, noiseBoost), { type: "run", forceLastKnown: true });
+    state.sneakStepsWithoutSignal = 0;
+  } else {
+    const base = 0.25;
+    const noiseBoost = rooms[nextRoom].noiseRisk ?? 0.2;
+    const strength = Math.min(0.4, base + noiseBoost * 0.2);
+    registerSignal(nextRoom, strength, { type: "sneak", lastKnownChance: strength * 0.5 });
+    if (strength < 0.35) {
+      state.sneakStepsWithoutSignal += 1;
+    } else {
+      state.sneakStepsWithoutSignal = 0;
+    }
+    if (state.sneakStepsWithoutSignal >= 2) {
+      state.trailTurns = Math.max(0, state.trailTurns - 1);
+      if (state.lastKnownPlayerRoom !== null) {
+        const currentSignal = state.roomSignals.get(state.lastKnownPlayerRoom) || 0;
+        state.roomSignals.set(state.lastKnownPlayerRoom, Math.max(0, currentSignal - 0.2));
+      }
+      state.sneakStepsWithoutSignal = 0;
+    }
   }
   state.turn += 1;
+  logDebug("player-move", {
+    room: nextRoom,
+    type: isRun ? "run" : "sneak",
+    trailTurns: state.trailTurns,
+    lastKnown: state.lastKnownPlayerRoom,
+  });
   if (state.playerPath.length === 0) {
     clearSelectedRoom();
     state.playerTravelTotal = 0;
@@ -1999,12 +2099,20 @@ function tickRobotTravel() {
       pushStatus("Metal steps echo nearby.", 3);
     }
   }
+  logDebug("robot-move", { room: state.robotRoom, mode: state.robotMode });
   if (state.robotPath.length === 0) {
     state.robotTravelStepStart = null;
     state.robotTravelStepDuration = 0;
     if (state.robotPlannedTarget !== null && state.robotRoom === state.robotPlannedTarget) {
-      state.robotInvestigateTurns = Math.floor(Math.random() * 3) + 3;
-      buildSweepQueue(state.robotRoom);
+      const confidence = Math.max(state.robotTargetConfidence, getRoomConfidence(state.robotRoom));
+      const baseInvestigate = confidence >= 0.7 ? 4 : 2;
+      const variance = confidence >= 0.7 ? 2 : 1;
+      state.robotInvestigateTurns = Math.floor(Math.random() * variance) + baseInvestigate;
+      if (confidence >= 0.55 || state.threat >= 3) {
+        buildSweepQueue(state.robotRoom);
+      } else {
+        state.robotSweepQueue = [];
+      }
       state.robotPlannedTarget = null;
       setRobotMode("investigate");
     }
