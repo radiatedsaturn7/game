@@ -212,17 +212,120 @@ const DEBUG_AI = false;
 const DEBUG_UI = true;
 
 const NIGHT_UNLOCKS = {
-  1: { devices: false, crafting: false, slowRewire: false, doorJams: false, showMap: true },
-  2: { devices: true, crafting: false, slowRewire: false, doorJams: false, showMap: true },
-  3: { devices: true, crafting: false, slowRewire: true, doorJams: false, showMap: true },
-  4: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
-  5: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
-  6: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
-  7: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
-  8: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
-  9: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
-  10: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
+  1: {
+    showMap: true,
+    robotActive: false,
+    allowSirens: false,
+    allowSlowRewire: false,
+    allowScanner: false,
+    allowNoiseLure: false,
+    allowCrafting: false,
+    allowDoorJams: false,
+    showRobotIntelOnMap: false,
+  },
+  2: {
+    showMap: true,
+    robotActive: true,
+    allowSirens: false,
+    allowSlowRewire: false,
+    allowScanner: false,
+    allowNoiseLure: false,
+    allowCrafting: false,
+    allowDoorJams: false,
+    showRobotIntelOnMap: false,
+  },
+  3: {
+    showMap: true,
+    robotActive: true,
+    allowSirens: true,
+    allowSlowRewire: true,
+    allowScanner: false,
+    allowNoiseLure: false,
+    allowCrafting: false,
+    allowDoorJams: false,
+    showRobotIntelOnMap: false,
+  },
+  4: {
+    showMap: true,
+    robotActive: true,
+    allowSirens: true,
+    allowSlowRewire: true,
+    allowScanner: true,
+    allowNoiseLure: false,
+    allowCrafting: false,
+    allowDoorJams: false,
+    showRobotIntelOnMap: true,
+  },
+  5: {
+    showMap: true,
+    robotActive: true,
+    allowSirens: true,
+    allowSlowRewire: true,
+    allowScanner: true,
+    allowNoiseLure: true,
+    allowCrafting: true,
+    allowDoorJams: false,
+    showRobotIntelOnMap: true,
+  },
+  6: {
+    showMap: true,
+    robotActive: true,
+    allowSirens: true,
+    allowSlowRewire: true,
+    allowScanner: true,
+    allowNoiseLure: true,
+    allowCrafting: true,
+    allowDoorJams: true,
+    showRobotIntelOnMap: true,
+  },
+  7: {
+    showMap: true,
+    robotActive: true,
+    allowSirens: true,
+    allowSlowRewire: true,
+    allowScanner: true,
+    allowNoiseLure: true,
+    allowCrafting: true,
+    allowDoorJams: true,
+    showRobotIntelOnMap: true,
+  },
+  8: {
+    showMap: true,
+    robotActive: true,
+    allowSirens: true,
+    allowSlowRewire: true,
+    allowScanner: true,
+    allowNoiseLure: true,
+    allowCrafting: true,
+    allowDoorJams: true,
+    showRobotIntelOnMap: true,
+  },
+  9: {
+    showMap: true,
+    robotActive: true,
+    allowSirens: true,
+    allowSlowRewire: true,
+    allowScanner: true,
+    allowNoiseLure: true,
+    allowCrafting: true,
+    allowDoorJams: true,
+    showRobotIntelOnMap: true,
+  },
+  10: {
+    showMap: true,
+    robotActive: true,
+    allowSirens: true,
+    allowSlowRewire: true,
+    allowScanner: true,
+    allowNoiseLure: true,
+    allowCrafting: true,
+    allowDoorJams: true,
+    showRobotIntelOnMap: true,
+  },
 };
+
+const SCANNER_TRACE_SPIKE = 0.18;
+const SCANNER_TRACE_DOT = 0.06;
 
 const MISSION_TYPES = {
   ESCAPE: "escape",
@@ -478,10 +581,14 @@ const state = {
   completedNight: null,
   nightProfile: null,
   missionType: MISSION_TYPES.ESCAPE,
+  escapeMode: "fabricate",
   stabilizeTargets: [],
   stabilizedTargets: new Set(),
   dataFragmentsNeeded: 0,
   dataFragmentsFound: new Set(),
+  manualOverrideNeeded: 0,
+  manualOverrideTargets: new Set(),
+  manualOverridesDone: new Set(),
   dayCount: 1,
   baseDate: new Date("2326-12-25T00:00:00Z"),
   unlocks: {},
@@ -691,11 +798,17 @@ function updateUI() {
   ensureTravelAnimation();
   updateBuildButton();
   updateMoveButtons();
-  dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
+  if (dom.toggleRobotBtn) {
+    dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
+  }
   dom.tasksText.textContent = getObjectiveText();
   if (dom.useBtn) {
-    dom.useBtn.classList.toggle("hidden", !state.unlocks.devices);
-    dom.useBtn.disabled = !state.unlocks.devices;
+    const allowUse = state.unlocks.allowScanner ||
+      state.unlocks.allowNoiseLure ||
+      state.unlocks.allowDoorJams ||
+      state.craftedItems.size > 0;
+    dom.useBtn.classList.toggle("hidden", !allowUse);
+    dom.useBtn.disabled = !allowUse;
   }
   if (dom.mapBtn) {
     dom.mapBtn.classList.toggle("hidden", !state.unlocks.showMap);
@@ -737,9 +850,9 @@ function updateInventoryList() {
 
 function updateSchematicsInventory() {
   dom.schematicInventory.innerHTML = "";
-  if (!state.unlocks.crafting) {
+  if (!state.unlocks.allowCrafting) {
     const locked = document.createElement("li");
-    const unlockNight = getNextUnlockNightFromNow("crafting");
+    const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     locked.textContent = unlockNight
       ? `Crafting locked until Night ${unlockNight}.`
       : "Crafting locked.";
@@ -770,9 +883,9 @@ function updateSchematicsInventory() {
 
 function updateSchematicList() {
   dom.schematicList.innerHTML = "";
-  if (!state.unlocks.crafting) {
+  if (!state.unlocks.allowCrafting) {
     const locked = document.createElement("li");
-    const unlockNight = getNextUnlockNightFromNow("crafting");
+    const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     locked.textContent = unlockNight
       ? `Crafting locked until Night ${unlockNight}.`
       : "Crafting locked.";
@@ -806,8 +919,8 @@ function updateSchematicList() {
 }
 
 function updateBuildButton() {
-  if (!state.unlocks.crafting) {
-    const unlockNight = getNextUnlockNightFromNow("crafting");
+  if (!state.unlocks.allowCrafting) {
+    const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = unlockNight
       ? `Crafting locked (Night ${unlockNight})`
@@ -818,6 +931,14 @@ function updateBuildButton() {
   if (!selected) {
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = "Select a Schematic";
+    return;
+  }
+  if (selected.name === "Door Jam" && !state.unlocks.allowDoorJams) {
+    const unlockNight = getNextUnlockNightFromNow("allowDoorJams");
+    dom.buildBtn.disabled = true;
+    dom.buildBtn.textContent = unlockNight
+      ? `Door Jams locked (Night ${unlockNight})`
+      : "Door Jams locked";
     return;
   }
   const matchesEscape = !state.requiredEscapeSchematic || selected.name === state.requiredEscapeSchematic;
@@ -944,11 +1065,15 @@ function getUnlocks() {
 
 function getUnlocksForNight(night) {
   return NIGHT_UNLOCKS[night] ?? {
-    devices: true,
-    crafting: true,
-    slowRewire: true,
-    doorJams: true,
     showMap: true,
+    robotActive: true,
+    allowSirens: true,
+    allowSlowRewire: true,
+    allowScanner: true,
+    allowNoiseLure: true,
+    allowCrafting: true,
+    allowDoorJams: true,
+    showRobotIntelOnMap: true,
   };
 }
 
@@ -978,11 +1103,15 @@ function getNextUnlockNightFromNow(feature) {
 function listNewUnlockMessages(prevUnlocks, nextUnlocks) {
   const messages = [];
   const labelMap = {
-    devices: "Devices online: Scanner reads pressure; Noise Lure pulls it away.",
-    slowRewire: "Slow Rewire unlocked: reduce signal after sneaking.",
-    crafting: "Fabrication unlocked: scan schematics and build tools.",
-    doorJams: "Door Jams unlocked: wedge doors to block paths (briefly).",
-    showMap: "Map Access unlocked.",
+    showMap: "Map access unlocked.",
+    robotActive: "Robot systems restored. Expect patrols after the console.",
+    allowSirens: "Room sirens can now be triggered.",
+    allowSlowRewire: "Slow Rewire unlocked: reduce signal after sneaking.",
+    allowScanner: "Pulse Scanner unlocked.",
+    allowNoiseLure: "Noise Lure unlocked.",
+    allowCrafting: "Fabrication unlocked: scan schematics and build tools.",
+    allowDoorJams: "Door Jams unlocked: wedge doors to block paths (briefly).",
+    showRobotIntelOnMap: "Scanner can expose robot routes on the map.",
   };
   Object.keys(labelMap).forEach((key) => {
     if (!prevUnlocks?.[key] && nextUnlocks?.[key]) {
@@ -1021,10 +1150,14 @@ function pickMissionForNight(night) {
 
 function setupMissionForNight() {
   state.missionType = pickMissionForNight(state.currentNight);
+  state.escapeMode = state.currentNight <= 3 ? "manual" : "fabricate";
   state.stabilizeTargets = [];
   state.stabilizedTargets = new Set();
   state.dataFragmentsFound = new Set();
   state.dataFragmentsNeeded = 0;
+  state.manualOverrideNeeded = 0;
+  state.manualOverrideTargets = new Set();
+  state.manualOverridesDone = new Set();
 
   if (state.missionType === MISSION_TYPES.STABILIZE) {
     const choices = [...STABILIZE_SYSTEMS].sort(() => Math.random() - 0.5);
@@ -1045,6 +1178,9 @@ function setCurrentNight(night) {
   state.currentNight = next;
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
+  if (!state.unlocks.robotActive) {
+    state.robotDisabled = true;
+  }
   if (DEBUG_UI) {
     // Reset mission state for coherent debug night swaps.
     setupMissionForNight();
@@ -1320,7 +1456,7 @@ function updateRoomActions() {
     });
   }
 
-  const canRewire = state.unlocks.slowRewire &&
+  const canRewire = state.unlocks.allowSlowRewire &&
     !state.hidden &&
     state.lastMoveType !== "run" &&
     (hasPart("Resistors") || hasPart("Capacitors"));
@@ -1346,13 +1482,13 @@ function updateRoomActions() {
     const isDataMission = state.missionType === MISSION_TYPES.DATA;
     const scanLabel = isDataMission
       ? "Recover Data Fragment"
-      : state.unlocks.crafting
+      : state.unlocks.allowCrafting
         ? `Scan Schematic: ${room.schematic}`
-        : `Schematic Scan (Night ${getNextUnlockNightFromNow("crafting") ?? "?"})`;
+        : `Schematic Scan (Night ${getNextUnlockNightFromNow("allowCrafting") ?? "?"})`;
     actions.push({
       label: scanLabel,
       onClick: () => collectSchematic(room.id),
-      disabled: state.hidden || blocked || (!isDataMission && !state.unlocks.crafting),
+      disabled: state.hidden || blocked || (!isDataMission && !state.unlocks.allowCrafting),
       risk: "Quiet",
       highlight: isDataMission,
     });
@@ -1381,6 +1517,20 @@ function updateRoomActions() {
     }
   }
 
+  if (state.missionType === MISSION_TYPES.ESCAPE &&
+    state.escapeConsoleInspected &&
+    state.escapeMode === "manual" &&
+    state.manualOverrideTargets.has(room.id) &&
+    !state.manualOverridesDone.has(room.id)) {
+    actions.push({
+      label: "Align Override Node",
+      onClick: () => alignManualOverride(room.id),
+      disabled: state.hidden || blocked,
+      highlight: true,
+      risk: "Quiet",
+    });
+  }
+
   room.hideSpots.forEach((spot) => {
     const burned = state.burnedHidingSpots.has(`${room.id}:${spot}`);
     actions.push({
@@ -1400,7 +1550,7 @@ function updateRoomActions() {
     });
   }
 
-  if (room.siren) {
+  if (room.siren && state.unlocks.allowSirens) {
     actions.push({
       label: `Trigger ${room.siren}`,
       onClick: () => triggerSiren(room.id),
@@ -1460,6 +1610,37 @@ function stabilizeSystem(target) {
   );
   pushStatus(`${target.room} stabilized.`, 3);
   if (state.stabilizedTargets.size >= state.stabilizeTargets.length) {
+    state.escapeReady = true;
+  }
+  updateUI();
+}
+
+function getManualOverrideCountForNight(night) {
+  if (night <= 1) return 2;
+  if (night === 2) return 3;
+  if (night === 3) return Math.random() < 0.5 ? 3 : 4;
+  return 3;
+}
+
+function assignManualOverrideTargets() {
+  const choices = rooms.filter((room) => !room.isExit);
+  const shuffled = [...choices].sort(() => Math.random() - 0.5);
+  const count = Math.min(state.manualOverrideNeeded, shuffled.length);
+  state.manualOverrideTargets = new Set(shuffled.slice(0, count).map((room) => room.id));
+  state.manualOverridesDone = new Set();
+}
+
+function alignManualOverride(roomId) {
+  if (state.manualOverridesDone.has(roomId)) return;
+  state.manualOverridesDone.add(roomId);
+  const profile = getNightProfile();
+  registerSignal(
+    roomId,
+    0.16 * profile.signalStrength.device,
+    { type: "override", lastKnownChance: 0.12 }
+  );
+  pushStatus("Override node aligned.", 3);
+  if (state.manualOverridesDone.size >= state.manualOverrideNeeded) {
     state.escapeReady = true;
   }
   updateUI();
@@ -1548,23 +1729,41 @@ function updateTravelStatus() {
 
 function revealEscapeSchematic() {
   if (state.escapeConsoleInspected) return;
+  state.escapeReady = false;
   if (state.missionType === MISSION_TYPES.ESCAPE) {
-    const options = craftableItems
-      .map((item) => item.name)
-      .filter((name) => name !== "Door Jam");
-    state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
-    state.selectedSchematic = state.requiredEscapeSchematic;
+    if (state.escapeMode === "fabricate") {
+      const options = craftableItems
+        .map((item) => item.name)
+        .filter((name) => name !== "Door Jam");
+      state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
+      state.selectedSchematic = state.requiredEscapeSchematic;
+    } else {
+      state.requiredEscapeSchematic = null;
+      state.selectedSchematic = null;
+      state.manualOverrideNeeded = getManualOverrideCountForNight(state.currentNight);
+      assignManualOverrideTargets();
+    }
   }
-  state.robotDisabled = false;
   state.escapeConsoleInspected = true;
   if (state.missionType === MISSION_TYPES.ESCAPE) {
-    showObjectiveModal(`Objective unlocked: Build ${state.requiredEscapeSchematic}.`);
+    if (state.escapeMode === "manual") {
+      showObjectiveModal("Objective unlocked: Align the override nodes.");
+    } else {
+      showObjectiveModal(`Objective unlocked: Build ${state.requiredEscapeSchematic}.`);
+    }
   } else if (state.missionType === MISSION_TYPES.STABILIZE) {
     showObjectiveModal("Objective unlocked: Stabilize core systems.");
   } else {
     showObjectiveModal("Objective unlocked: Recover data fragments.");
   }
-  queueRobotAlert("Warning: Robot online.");
+  if (state.unlocks.robotActive) {
+    state.robotDisabled = false;
+    if (state.currentNight >= 2) {
+      queueRobotAlert("Warning: Robot online.");
+    }
+  } else {
+    state.robotDisabled = true;
+  }
   updateUI();
 }
 
@@ -1593,7 +1792,11 @@ function getObjectiveText() {
     return "Inspect the Escape Workshop console to receive your mission.";
   }
   if (state.missionType === MISSION_TYPES.ESCAPE) {
-    if (!state.escapeReady && state.requiredEscapeSchematic) {
+    if (state.escapeMode === "manual") {
+      if (!state.escapeReady) {
+        return `Align ${state.manualOverridesDone.size}/${state.manualOverrideNeeded} override nodes, then escape.`;
+      }
+    } else if (!state.escapeReady && state.requiredEscapeSchematic) {
       return `Find and build the ${state.requiredEscapeSchematic} schematic, then escape.`;
     }
   }
@@ -1700,7 +1903,7 @@ function collectItem(roomId) {
 
 function collectSchematic(roomId) {
   if (state.hidden) return;
-  if (!state.unlocks.crafting && state.missionType !== MISSION_TYPES.DATA) {
+  if (!state.unlocks.allowCrafting && state.missionType !== MISSION_TYPES.DATA) {
     pushStatus("You note the diagram, but you can't assemble it yet.", 3);
     return;
   }
@@ -1763,10 +1966,18 @@ function handleAction(action) {
   }
 
   if (action === "scan" || action === "noise") {
-    if (!state.unlocks.devices) {
-      const unlockNight = getNextUnlockNightFromNow("devices");
+    if (action === "scan" && !state.unlocks.allowScanner) {
+      const unlockNight = getNextUnlockNightFromNow("allowScanner");
       pushStatus(
-        unlockNight ? `Devices unlock on Night ${unlockNight}.` : "Devices locked.",
+        unlockNight ? `Scanner unlocks on Night ${unlockNight}.` : "Scanner locked.",
+        3
+      );
+      return;
+    }
+    if (action === "noise" && !state.unlocks.allowNoiseLure) {
+      const unlockNight = getNextUnlockNightFromNow("allowNoiseLure");
+      pushStatus(
+        unlockNight ? `Noise Lure unlocks on Night ${unlockNight}.` : "Noise Lure locked.",
         3
       );
       return;
@@ -1808,11 +2019,17 @@ function useDevice(type) {
   applyRobotPause("distract");
   if (type === "scan") {
     registerSignal(state.playerRoom, 0.3 * profile.signalStrength.device * strengthMultiplier);
+    registerSignal(
+      state.playerRoom,
+      SCANNER_TRACE_SPIKE * profile.signalStrength.device,
+      { type: "device", lastKnownChance: 0.22 }
+    );
     state.scanFocusRoom = pickScannerFocusRoom();
     state.scanPulseTicks = 3;
     if (state.scanFocusRoom !== null) {
       pushStatus(`Scanner sweep: attention toward ${rooms[state.scanFocusRoom].name}.`, 3);
     }
+    pushStatus("Scanner pulse blooms static in the room.", 3);
   }
   if (type === "noise") {
     state.noiseLures = Math.max(0, state.noiseLures - 1);
@@ -2090,6 +2307,9 @@ function resetGame() {
   state.requiredEscapeSchematic = null;
   state.escapeReady = false;
   state.escapeConsoleInspected = false;
+  state.manualOverrideNeeded = 0;
+  state.manualOverrideTargets = new Set();
+  state.manualOverridesDone = new Set();
   state.noiseLures = 3;
   state.roomSignals.clear();
   state.checkedRooms.clear();
@@ -2146,6 +2366,7 @@ function resetGame() {
   state.jammedEdges.clear();
   state.doorJams = 1;
   state.missionType = MISSION_TYPES.ESCAPE;
+  state.escapeMode = state.currentNight <= 3 ? "manual" : "fabricate";
   state.stabilizeTargets = [];
   state.stabilizedTargets = new Set();
   state.dataFragmentsNeeded = 0;
@@ -2157,6 +2378,9 @@ function resetGame() {
   state.hiddenTurns = 0;
   state.lastMoveType = "sneak";
   state.unlocks = getUnlocks();
+  if (!state.unlocks.robotActive) {
+    state.robotDisabled = true;
+  }
   state.ohShitTriggered = false;
   state.runMoments = [];
   state.runSummary = "";
@@ -2627,6 +2851,22 @@ function renderMap() {
   });
 }
 
+function canSeeRobotIntel() {
+  if (!state.unlocks.showRobotIntelOnMap) return false;
+  if (state.scanPulseTicks > 0) return true;
+  if (state.robotDisabled) return false;
+  if (state.robotRoom === state.playerRoom) return true;
+  const adj = new Set(roomConnections[state.playerRoom] || []);
+  if (adj.has(state.robotRoom)) return true;
+  return false;
+}
+
+function canShowRobotTravelLine() {
+  return state.unlocks.showRobotIntelOnMap &&
+    state.scanPulseTicks > 0 &&
+    !state.robotDisabled;
+}
+
 function updateMap() {
   const path = state.routePreviewRoom === null
     ? []
@@ -2666,12 +2906,13 @@ function updateMap() {
   }
   const playerEdge = currentTravelEdge(state.playerRoom, state.playerPath);
   const suppressPreviewEdge = playerEdge?.key ?? null;
+  const showRobotIntel = canSeeRobotIntel();
 
   dom.floorplanMap.querySelectorAll(".map-link").forEach((line) => {
     const edge = line.getAttribute("data-edge");
     const showPreview = edges.has(edge) && edge !== suppressPreviewEdge;
     line.classList.toggle("active", showPreview);
-    line.classList.toggle("robot-plan", robotEdges.has(edge));
+    line.classList.toggle("robot-plan", showRobotIntel && robotEdges.has(edge));
     line.classList.toggle("edge-jammed", state.jammedEdges.has(edge));
   });
   dom.floorplanMap.querySelectorAll(".map-jam").forEach((marker) => {
@@ -2687,7 +2928,7 @@ function updateMap() {
   const robotAdjacents = showRobotVision ? new Set(roomConnections[state.robotRoom]) : new Set();
   dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
     const roomId = Number(node.getAttribute("data-room-id"));
-    const pressure = getRoomPressure(roomId);
+    const pressure = showRobotIntel ? getRoomPressure(roomId) : getSignalPressure(roomId);
     const ring = node.querySelector(".map-pressure");
     if (ring) {
       let opacity = pressure > 0.05 ? 0.15 + pressure * 0.55 : 0;
@@ -2713,17 +2954,22 @@ function updateMap() {
     );
     node.classList.toggle("preview", roomId === state.routePreviewRoom);
     node.classList.toggle("adjacent", playerAdjacents.has(roomId));
-    node.classList.toggle("robot-adjacent", showRobotVision && roomId === state.robotScanTarget);
-    node.classList.toggle("robot-target", roomId === state.robotPlannedTarget);
-    node.classList.toggle("robot-sweep", state.robotSweepQueue.includes(roomId));
+    node.classList.toggle(
+      "robot-adjacent",
+      showRobotIntel && showRobotVision && roomId === state.robotScanTarget
+    );
+    node.classList.toggle("robot-target", showRobotIntel && roomId === state.robotPlannedTarget);
+    node.classList.toggle("robot-sweep", showRobotIntel && state.robotSweepQueue.includes(roomId));
     node.classList.toggle("scan-focus", state.scanPulseTicks > 0 && roomId === state.scanFocusRoom);
     const poi = node.querySelector(".map-poi");
     if (poi) {
       const room = rooms[roomId];
       const discoveriesEnabled = state.escapeConsoleInspected;
       const hasItem = discoveriesEnabled && Boolean(room.item) && !state.inventory.has(room.item);
+      const allowSchematicMarkers = state.unlocks.allowCrafting ||
+        state.missionType === MISSION_TYPES.DATA;
       const hasSchematic = discoveriesEnabled &&
-        state.unlocks.crafting &&
+        allowSchematicMarkers &&
         Boolean(room.schematic) &&
         !state.foundSchematics.has(room.schematic);
       const isExit = Boolean(room.isExit);
@@ -2760,6 +3006,11 @@ function getRoomPressure(roomId) {
   return pressure;
 }
 
+function getSignalPressure(roomId) {
+  const signal = state.roomSignals.get(roomId) || 0;
+  return clamp(signal, 0, 1);
+}
+
 function applyTravelProgress(line, edgeKey) {
   line.style.opacity = "0";
   const playerEdge = currentTravelEdge(state.playerRoom, state.playerPath);
@@ -2771,6 +3022,10 @@ function applyTravelProgress(line, edgeKey) {
   }
   const robotEdge = currentTravelEdge(state.robotRoom, state.robotPath);
   if (robotEdge && edgeKey === robotEdge.key) {
+    if (line.classList.contains("robot-travel") && !canShowRobotTravelLine()) {
+      line.style.opacity = "0";
+      return;
+    }
     const progress = getProgress(state.robotTravelStepStart, state.robotTravelStepDuration);
     if (line.classList.contains("robot-travel")) {
       setLineProgress(line, robotEdge.startRoom, robotEdge.endRoom, progress);
@@ -3043,8 +3298,8 @@ function craftItem() {
   if (!state.isAlive || state.hasEscaped) return;
   const craftable = getSelectedSchematic();
   if (!craftable) return;
-  if (!state.unlocks.crafting) {
-    const unlockNight = getNextUnlockNightFromNow("crafting");
+  if (!state.unlocks.allowCrafting) {
+    const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     pushStatus(
       unlockNight ? `Crafting locked until Night ${unlockNight}.` : "Crafting locked.",
       3
@@ -3053,8 +3308,8 @@ function craftItem() {
   }
   if (!state.foundSchematics.has(craftable.name)) return;
   if (craftable.name !== "Door Jam" && state.craftedItems.has(craftable.name)) return;
-  if (craftable.name === "Door Jam" && !state.unlocks.doorJams) {
-    const unlockNight = getNextUnlockNightFromNow("doorJams");
+  if (craftable.name === "Door Jam" && !state.unlocks.allowDoorJams) {
+    const unlockNight = getNextUnlockNightFromNow("allowDoorJams");
     pushStatus(
       unlockNight ? `Door jams unlock on Night ${unlockNight}.` : "Door jams locked.",
       3
@@ -3102,6 +3357,12 @@ function startGameLoop() {
       state.hiddenTurns = 0;
     }
     if (state.scanPulseTicks > 0) {
+      const profile = getNightProfile();
+      registerSignal(
+        state.playerRoom,
+        SCANNER_TRACE_DOT * profile.signalStrength.device,
+        { type: "device", lastKnownChance: 0.1 }
+      );
       state.scanPulseTicks -= 1;
       if (state.scanPulseTicks === 0) {
         state.scanFocusRoom = null;
@@ -3124,13 +3385,17 @@ function startGameLoop() {
 function updateUseList() {
   dom.useList.innerHTML = "";
   const options = [];
-  if (state.unlocks.devices) {
+  if (state.unlocks.allowScanner) {
     options.push(
-      { label: "Pulse Scanner (∞)", action: () => handleAction("scan"), help: "Pulse Scanner" },
+      { label: "Pulse Scanner (∞)", action: () => handleAction("scan"), help: "Pulse Scanner" }
+    );
+  }
+  if (state.unlocks.allowNoiseLure) {
+    options.push(
       { label: `Noise Lure (${state.noiseLures})`, action: () => handleAction("noise"), help: "Noise Lure" }
     );
   }
-  if (state.unlocks.doorJams && state.doorJams > 0) {
+  if (state.unlocks.allowDoorJams && state.doorJams > 0) {
     const adjacent = roomConnections[state.playerRoom] || [];
     adjacent.forEach((roomId) => {
       const disallowed = rooms[roomId].isExit || rooms[state.playerRoom].isExit;
@@ -3151,12 +3416,14 @@ function updateUseList() {
 
   if (options.length === 0) {
     const empty = document.createElement("li");
-    const unlockNight = getNextUnlockNightFromNow("devices");
-    empty.textContent = state.unlocks.devices
-      ? "No usable items."
-      : unlockNight
-        ? `Devices locked (Night ${unlockNight})`
-        : "Devices locked.";
+    if (!state.unlocks.allowScanner) {
+      const unlockNight = getNextUnlockNightFromNow("allowScanner");
+      empty.textContent = unlockNight
+        ? `Scanner locked (Night ${unlockNight})`
+        : "Scanner locked.";
+    } else {
+      empty.textContent = "No usable items.";
+    }
     dom.useList.appendChild(empty);
     return;
   }
@@ -3392,8 +3659,19 @@ function tickRobotTravel() {
 }
 
 function toggleRobot() {
+  if (!state.unlocks.robotActive) {
+    state.robotDisabled = true;
+    if (dom.toggleRobotBtn) {
+      dom.toggleRobotBtn.textContent = "Enable Robot";
+    }
+    pushStatus("Robot systems are offline.", 3);
+    updateUI();
+    return;
+  }
   state.robotDisabled = !state.robotDisabled;
-  dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
+  if (dom.toggleRobotBtn) {
+    dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
+  }
   if (!state.robotDisabled) {
     queueRobotAlert("Warning: Robot online.");
   }
