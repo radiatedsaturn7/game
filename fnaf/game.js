@@ -481,13 +481,16 @@ const dom = {
   mapBtn: document.getElementById("mapBtn"),
   tasksBtn: document.getElementById("tasksBtn"),
   useBtn: document.getElementById("useBtn"),
+  debugBtn: document.getElementById("debugBtn"),
   toggleRobotBtn: document.getElementById("toggleRobotBtn"),
   closeMenuBtn: document.getElementById("closeMenuBtn"),
   closeMapBtn: document.getElementById("closeMapBtn"),
   closeUseBtn: document.getElementById("closeUseBtn"),
+  closeDebugBtn: document.getElementById("closeDebugBtn"),
   menuPanel: document.getElementById("menuPanel"),
   mapPanel: document.getElementById("mapPanel"),
   usePanel: document.getElementById("usePanel"),
+  debugPanel: document.getElementById("debugPanel"),
   useList: document.getElementById("useList"),
   componentPanel: document.getElementById("componentPanel"),
   componentTitle: document.getElementById("componentTitle"),
@@ -545,10 +548,12 @@ function attachEvents() {
   dom.mapBtn.addEventListener("click", openMap);
   dom.tasksBtn.addEventListener("click", openTasks);
   dom.useBtn.addEventListener("click", openUse);
+  dom.debugBtn.addEventListener("click", openDebug);
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
   dom.closeMenuBtn.addEventListener("click", closeMenu);
   dom.closeMapBtn.addEventListener("click", closeMap);
   dom.closeUseBtn.addEventListener("click", closeUse);
+  dom.closeDebugBtn.addEventListener("click", closeDebug);
   dom.closeComponentBtn.addEventListener("click", closeComponent);
   dom.closeTasksBtn.addEventListener("click", closeTasks);
   dom.ackObjectiveBtn.addEventListener("click", acknowledgeObjective);
@@ -571,6 +576,11 @@ function attachEvents() {
   dom.usePanel.addEventListener("click", (event) => {
     if (event.target === dom.usePanel) {
       closeUse();
+    }
+  });
+  dom.debugPanel.addEventListener("click", (event) => {
+    if (event.target === dom.debugPanel) {
+      closeDebug();
     }
   });
   dom.componentPanel.addEventListener("click", (event) => {
@@ -982,6 +992,17 @@ function openUse() {
 function closeUse() {
   dom.usePanel.classList.remove("active");
   dom.usePanel.setAttribute("aria-hidden", "true");
+}
+
+function openDebug() {
+  if (state.objectiveBlocked) return;
+  dom.debugPanel.classList.add("active");
+  dom.debugPanel.setAttribute("aria-hidden", "false");
+}
+
+function closeDebug() {
+  dom.debugPanel.classList.remove("active");
+  dom.debugPanel.setAttribute("aria-hidden", "true");
 }
 
 function openComponent(part) {
