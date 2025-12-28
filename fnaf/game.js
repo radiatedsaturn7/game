@@ -450,6 +450,9 @@ const state = {
   signalDecayBoost: new Map(),
   lastStrongSignalTick: -999,
   lastStrongSignalRoom: null,
+  lastKnownTick: -999,
+  lastTrailBreakTick: -999,
+  lastDeviceFatigueTick: -999,
   sneakStepsWithoutSignal: 0,
   pendingSignals: [],
   persistentSignals: new Map(),
@@ -1327,6 +1330,10 @@ function collectItem(roomId) {
   const room = rooms[roomId];
   if (room.item && !state.inventory.has(room.item)) {
     state.inventory.add(room.item);
+    const profile = getNightProfile();
+    const noiseRisk = getRoomNoiseRisk(roomId);
+    const strength = (0.18 + noiseRisk * 0.12) * profile.signalStrength.sneak;
+    registerSignal(roomId, strength, { type: "loot", lastKnownChance: 0.16 });
   }
   updateUI();
 }
@@ -1336,6 +1343,9 @@ function collectSchematic(roomId) {
   const room = rooms[roomId];
   if (room.schematic && !state.foundSchematics.has(room.schematic)) {
     state.foundSchematics.add(room.schematic);
+    const profile = getNightProfile();
+    const strength = 0.2 * profile.signalStrength.sneak;
+    registerSignal(roomId, strength, { type: "scan", lastKnownChance: 0.12 });
   }
   updateUI();
 }
@@ -1391,14 +1401,16 @@ function handleAction(action) {
 
 function useDevice(type) {
   const profile = getNightProfile();
-  const device = deviceTypes[type];
   const history = state.usedDevices.get(type) || [];
   history.push(state.turn);
   state.usedDevices.set(type, history.slice(-4));
 
-  if (deviceLearned(type, profile.deviceFatigue)) {
-    state.robotFocus = null;
-    return;
+  const fatigueLevel = deviceLearned(type, profile.deviceFatigue);
+  const strengthMultiplier = fatigueLevel === 2 ? 0.35 : fatigueLevel === 1 ? 0.6 : 1;
+  const durationPenalty = fatigueLevel > 0 ? 1 : 0;
+  if (fatigueLevel > 0 && state.turn - state.lastDeviceFatigueTick > 3) {
+    pushStatus("It ignores the familiar signal.", 3);
+    state.lastDeviceFatigueTick = state.turn;
   }
 
   const availableRooms = rooms
@@ -1408,27 +1420,36 @@ function useDevice(type) {
   state.robotFocus = diversion;
   applyRobotPause("distract");
   if (type === "scan") {
-    registerSignal(state.playerRoom, 0.3 * profile.signalStrength.device);
+    registerSignal(state.playerRoom, 0.3 * profile.signalStrength.device * strengthMultiplier);
   }
   if (type === "noise") {
     state.noiseLures = Math.max(0, state.noiseLures - 1);
-    registerSignal(diversion, 0.4 * profile.signalStrength.device, {
+    registerSignal(diversion, 0.4 * profile.signalStrength.device * strengthMultiplier, {
       type: "noise",
       forceLastKnown: true,
       bleed: true,
     });
-    scheduleSignal(diversion, 0.5 * profile.signalStrength.device, 2, {
+    const decoyDelay = Math.max(1, 2 - durationPenalty);
+    scheduleSignal(diversion, 0.5 * profile.signalStrength.device * strengthMultiplier, decoyDelay, {
       type: "decoy",
       forceLastKnown: true,
       bleed: true,
     });
+    const lingerDuration = Math.max(0, 2 - durationPenalty);
+    if (lingerDuration > 0) {
+      state.persistentSignals.set(diversion, lingerDuration);
+    }
   }
 }
 
 function deviceLearned(type, fatigue = 1) {
   const history = state.usedDevices.get(type) || [];
   const recentUses = history.filter((turn) => state.turn - turn <= 4);
-  return recentUses.length >= Math.ceil(3 * fatigue);
+  const partial = Math.ceil(2 * fatigue);
+  const full = Math.ceil(3 * fatigue);
+  if (recentUses.length >= full) return 2;
+  if (recentUses.length >= partial) return 1;
+  return 0;
 }
 
 function isRobotTraveling() {
@@ -1682,6 +1703,9 @@ function resetGame() {
   state.signalDecayBoost.clear();
   state.lastStrongSignalTick = -999;
   state.lastStrongSignalRoom = null;
+  state.lastKnownTick = -999;
+  state.lastTrailBreakTick = -999;
+  state.lastDeviceFatigueTick = -999;
   state.sneakStepsWithoutSignal = 0;
   state.pendingSignals = [];
   state.persistentSignals.clear();
@@ -1745,6 +1769,7 @@ function registerSignal(roomId, strength, options = {}) {
   const updateChance = (lastKnownChance ?? next) * profile.lastKnownChance;
   if (forceLastKnown || Math.random() < updateChance) {
     state.lastKnownPlayerRoom = roomId;
+    state.lastKnownTick = state.turn;
     state.trailTurns = profile.trailStaleness;
   }
   if (scaledStrength >= 0.6 || next >= 0.7) {
@@ -1795,6 +1820,25 @@ function decaySignals() {
   });
 }
 
+function maybeExpireLastKnown() {
+  if (state.lastKnownPlayerRoom === null) return;
+  if (state.trailTurns > 0) return;
+  const profile = getNightProfile();
+  const strongCold = state.turn - state.lastStrongSignalTick > profile.trailStaleness + 1;
+  const staleLastKnown = state.turn - state.lastKnownTick > profile.trailStaleness + 2;
+  if (!strongCold || !staleLastKnown) return;
+  state.lastKnownPlayerRoom = null;
+  state.lastKnownTick = -999;
+  state.robotTargetConfidence = Math.max(0, state.robotTargetConfidence - 0.2);
+  if (state.turn - state.lastTrailBreakTick > 4) {
+    pushStatus("The pressure fades.", 3);
+    state.lastTrailBreakTick = state.turn;
+  }
+  if (state.currentNight <= 3) {
+    state.threat = Math.max(1, state.threat - 0.15);
+  }
+}
+
 function applyRobotPause(reason) {
   if (state.robotDisabled) return;
   const threatFactor = clamp(1 - (state.threat - 1) * 0.15, 0.4, 1);
@@ -1808,7 +1852,6 @@ function applyRobotPause(reason) {
 }
 
 function markRoomChecked(roomId) {
-  state.checkedRooms.add(roomId);
   state.robotCheckedCooldown.set(roomId, 6);
   state.robotPresenceHeat.set(roomId, 1);
 }
@@ -1826,6 +1869,10 @@ function buildSweepQueue(roomId) {
     count = Math.min(available.length, profile.sweepDepth.mid);
   } else {
     count = Math.min(available.length, profile.sweepDepth.low);
+  }
+  const noRecentSignal = state.turn - state.lastStrongSignalTick > profile.trailStaleness + 2;
+  if (state.threat >= 4.8 && state.robotTargetConfidence >= 0.75 && noRecentSignal) {
+    count = Math.max(1, count - 1);
   }
   const shuffled = [...available].sort(() => Math.random() - 0.5);
   state.robotSweepQueue = shuffled.slice(0, count);
@@ -1852,13 +1899,13 @@ function pickRobotTarget() {
   const signals = Array.from(state.roomSignals.entries()).sort((a, b) => b[1] - a[1]);
   for (const [roomId, value] of signals) {
     if (value <= 0.2) continue;
-    if (!state.checkedRooms.has(roomId)) return roomId;
+    if (!state.robotCheckedCooldown.has(roomId)) return roomId;
     if (value >= 0.7) return roomId;
   }
 
   if (state.trailTurns > 0 && state.lastKnownPlayerRoom !== null) {
     const confidence = getRoomConfidence(state.lastKnownPlayerRoom);
-    if (!state.checkedRooms.has(state.lastKnownPlayerRoom) || confidence >= 0.7) {
+    if (!state.robotCheckedCooldown.has(state.lastKnownPlayerRoom) || confidence >= 0.7) {
       return state.lastKnownPlayerRoom;
     }
   }
@@ -2368,6 +2415,13 @@ function craftItem() {
   if (state.requiredEscapeSchematic === craftable.name) {
     state.escapeReady = true;
   }
+  const profile = getNightProfile();
+  registerSignal(
+    state.playerRoom,
+    0.28 * profile.signalStrength.device,
+    { type: "build", lastKnownChance: 0.18, bleed: false }
+  );
+  applyRoomStress(state.playerRoom);
   updateUI();
 }
 
@@ -2390,6 +2444,7 @@ function startGameLoop() {
     processPendingSignals();
     tickPersistentSignals();
     decaySignals();
+    maybeExpireLastKnown();
     advanceRobot();
     checkThreat();
     tickRobotMemory();
@@ -2494,10 +2549,15 @@ function tickPlayerTravel() {
       state.sneakStepsWithoutSignal = 0;
     }
     if (state.sneakStepsWithoutSignal >= profile.sneakBreakRooms) {
+      const hadTrail = state.trailTurns > 0;
       state.trailTurns = Math.max(0, state.trailTurns - 1);
       if (state.lastKnownPlayerRoom !== null) {
         const currentSignal = state.roomSignals.get(state.lastKnownPlayerRoom) || 0;
         state.roomSignals.set(state.lastKnownPlayerRoom, Math.max(0, currentSignal - 0.2));
+      }
+      if (hadTrail && state.trailTurns === 0 && state.turn - state.lastTrailBreakTick > 4) {
+        pushStatus("The echoes die out.", 3);
+        state.lastTrailBreakTick = state.turn;
       }
       state.sneakStepsWithoutSignal = 0;
     }
@@ -2561,18 +2621,6 @@ function tickRobotTravel() {
     }
   } else {
     startRobotTravelStep();
-  }
-}
-
-function tickDormantState() {
-  if (state.robotDisabled) return;
-  if (state.robotDormant > 0) return;
-  if (Math.random() < 0.05) {
-    state.robotDormant = Math.floor(Math.random() * 76) + 25;
-    state.robotLinger = 0;
-    state.robotSearchTurns = 0;
-    state.robotSearchSpot = null;
-    state.robotLookTurns = 0;
   }
 }
 
