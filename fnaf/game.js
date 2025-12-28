@@ -211,6 +211,19 @@ const TICK_MS = 1200;
 const DEBUG_AI = false;
 const DEBUG_UI = true;
 
+const NIGHT_UNLOCKS = {
+  1: { devices: false, crafting: false, slowRewire: false, doorJams: false, showMap: true },
+  2: { devices: true, crafting: false, slowRewire: false, doorJams: false, showMap: true },
+  3: { devices: true, crafting: false, slowRewire: true, doorJams: false, showMap: true },
+  4: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
+  5: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
+  6: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
+  7: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
+  8: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
+  9: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
+  10: { devices: true, crafting: true, slowRewire: true, doorJams: true, showMap: true },
+};
+
 const MISSION_TYPES = {
   ESCAPE: "escape",
   STABILIZE: "stabilize",
@@ -472,6 +485,7 @@ const state = {
   dataFragmentsFound: new Set(),
   dayCount: 1,
   baseDate: new Date("2326-12-25T00:00:00Z"),
+  unlocks: {},
   isAlive: true,
   hasEscaped: false,
   robotAlertQueued: false,
@@ -570,6 +584,7 @@ let gameLoopId = null;
 
 function init() {
   state.nightProfile = getNightProfile();
+  state.unlocks = getUnlocks();
   renderMap();
   assignRoomFinds();
   setupMissionForNight();
@@ -678,6 +693,14 @@ function updateUI() {
   updateMoveButtons();
   dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
   dom.tasksText.textContent = getObjectiveText();
+  if (dom.useBtn) {
+    dom.useBtn.classList.toggle("hidden", !state.unlocks.devices);
+    dom.useBtn.disabled = !state.unlocks.devices;
+  }
+  if (dom.mapBtn) {
+    dom.mapBtn.classList.toggle("hidden", !state.unlocks.showMap);
+    dom.mapBtn.disabled = !state.unlocks.showMap;
+  }
   updateDebugUI();
 }
 
@@ -714,6 +737,15 @@ function updateInventoryList() {
 
 function updateSchematicsInventory() {
   dom.schematicInventory.innerHTML = "";
+  if (!state.unlocks.crafting) {
+    const locked = document.createElement("li");
+    const unlockNight = getNextUnlockNight("crafting");
+    locked.textContent = unlockNight
+      ? `Crafting locked until Night ${unlockNight}.`
+      : "Crafting locked.";
+    dom.schematicInventory.appendChild(locked);
+    return;
+  }
   if (state.foundSchematics.size === 0) {
     const empty = document.createElement("li");
     empty.textContent = "No schematics found.";
@@ -738,6 +770,15 @@ function updateSchematicsInventory() {
 
 function updateSchematicList() {
   dom.schematicList.innerHTML = "";
+  if (!state.unlocks.crafting) {
+    const locked = document.createElement("li");
+    const unlockNight = getNextUnlockNight("crafting");
+    locked.textContent = unlockNight
+      ? `Crafting locked until Night ${unlockNight}.`
+      : "Crafting locked.";
+    dom.schematicList.appendChild(locked);
+    return;
+  }
   const selected = getSelectedSchematic();
   if (!selected) {
     const empty = document.createElement("li");
@@ -765,6 +806,14 @@ function updateSchematicList() {
 }
 
 function updateBuildButton() {
+  if (!state.unlocks.crafting) {
+    const unlockNight = getNextUnlockNight("crafting");
+    dom.buildBtn.disabled = true;
+    dom.buildBtn.textContent = unlockNight
+      ? `Crafting locked until Night ${unlockNight}`
+      : "Crafting locked";
+    return;
+  }
   const selected = getSelectedSchematic();
   if (!selected) {
     dom.buildBtn.disabled = true;
@@ -889,6 +938,44 @@ function getNightProfile() {
   return NIGHT_PROFILES[state.currentNight] ?? NIGHT_PROFILES[1];
 }
 
+function getUnlocks() {
+  return NIGHT_UNLOCKS[state.currentNight] ?? {
+    devices: true,
+    crafting: true,
+    slowRewire: true,
+    doorJams: true,
+    showMap: true,
+  };
+}
+
+function getNextUnlockNight(feature) {
+  const nights = Object.keys(NIGHT_UNLOCKS)
+    .map((value) => Number(value))
+    .sort((a, b) => a - b);
+  for (const night of nights) {
+    const unlocks = NIGHT_UNLOCKS[night];
+    if (unlocks?.[feature]) return night;
+  }
+  return null;
+}
+
+function listNewUnlockMessages(prevUnlocks, nextUnlocks) {
+  const messages = [];
+  const labelMap = {
+    devices: "Devices",
+    crafting: "Crafting",
+    slowRewire: "Slow Rewire",
+    doorJams: "Door Jams",
+    showMap: "Map Access",
+  };
+  Object.keys(labelMap).forEach((key) => {
+    if (!prevUnlocks?.[key] && nextUnlocks?.[key]) {
+      messages.push(`Night ${state.currentNight} unlocked: ${labelMap[key]}.`);
+    }
+  });
+  return messages;
+}
+
 function weightedPick(options) {
   const total = options.reduce((sum, option) => sum + option.weight, 0);
   let roll = Math.random() * total;
@@ -941,6 +1028,7 @@ function setCurrentNight(night) {
   const next = clamp(Math.floor(night), 1, 10);
   state.currentNight = next;
   state.nightProfile = getNightProfile();
+  state.unlocks = getUnlocks();
   if (DEBUG_UI) {
     // Reset mission state for coherent debug night swaps.
     setupMissionForNight();
@@ -948,6 +1036,7 @@ function setCurrentNight(night) {
     state.requiredEscapeSchematic = null;
     state.selectedSchematic = null;
     state.escapeConsoleInspected = false;
+    state.devicesUnlocked = state.unlocks.devices;
   }
   updateNextNightButton();
   updateUI();
@@ -1216,7 +1305,8 @@ function updateRoomActions() {
     });
   }
 
-  const canRewire = !state.hidden &&
+  const canRewire = state.unlocks.slowRewire &&
+    !state.hidden &&
     state.lastMoveType !== "run" &&
     (hasPart("Resistors") || hasPart("Capacitors"));
   if (canRewire) {
@@ -1593,6 +1683,10 @@ function collectItem(roomId) {
 
 function collectSchematic(roomId) {
   if (state.hidden) return;
+  if (!state.unlocks.crafting && state.missionType !== MISSION_TYPES.DATA) {
+    pushStatus("You note the diagram, but you can't assemble it yet.", 3);
+    return;
+  }
   const room = rooms[roomId];
   if (room.schematic && !state.foundSchematics.has(room.schematic)) {
     state.foundSchematics.add(room.schematic);
@@ -1652,6 +1746,14 @@ function handleAction(action) {
   }
 
   if (action === "scan" || action === "noise") {
+    if (!state.unlocks.devices) {
+      const unlockNight = getNextUnlockNight("devices");
+      pushStatus(
+        unlockNight ? `Devices unlock on Night ${unlockNight}.` : "Devices locked.",
+        3
+      );
+      return;
+    }
     if (action === "scan" && state.hidden && state.robotRoom === state.playerRoom) {
       triggerDeath();
       return;
@@ -1929,13 +2031,19 @@ function updateNextNightButton() {
 }
 
 function advanceNight() {
+  const prevUnlocks = state.unlocks;
   if (state.currentNight >= 10) {
     state.currentNight = 1;
   } else {
     state.currentNight = Math.min(10, state.currentNight + 1);
   }
   state.nightProfile = getNightProfile();
+  state.unlocks = getUnlocks();
   resetGame();
+  const messages = listNewUnlockMessages(prevUnlocks, state.unlocks);
+  if (messages.length > 0) {
+    showObjectiveModal(messages.join(" "));
+  }
 }
 
 function resetGame() {
@@ -1960,7 +2068,7 @@ function resetGame() {
   state.requiredEscapeSchematic = null;
   state.escapeReady = false;
   state.escapeConsoleInspected = false;
-  state.devicesUnlocked = true;
+  state.devicesUnlocked = state.unlocks.devices;
   state.noiseLures = 3;
   state.roomSignals.clear();
   state.checkedRooms.clear();
@@ -1982,6 +2090,7 @@ function resetGame() {
   state.robotMood = null;
   state.robotMoodTicks = 0;
   state.nightProfile = getNightProfile();
+  state.unlocks = getUnlocks();
   state.completedNight = null;
   state.sawPlayerHide = false;
   state.robotDisabled = true;
@@ -2026,6 +2135,7 @@ function resetGame() {
   state.scanFocusRoom = null;
   state.hiddenTurns = 0;
   state.lastMoveType = "sneak";
+  state.unlocks = getUnlocks();
   state.ohShitTriggered = false;
   state.runMoments = [];
   state.runSummary = "";
@@ -2907,8 +3017,24 @@ function craftItem() {
   if (!state.isAlive || state.hasEscaped) return;
   const craftable = getSelectedSchematic();
   if (!craftable) return;
+  if (!state.unlocks.crafting) {
+    const unlockNight = getNextUnlockNight("crafting");
+    pushStatus(
+      unlockNight ? `Crafting locked until Night ${unlockNight}.` : "Crafting locked.",
+      3
+    );
+    return;
+  }
   if (!state.foundSchematics.has(craftable.name)) return;
   if (craftable.name !== "Door Jam" && state.craftedItems.has(craftable.name)) return;
+  if (craftable.name === "Door Jam" && !state.unlocks.doorJams) {
+    const unlockNight = getNextUnlockNight("doorJams");
+    pushStatus(
+      unlockNight ? `Door jams unlock on Night ${unlockNight}.` : "Door jams locked.",
+      3
+    );
+    return;
+  }
   if (!craftable.parts.every((part) => state.inventory.has(part))) return;
   craftable.parts.forEach((part) => state.inventory.delete(part));
   if (craftable.name === "Door Jam") {
@@ -2972,13 +3098,13 @@ function startGameLoop() {
 function updateUseList() {
   dom.useList.innerHTML = "";
   const options = [];
-  if (state.devicesUnlocked) {
+  if (state.unlocks.devices) {
     options.push(
       { label: "Pulse Scanner (∞)", action: () => handleAction("scan"), help: "Pulse Scanner" },
       { label: `Noise Lure (${state.noiseLures})`, action: () => handleAction("noise"), help: "Noise Lure" }
     );
   }
-  if (state.doorJams > 0) {
+  if (state.unlocks.doorJams && state.doorJams > 0) {
     const adjacent = roomConnections[state.playerRoom] || [];
     adjacent.forEach((roomId) => {
       const disallowed = rooms[roomId].isExit || rooms[state.playerRoom].isExit;
@@ -2999,7 +3125,12 @@ function updateUseList() {
 
   if (options.length === 0) {
     const empty = document.createElement("li");
-    empty.textContent = "No usable items.";
+    const unlockNight = getNextUnlockNight("devices");
+    empty.textContent = state.unlocks.devices
+      ? "No usable items."
+      : unlockNight
+        ? `Devices locked until Night ${unlockNight}.`
+        : "Devices locked.";
     dom.useList.appendChild(empty);
     return;
   }
