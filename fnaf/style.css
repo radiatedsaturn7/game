@@ -716,6 +716,12 @@ button.primary {
   color: #ffb4b4;
 }
 
+.run-summary {
+  margin-top: 16px;
+  font-size: 0.9rem;
+  color: #cbd6f3;
+}
+
 @keyframes glitch {
   0% {
     transform: translate(0, 0);

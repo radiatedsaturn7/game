@@ -261,6 +261,8 @@ const state = {
   robotTargetConfidence: 0,
   robotSweepCooldown: 0,
   robotPredictionCooldown: 0,
+  robotMood: null,
+  robotMoodTicks: 0,
   dayCount: 1,
   baseDate: new Date("2326-12-25T00:00:00Z"),
   isAlive: true,
@@ -274,6 +276,13 @@ const state = {
   lastStrongSignalTick: -999,
   lastStrongSignalRoom: null,
   sneakStepsWithoutSignal: 0,
+  pendingSignals: [],
+  persistentSignals: new Map(),
+  roomNoisePenalty: new Map(),
+  burnedHidingSpots: new Set(),
+  ohShitTriggered: false,
+  runMoments: [],
+  runSummary: "",
 };
 
 let travelAnimationId = null;
@@ -330,6 +339,8 @@ const dom = {
   victoryScreen: document.getElementById("victoryScreen"),
   restartBtn: document.getElementById("restartBtn"),
   roomStatus: document.querySelector(".room-status"),
+  deathSummary: document.getElementById("deathSummary"),
+  victorySummary: document.getElementById("victorySummary"),
 };
 
 let gameLoopId = null;
@@ -576,6 +587,24 @@ function setRobotMode(mode) {
   }
 }
 
+function setRobotMood(mood, ticks) {
+  if (!mood || ticks <= 0) return;
+  if (state.robotMood === mood) {
+    state.robotMoodTicks = Math.max(state.robotMoodTicks, ticks);
+    return;
+  }
+  state.robotMood = mood;
+  state.robotMoodTicks = ticks;
+  if (mood === "irritated") {
+    pushStatus("The robot grows impatient.", 3);
+  } else if (mood === "cautious") {
+    pushStatus("Its pace slows. It seems unsure.", 3);
+  } else if (mood === "confident") {
+    pushStatus("It moves with renewed confidence.", 3);
+  }
+  logDebug("robot-mood", { mood, ticks });
+}
+
 function updatePlayerTrail(roomId) {
   state.playerTrail.push(roomId);
   if (state.playerTrail.length > 3) {
@@ -590,6 +619,86 @@ function clamp(value, min, max) {
 function logDebug(event, payload) {
   if (!DEBUG_AI) return;
   console.log(`[AI] ${event}`, payload);
+}
+
+function scheduleSignal(roomId, strength, delay, options = {}) {
+  state.pendingSignals.push({
+    roomId,
+    strength,
+    delay,
+    options,
+  });
+}
+
+function processPendingSignals() {
+  if (state.pendingSignals.length === 0) return;
+  state.pendingSignals.forEach((entry) => {
+    entry.delay -= 1;
+  });
+  const ready = state.pendingSignals.filter((entry) => entry.delay <= 0);
+  state.pendingSignals = state.pendingSignals.filter((entry) => entry.delay > 0);
+  ready.forEach((entry) => {
+    registerSignal(entry.roomId, entry.strength, entry.options);
+  });
+}
+
+function tickPersistentSignals() {
+  state.persistentSignals.forEach((value, roomId) => {
+    registerSignal(roomId, 0.32, { type: "linger", lastKnownChance: 0.2 });
+    const next = value - 1;
+    if (next <= 0) {
+      state.persistentSignals.delete(roomId);
+    } else {
+      state.persistentSignals.set(roomId, next);
+    }
+  });
+}
+
+function applyRoomStress(roomId) {
+  const current = state.roomNoisePenalty.get(roomId) || 0;
+  const next = clamp(current + 0.05, 0, 0.2);
+  state.roomNoisePenalty.set(roomId, next);
+}
+
+function getRoomNoiseRisk(roomId) {
+  const base = rooms[roomId].noiseRisk ?? 0.2;
+  const penalty = state.roomNoisePenalty.get(roomId) || 0;
+  return clamp(base + penalty, 0, 0.6);
+}
+
+function triggerOhShit(roomId) {
+  if (state.ohShitTriggered || !state.escapeConsoleInspected) return;
+  if (rooms[roomId].isExit) return;
+  state.ohShitTriggered = true;
+  state.robotFocus = roomId;
+  registerSignal(roomId, 0.9, { type: "surge", forceLastKnown: true, bleed: true });
+  state.persistentSignals.set(roomId, 3);
+  showObjectiveModal("Power surge! The room erupts in noise.");
+  state.runMoments.push("A sudden power surge forced you into the open.");
+}
+
+function buildRunSummary(outcome) {
+  const lines = [];
+  if (outcome === "win") {
+    lines.push("You escaped the factory, but the machine kept learning.");
+  } else {
+    lines.push(`You were caught in ${rooms[state.playerRoom].name}.`);
+  }
+  if (state.learnedHidingSpots.size > 0) {
+    lines.push("The robot adapted to your hiding habits.");
+  }
+  if (state.roomNoisePenalty.size > 0) {
+    lines.push("The facility grew louder with every search.");
+  }
+  if (state.ohShitTriggered) {
+    lines.push("A power surge blew your cover at the worst time.");
+  }
+  state.runMoments.forEach((moment) => {
+    if (!lines.includes(moment)) {
+      lines.push(moment);
+    }
+  });
+  return lines.join(" ");
 }
 
 function tickStatus() {
@@ -615,6 +724,12 @@ function tickRobotMemory() {
   }
   if (state.robotPredictionCooldown > 0) {
     state.robotPredictionCooldown -= 1;
+  }
+  if (state.robotMoodTicks > 0) {
+    state.robotMoodTicks -= 1;
+    if (state.robotMoodTicks <= 0) {
+      state.robotMood = null;
+    }
   }
   state.robotPresenceHeat.forEach((value, roomId) => {
     const next = Math.max(0, value - 0.08);
@@ -766,11 +881,12 @@ function updateRoomActions() {
   }
 
   room.hideSpots.forEach((spot) => {
+    const burned = state.burnedHidingSpots.has(`${room.id}:${spot}`);
     actions.push({
       label: `Hide: ${spot}`,
       onClick: () => setHidden(spot),
       disabled: blocked || (state.hidden && state.hiddenSpot === spot),
-      risk: "Quiet",
+      risk: burned ? "Risky" : "Quiet",
     });
   });
 
@@ -952,8 +1068,18 @@ function startPlayerTravelStep() {
 
 function startRobotTravelStep() {
   const ticks = Math.floor(Math.random() * 2) + 2;
+  let adjusted = ticks;
+  if (state.robotMood === "irritated") {
+    adjusted = Math.max(1, ticks - 1);
+  }
+  if (state.robotMood === "cautious") {
+    adjusted = ticks + 1;
+  }
+  if (state.robotMood === "confident") {
+    adjusted = Math.max(1, ticks - 0.5);
+  }
   state.robotTravelStepStart = Date.now();
-  state.robotTravelStepDuration = ticks * TICK_MS;
+  state.robotTravelStepDuration = adjusted * TICK_MS;
 }
 
 function moveSelected(isRun) {
@@ -1002,6 +1128,12 @@ function setHidden(spot) {
   if (nextCount >= 3 && !state.learnedHidingSpots.has(state.playerRoom)) {
     state.learnedHidingSpots.add(state.playerRoom);
     pushStatus("The robot hesitates… then checks the console.", 4);
+    const burnedSpot = `${state.playerRoom}:${spot}`;
+    state.burnedHidingSpots.add(burnedSpot);
+    state.runMoments.push("The robot adapted to your hiding habits.");
+  }
+  if (state.burnedHidingSpots.has(`${state.playerRoom}:${spot}`)) {
+    registerSignal(state.playerRoom, 0.25, { type: "hide", lastKnownChance: 0.2 });
   }
   registerSignal(state.playerRoom, 0.2);
   updateUI();
@@ -1049,7 +1181,8 @@ function useDevice(type) {
   }
   if (type === "noise") {
     state.noiseLures = Math.max(0, state.noiseLures - 1);
-    registerSignal(diversion, 0.4);
+    registerSignal(diversion, 0.4, { type: "noise", forceLastKnown: true, bleed: true });
+    scheduleSignal(diversion, 0.5, 2, { type: "decoy", forceLastKnown: true, bleed: true });
   }
 }
 
@@ -1097,6 +1230,8 @@ function advanceRobot() {
     }
     if (state.robotSearchTurns === 0) {
       applyRobotPause("failed");
+      setRobotMood("irritated", 4);
+      applyRoomStress(state.robotRoom);
     }
     setRobotMode("search");
     return;
@@ -1112,8 +1247,11 @@ function advanceRobot() {
     return;
   }
 
-  const hasRecentStrongSignal = state.turn - state.lastStrongSignalTick <= 4;
-  const commitAllowed = state.robotTargetConfidence >= 0.7 && hasRecentStrongSignal;
+  const strongWindow = state.robotMood === "confident" ? 5 : 4;
+  const hasRecentStrongSignal = state.turn - state.lastStrongSignalTick <= strongWindow;
+  const confidenceThreshold = state.robotMood === "irritated" ? 0.65 : 0.7;
+  const cautiousThreshold = state.robotMood === "cautious" ? 0.8 : confidenceThreshold;
+  const commitAllowed = state.robotTargetConfidence >= cautiousThreshold && hasRecentStrongSignal;
   if (state.robotSweepQueue.length > 0) {
     const nextSweep = state.robotSweepQueue.shift();
     if (nextSweep !== undefined) {
@@ -1194,6 +1332,7 @@ function checkThreat() {
       state.robotLinger = Math.floor(Math.random() * 3) + 1;
     }
     applyRobotPause("failed");
+    setRobotMood("confident", 4);
   }
 }
 
@@ -1209,12 +1348,15 @@ function attemptKill() {
   } else if (Math.random() < 0.4) {
     state.robotLinger = Math.floor(Math.random() * 2) + 1;
     applyRobotPause("failed");
+    setRobotMood("confident", 4);
   }
 }
 
 function triggerDeath() {
   state.isAlive = false;
   closeMap();
+  state.runSummary = buildRunSummary("loss");
+  dom.deathSummary.textContent = state.runSummary;
   dom.deathScreen.classList.add("active");
   dom.deathScreen.setAttribute("aria-hidden", "false");
 }
@@ -1225,6 +1367,8 @@ function buildEscape() {
   state.hasEscaped = true;
   state.dayCount += 1;
   state.threat = Math.min(5, state.threat + 0.4);
+  state.runSummary = buildRunSummary("win");
+  dom.victorySummary.textContent = state.runSummary;
   dom.victoryScreen.classList.add("active");
   dom.victoryScreen.setAttribute("aria-hidden", "false");
 }
@@ -1270,6 +1414,8 @@ function resetGame() {
   state.robotTargetConfidence = 0;
   state.robotSweepCooldown = 0;
   state.robotPredictionCooldown = 0;
+  state.robotMood = null;
+  state.robotMoodTicks = 0;
   state.sawPlayerHide = false;
   state.robotDisabled = true;
   state.alertTicks = 0;
@@ -1293,11 +1439,20 @@ function resetGame() {
   state.lastStrongSignalTick = -999;
   state.lastStrongSignalRoom = null;
   state.sneakStepsWithoutSignal = 0;
+  state.pendingSignals = [];
+  state.persistentSignals.clear();
+  state.roomNoisePenalty.clear();
+  state.burnedHidingSpots.clear();
+  state.ohShitTriggered = false;
+  state.runMoments = [];
+  state.runSummary = "";
   assignRoomFinds();
   dom.deathScreen.classList.remove("active");
   dom.deathScreen.setAttribute("aria-hidden", "true");
+  dom.deathSummary.textContent = "";
   dom.victoryScreen.classList.remove("active");
   dom.victoryScreen.setAttribute("aria-hidden", "true");
+  dom.victorySummary.textContent = "";
   dom.robotAlertModal.classList.remove("active");
   dom.robotAlertModal.setAttribute("aria-hidden", "true");
   updateUI();
@@ -1323,7 +1478,12 @@ function formatDate(baseDate, dayCount) {
 }
 
 function registerSignal(roomId, strength, options = {}) {
-  const { type = "ambient", forceLastKnown = false, lastKnownChance = null } = options;
+  const {
+    type = "ambient",
+    forceLastKnown = false,
+    lastKnownChance = null,
+    bleed = false,
+  } = options;
   const current = state.roomSignals.get(roomId) || 0;
   const next = Math.min(1, current + strength);
   state.roomSignals.set(roomId, next);
@@ -1350,6 +1510,12 @@ function registerSignal(roomId, strength, options = {}) {
     lastKnown: state.lastKnownPlayerRoom,
     forceLastKnown,
   });
+  if (bleed) {
+    const neighbors = roomConnections[roomId] || [];
+    neighbors.forEach((neighbor) => {
+      scheduleSignal(neighbor, strength * 0.35, 1, { type: "bleed", lastKnownChance: 0.1 });
+    });
+  }
   if (roomId !== state.robotRoom && next >= 0.4) {
     interruptRobotTask(roomId);
   }
@@ -1374,6 +1540,7 @@ function decaySignals() {
     }
     if (roomId === state.lastKnownPlayerRoom && value >= 0.55 && next < 0.55) {
       applyRobotPause("lost");
+      setRobotMood("cautious", 4);
     }
   });
 }
@@ -1453,7 +1620,11 @@ function pickRobotTarget() {
   ) {
     const confidence = getRoomConfidence(state.lastKnownPlayerRoom);
     const lastSignal = state.roomSignals.get(state.lastKnownPlayerRoom) || 0;
-    if (confidence >= 0.7 && lastSignal >= 0.65 && Math.random() < 0.25) {
+    const moodBoost = state.robotMood === "confident" ? 0.1 : 0;
+    const moodPenalty = state.robotMood === "cautious" ? -0.1 : 0;
+    const chance = clamp(0.25 + moodBoost + moodPenalty, 0.1, 0.45);
+    const signalThreshold = state.robotMood === "cautious" ? 0.75 : 0.65;
+    if (confidence >= 0.7 && lastSignal >= signalThreshold && Math.random() < chance) {
       state.robotPredictionCooldown = 5;
       logDebug("predict", { predicted, confidence, lastSignal });
       return predicted;
@@ -1482,7 +1653,8 @@ function pickSearchSpot() {
 function triggerSiren(roomId) {
   if (!state.isAlive || state.hasEscaped) return;
   state.robotFocus = roomId;
-  registerSignal(roomId, 0.6);
+  registerSignal(roomId, 0.6, { type: "siren", forceLastKnown: true, bleed: true });
+  state.persistentSignals.set(roomId, 4);
   state.turn += 1;
   updateUI();
 }
@@ -1955,6 +2127,8 @@ function startGameLoop() {
     tickStatus();
     tickPlayerTravel();
     tickRobotTravel();
+    processPendingSignals();
+    tickPersistentSignals();
     decaySignals();
     advanceRobot();
     checkThreat();
@@ -2039,12 +2213,12 @@ function tickPlayerTravel() {
   const isRun = state.playerTravelMode === "run";
   if (isRun) {
     registerSignal(nextRoom, 0.95, { type: "run", forceLastKnown: true });
-    const noiseBoost = rooms[nextRoom].noiseRisk ?? 0.2;
+    const noiseBoost = getRoomNoiseRisk(nextRoom);
     registerSignal(nextRoom, Math.max(0.35, noiseBoost), { type: "run", forceLastKnown: true });
     state.sneakStepsWithoutSignal = 0;
   } else {
     const base = 0.25;
-    const noiseBoost = rooms[nextRoom].noiseRisk ?? 0.2;
+    const noiseBoost = getRoomNoiseRisk(nextRoom);
     const strength = Math.min(0.4, base + noiseBoost * 0.2);
     registerSignal(nextRoom, strength, { type: "sneak", lastKnownChance: strength * 0.5 });
     if (strength < 0.35) {
@@ -2061,6 +2235,7 @@ function tickPlayerTravel() {
       state.sneakStepsWithoutSignal = 0;
     }
   }
+  triggerOhShit(nextRoom);
   state.turn += 1;
   logDebug("player-move", {
     room: nextRoom,
