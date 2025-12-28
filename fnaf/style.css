@@ -348,6 +348,12 @@ main {
   stroke-dasharray: 6 6;
 }
 
+.map-link.edge-jammed {
+  stroke: rgba(230, 236, 255, 0.85);
+  stroke-width: 3;
+  stroke-dasharray: 3 4;
+}
+
 .map-travel {
   stroke-width: 3;
   stroke-linecap: round;
@@ -385,6 +391,17 @@ main {
   font-size: 12px;
   text-anchor: middle;
   pointer-events: none;
+}
+
+.map-jam {
+  fill: rgba(235, 240, 255, 0.9);
+  font-size: 10px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.map-jam.active {
+  opacity: 0.9;
 }
 
 .map-node .map-poi {

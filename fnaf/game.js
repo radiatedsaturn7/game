@@ -150,6 +150,7 @@ const craftableItems = [
   { name: "Signal Scrambler", parts: ["Capacitors", "Copper Wire"] },
   { name: "Motion Dampener", parts: ["Resistors", "Servo Motor"] },
   { name: "Override Key", parts: ["Power Cell", "Microcontroller"] },
+  { name: "Door Jam", parts: ["Resistors", "Copper Wire"] },
 ];
 
 const componentDescriptions = {
@@ -162,6 +163,7 @@ const componentDescriptions = {
   "Signal Scrambler": "Jams the robot's sensors and clears accumulated signals.",
   "Motion Dampener": "Buys time by slowing the robot's movement for a short while.",
   "Override Key": "Overrides local locks and reduces the robot's alertness.",
+  "Door Jam": "Temporarily wedges a nearby door to slow pursuit.",
   "Pulse Scanner": "Pings the area to reveal robot attention and nearby threats.",
   "Noise Lure": "Creates a loud distraction to pull the robot off your trail.",
 };
@@ -460,6 +462,8 @@ const state = {
   persistentSignals: new Map(),
   roomNoisePenalty: new Map(),
   burnedHidingSpots: new Set(),
+  jammedEdges: new Map(),
+  doorJams: 1,
   ohShitTriggered: false,
   runMoments: [],
   runSummary: "",
@@ -834,6 +838,7 @@ function setCurrentNight(night) {
   const next = clamp(Math.floor(night), 1, 10);
   state.currentNight = next;
   state.nightProfile = getNightProfile();
+  updateNextNightButton();
   updateUI();
   pushStatus(`Night ${next} protocols loaded.`, 3);
 }
@@ -1166,25 +1171,6 @@ function updateRoomActions() {
   });
 }
 
-function updateAdjacentMoves() {
-  if (!dom.adjacentMoves) return;
-  dom.adjacentMoves.innerHTML = "";
-  const adjacent = roomConnections[state.playerRoom];
-  adjacent.forEach((roomId) => {
-    const button = document.createElement("button");
-    const label = document.createElement("span");
-    label.textContent = `Sneak: ${rooms[roomId].name}`;
-    button.appendChild(label);
-    const risk = document.createElement("span");
-    risk.textContent = "Quiet";
-    risk.classList.add("risk-hint");
-    button.appendChild(risk);
-    button.disabled = isPlayerTraveling();
-    button.addEventListener("click", () => movePlayer(roomId, false));
-    dom.adjacentMoves.appendChild(button);
-  });
-}
-
 function updateDebugUI() {
   const debugLabel = dom.nightSelect?.closest(".night-debug");
   if (debugLabel) {
@@ -1234,7 +1220,9 @@ function updateTravelStatus() {
 
 function revealEscapeSchematic() {
   if (state.requiredEscapeSchematic) return;
-  const options = craftableItems.map((item) => item.name);
+  const options = craftableItems
+    .map((item) => item.name)
+    .filter((name) => name !== "Door Jam");
   state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
   state.selectedSchematic = state.requiredEscapeSchematic;
   state.robotDisabled = false;
@@ -1659,7 +1647,9 @@ function updateNextNightButton() {
 }
 
 function advanceNight() {
-  if (state.currentNight < 10) {
+  if (state.currentNight >= 10) {
+    state.currentNight = 1;
+  } else {
     state.currentNight = Math.min(10, state.currentNight + 1);
   }
   state.nightProfile = getNightProfile();
@@ -1741,6 +1731,8 @@ function resetGame() {
   state.persistentSignals.clear();
   state.roomNoisePenalty.clear();
   state.burnedHidingSpots.clear();
+  state.jammedEdges.clear();
+  state.doorJams = 1;
   state.ohShitTriggered = false;
   state.runMoments = [];
   state.runSummary = "";
@@ -1878,6 +1870,7 @@ function applyRobotPause(reason) {
   if (reason === "failed") base = 3;
   if (reason === "lost") base = 2;
   if (reason === "distract") base = 2;
+  if (reason === "blocked") base = 2;
   state.robotDormant = Math.max(state.robotDormant, Math.ceil(base * threatFactor));
 }
 
@@ -2039,6 +2032,15 @@ function renderMap() {
         "data-edge": `${room.id}-${neighbor}`,
       });
       svg.appendChild(line);
+      const jam = createSvgElement("text", {
+        x: (mapPositions[room.id].x + mapPositions[neighbor].x) / 2,
+        y: (mapPositions[room.id].y + mapPositions[neighbor].y) / 2,
+        class: "map-jam",
+        "data-edge": `${room.id}-${neighbor}`,
+        "text-anchor": "middle",
+        "dominant-baseline": "middle",
+      }, "⛔");
+      svg.appendChild(jam);
       const playerLine = createSvgElement("line", {
         x1: mapPositions[room.id].x,
         y1: mapPositions[room.id].y,
@@ -2146,6 +2148,11 @@ function updateMap() {
     const showPreview = edges.has(edge) && edge !== suppressPreviewEdge;
     line.classList.toggle("active", showPreview);
     line.classList.toggle("robot-plan", robotEdges.has(edge));
+    line.classList.toggle("edge-jammed", state.jammedEdges.has(edge));
+  });
+  dom.floorplanMap.querySelectorAll(".map-jam").forEach((marker) => {
+    const edge = marker.getAttribute("data-edge");
+    marker.classList.toggle("active", state.jammedEdges.has(edge));
   });
   dom.floorplanMap.querySelectorAll(".map-travel").forEach((line) => {
     applyTravelProgress(line, line.getAttribute("data-edge"));
@@ -2313,6 +2320,34 @@ function createSvgElement(tag, attrs, text) {
   return el;
 }
 
+function edgeKey(a, b) {
+  const start = Math.min(a, b);
+  const end = Math.max(a, b);
+  return `${start}-${end}`;
+}
+
+function isEdgeJammed(a, b) {
+  return state.jammedEdges.has(edgeKey(a, b));
+}
+
+function jamEdge(a, b, duration) {
+  const key = edgeKey(a, b);
+  if (state.jammedEdges.has(key)) return false;
+  state.jammedEdges.set(key, duration);
+  return true;
+}
+
+function tickJammedEdges() {
+  state.jammedEdges.forEach((value, key) => {
+    const next = value - 1;
+    if (next <= 0) {
+      state.jammedEdges.delete(key);
+    } else {
+      state.jammedEdges.set(key, next);
+    }
+  });
+}
+
 function getShortestPath(start, target) {
   if (start === target) return [start];
   const queue = [start];
@@ -2323,6 +2358,7 @@ function getShortestPath(start, target) {
     const current = queue.shift();
     if (current === target) break;
     roomConnections[current].forEach((neighbor) => {
+      if (isEdgeJammed(current, neighbor)) return;
       if (!visited.has(neighbor)) {
         visited.add(neighbor);
         parent.set(neighbor, current);
@@ -2351,6 +2387,7 @@ function nextStepToward(start, target) {
     const current = queue.shift();
     if (current === target) break;
     for (const neighbor of roomConnections[current]) {
+      if (isEdgeJammed(current, neighbor)) continue;
       if (!visited.has(neighbor)) {
         visited.add(neighbor);
         parent.set(neighbor, current);
@@ -2474,10 +2511,14 @@ function craftItem() {
   const craftable = getSelectedSchematic();
   if (!craftable) return;
   if (!state.foundSchematics.has(craftable.name)) return;
-  if (state.craftedItems.has(craftable.name)) return;
+  if (craftable.name !== "Door Jam" && state.craftedItems.has(craftable.name)) return;
   if (!craftable.parts.every((part) => state.inventory.has(part))) return;
   craftable.parts.forEach((part) => state.inventory.delete(part));
-  state.craftedItems.add(craftable.name);
+  if (craftable.name === "Door Jam") {
+    state.doorJams += 1;
+  } else {
+    state.craftedItems.add(craftable.name);
+  }
   if (state.requiredEscapeSchematic === craftable.name) {
     state.escapeReady = true;
   }
@@ -2510,6 +2551,7 @@ function startGameLoop() {
     processPendingSignals();
     tickPersistentSignals();
     decaySignals();
+    tickJammedEdges();
     maybeExpireLastKnown();
     advanceRobot();
     checkThreat();
@@ -2527,6 +2569,21 @@ function updateUseList() {
       { label: `Noise Lure (${state.noiseLures})`, action: () => handleAction("noise"), help: "Noise Lure" }
     );
   }
+  if (state.doorJams > 0) {
+    const adjacent = roomConnections[state.playerRoom] || [];
+    adjacent.forEach((roomId) => {
+      const disallowed = rooms[roomId].isExit || rooms[state.playerRoom].isExit;
+      if (disallowed) return;
+      const blocked = isEdgeJammed(state.playerRoom, roomId);
+      const disabled = blocked || isPlayerTraveling();
+      options.push({
+        label: `Jam door to ${rooms[roomId].name} (${state.doorJams})`,
+        action: () => jamDoorTo(roomId),
+        help: "Door Jam",
+        disabled,
+      });
+    });
+  }
   state.craftedItems.forEach((item) => {
     options.push({ label: item, action: () => useCraftedItem(item), help: item });
   });
@@ -2542,6 +2599,9 @@ function updateUseList() {
     const li = document.createElement("li");
     const button = document.createElement("button");
     button.textContent = `Use ${item.label}`;
+    if (item.disabled) {
+      button.disabled = true;
+    }
     button.addEventListener("click", item.action);
     li.appendChild(button);
     const help = document.createElement("button");
@@ -2564,6 +2624,30 @@ function useCraftedItem(name) {
   if (name === "Override Key") {
     state.threat = Math.max(1, state.threat - 1);
   }
+  closeUse();
+  updateUI();
+}
+
+function jamDurationForNight() {
+  if (state.currentNight <= 3) return 5;
+  if (state.currentNight <= 7) return 4;
+  return 3;
+}
+
+function jamDoorTo(roomId) {
+  if (state.doorJams <= 0) return;
+  if (rooms[state.playerRoom].isExit || rooms[roomId].isExit) return;
+  if (isEdgeJammed(state.playerRoom, roomId)) return;
+  const duration = jamDurationForNight();
+  if (!jamEdge(state.playerRoom, roomId, duration)) return;
+  state.doorJams = Math.max(0, state.doorJams - 1);
+  const profile = getNightProfile();
+  registerSignal(
+    state.playerRoom,
+    0.35 * profile.signalStrength.device,
+    { type: "jam", lastKnownChance: 0.2 }
+  );
+  pushStatus("You wedge the door. Metal screams.", 3);
   closeUse();
   updateUI();
 }
@@ -2658,7 +2742,30 @@ function tickRobotTravel() {
   }
   const elapsed = Date.now() - state.robotTravelStepStart;
   if (elapsed < state.robotTravelStepDuration) return;
-  const nextRoom = state.robotPath.shift();
+  const nextRoom = state.robotPath[0];
+  if (nextRoom !== undefined && isEdgeJammed(state.robotRoom, nextRoom)) {
+    const key = edgeKey(state.robotRoom, nextRoom);
+    const remaining = state.jammedEdges.get(key) || 0;
+    const moodBoost = state.robotMood === "irritated" || state.robotMood === "confident";
+    const nightBoost = state.currentNight >= 7 ? 0.55 : 0.35;
+    const breakChance = moodBoost ? nightBoost + 0.2 : nightBoost;
+    if (Math.random() < breakChance) {
+      const next = Math.max(0, remaining - 1);
+      if (next <= 0) {
+        state.jammedEdges.delete(key);
+      } else {
+        state.jammedEdges.set(key, next);
+      }
+    }
+    applyRobotPause("blocked");
+    state.robotInvestigateTurns = Math.max(state.robotInvestigateTurns, Math.floor(Math.random() * 2) + 1);
+    setRobotMode("investigate");
+    state.robotTravelStepStart = null;
+    state.robotTravelStepDuration = 0;
+    state.robotPath = [];
+    return;
+  }
+  state.robotPath.shift();
   state.robotRoom = nextRoom;
   markRoomChecked(state.robotRoom);
   if (!state.robotDisabled) {
