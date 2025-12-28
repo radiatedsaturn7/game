@@ -908,13 +908,7 @@ function pickMissionForNight(night) {
       { value: MISSION_TYPES.DATA, weight: 0.2 },
     ]);
   }
-  if (night <= 6) {
-    return weightedPick([
-      { value: MISSION_TYPES.ESCAPE, weight: 0.3 },
-      { value: MISSION_TYPES.STABILIZE, weight: 0.35 },
-      { value: MISSION_TYPES.DATA, weight: 0.35 },
-    ]);
-  }
+  // Night 4+ biases away from ESCAPE to reduce repetition.
   return weightedPick([
     { value: MISSION_TYPES.ESCAPE, weight: 0.15 },
     { value: MISSION_TYPES.STABILIZE, weight: 0.45 },
@@ -947,6 +941,14 @@ function setCurrentNight(night) {
   const next = clamp(Math.floor(night), 1, 10);
   state.currentNight = next;
   state.nightProfile = getNightProfile();
+  if (DEBUG_UI) {
+    // Reset mission state for coherent debug night swaps.
+    setupMissionForNight();
+    state.escapeReady = false;
+    state.requiredEscapeSchematic = null;
+    state.selectedSchematic = null;
+    state.escapeConsoleInspected = false;
+  }
   updateNextNightButton();
   updateUI();
   pushStatus(`Night ${next} protocols loaded.`, 3);
@@ -3094,7 +3096,6 @@ function tickPlayerTravel() {
   if (elapsed < state.playerTravelStepDuration) return;
   const nextRoom = state.playerPath.shift();
   state.playerRoom = nextRoom;
-  state.lastMoveType = isRun ? "run" : "sneak";
   state.hidden = false;
   state.hiddenSpot = null;
   state.hiddenTurns = 0;
@@ -3102,6 +3103,8 @@ function tickPlayerTravel() {
   const profile = getNightProfile();
   const effects = getPassiveEffects();
   const isRun = state.playerTravelMode === "run";
+  // Ensure lastMoveType is based on the resolved travel mode.
+  state.lastMoveType = isRun ? "run" : "sneak";
   if (isRun) {
     registerSignal(nextRoom, 0.95 * profile.signalStrength.run * effects.signalSpike, {
       type: "run",
