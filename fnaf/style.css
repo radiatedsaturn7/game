@@ -387,6 +387,54 @@ main {
   pointer-events: none;
 }
 
+.map-node .map-poi {
+  fill: rgba(230, 238, 255, 0.85);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+.map-node .map-poi.poi-item {
+  fill: rgba(146, 214, 255, 0.9);
+}
+
+.map-node .map-poi.poi-schematic {
+  fill: rgba(255, 212, 140, 0.9);
+}
+
+.map-node .map-poi.poi-exit {
+  fill: rgba(132, 255, 180, 0.9);
+}
+
+.map-node .map-poi.poi-exit-ready {
+  fill: rgba(80, 255, 150, 1);
+}
+
+.map-node.robot-target circle {
+  stroke: rgba(255, 120, 160, 0.9);
+  stroke-width: 2.8;
+}
+
+.map-node.robot-sweep circle {
+  stroke: rgba(255, 190, 130, 0.85);
+  stroke-width: 2.4;
+}
+
+.poi-blink {
+  animation: poiPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes poiPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
 .map-node.active circle {
   fill: rgba(92, 115, 191, 0.9);
   stroke: #b8c9ff;

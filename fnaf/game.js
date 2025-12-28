@@ -207,6 +207,7 @@ let roomConnections = {
 
 const TICK_MS = 1200;
 const DEBUG_AI = false;
+const DEBUG_UI = true;
 
 const NIGHT_PROFILES = {
   1: {
@@ -437,6 +438,7 @@ const state = {
   robotMood: null,
   robotMoodTicks: 0,
   currentNight: 1,
+  completedNight: null,
   nightProfile: null,
   dayCount: 1,
   baseDate: new Date("2326-12-25T00:00:00Z"),
@@ -514,11 +516,11 @@ const dom = {
   runBtn: document.getElementById("runBtn"),
   cancelBtn: document.getElementById("cancelBtn"),
   movementControls: document.getElementById("movementControls"),
-  adjacentMoves: document.getElementById("adjacentMoves"),
   escapeBtn: document.getElementById("escapeBtn"),
   deathScreen: document.getElementById("deathScreen"),
   victoryScreen: document.getElementById("victoryScreen"),
-  restartBtn: document.getElementById("restartBtn"),
+  retryBtn: document.getElementById("retryBtn"),
+  nextNightBtn: document.getElementById("nextNightBtn"),
   roomStatus: document.querySelector(".room-status"),
   deathSummary: document.getElementById("deathSummary"),
   victorySummary: document.getElementById("victorySummary"),
@@ -542,7 +544,8 @@ function init() {
 
 function attachEvents() {
   dom.buildBtn.addEventListener("click", craftItem);
-  dom.restartBtn.addEventListener("click", resetGame);
+  dom.retryBtn.addEventListener("click", resetGame);
+  dom.nextNightBtn.addEventListener("click", advanceNight);
   dom.randomizeBtn.addEventListener("click", randomizeLayout);
   dom.goBtn.addEventListener("click", () => moveSelected(false));
   dom.runBtn.addEventListener("click", () => moveSelected(true));
@@ -617,7 +620,9 @@ function updateUI() {
   dom.threatLevel.textContent = threatLabel();
   dom.dateLabel.textContent = formatDate(state.baseDate, state.dayCount);
   dom.nightLabel.textContent = `${state.currentNight}`.padStart(2, "0");
-  dom.nightSelect.value = String(state.currentNight);
+  if (dom.nightSelect) {
+    dom.nightSelect.value = String(state.currentNight);
+  }
   dom.selectedRoom.textContent = state.selectedRoom === null
     ? "None"
     : rooms[state.selectedRoom].name;
@@ -627,7 +632,6 @@ function updateUI() {
   updateUseList();
   updateRoomActions();
   updatePanels();
-  updateAdjacentMoves();
   updateEscapeButton();
   updateMap();
   ensureTravelAnimation();
@@ -635,6 +639,7 @@ function updateUI() {
   updateMoveButtons();
   dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
   dom.tasksText.textContent = getObjectiveText();
+  updateDebugUI();
 }
 
 function ensureTravelAnimation() {
@@ -891,20 +896,21 @@ function triggerOhShit(roomId) {
 
 function buildRunSummary(outcome) {
   const lines = [];
-  lines.push(`Night ${state.currentNight} log:`);
+  const night = state.completedNight ?? state.currentNight;
+  lines.push(`Night ${night} log:`);
   if (outcome === "win") {
-    lines.push(`You escaped the factory on Night ${state.currentNight}.`);
+    lines.push(`You escaped the factory on Night ${night}.`);
   } else {
     lines.push(`You were caught in ${rooms[state.playerRoom].name}.`);
   }
-  if (state.currentNight >= 6) {
-    lines.push(`By Night ${state.currentNight}, the robot anticipated your routes.`);
+  if (night >= 6) {
+    lines.push(`By Night ${night}, the robot anticipated your routes.`);
   }
-  if (state.currentNight >= 8) {
-    lines.push(`Your tricks stopped working by Night ${state.currentNight}.`);
+  if (night >= 8) {
+    lines.push(`Your tricks stopped working by Night ${night}.`);
   }
-  if (outcome === "win" && state.currentNight >= 9) {
-    lines.push(`You escaped on Night ${state.currentNight} by breaking the trail one last time.`);
+  if (outcome === "win" && night >= 9) {
+    lines.push(`You escaped on Night ${night} by breaking the trail one last time.`);
   }
   if (state.learnedHidingSpots.size > 0) {
     lines.push("The robot adapted to your hiding habits.");
@@ -1161,6 +1167,7 @@ function updateRoomActions() {
 }
 
 function updateAdjacentMoves() {
+  if (!dom.adjacentMoves) return;
   dom.adjacentMoves.innerHTML = "";
   const adjacent = roomConnections[state.playerRoom];
   adjacent.forEach((roomId) => {
@@ -1176,6 +1183,13 @@ function updateAdjacentMoves() {
     button.addEventListener("click", () => movePlayer(roomId, false));
     dom.adjacentMoves.appendChild(button);
   });
+}
+
+function updateDebugUI() {
+  const debugLabel = dom.nightSelect?.closest(".night-debug");
+  if (debugLabel) {
+    debugLabel.classList.toggle("hidden", !DEBUG_UI);
+  }
 }
 
 function updateRequiredComponents() {
@@ -1629,12 +1643,27 @@ function buildEscape() {
   if (!state.isAlive || state.hasEscaped) return;
   if (!rooms[state.playerRoom].isExit || !state.escapeReady) return;
   state.hasEscaped = true;
+  state.completedNight = state.currentNight;
   state.dayCount += 1;
   state.threat = Math.min(5, state.threat + 0.4);
   state.runSummary = buildRunSummary("win");
   dom.victorySummary.textContent = state.runSummary;
+  updateNextNightButton();
   dom.victoryScreen.classList.add("active");
   dom.victoryScreen.setAttribute("aria-hidden", "false");
+}
+
+function updateNextNightButton() {
+  const isFinalNight = state.currentNight >= 10;
+  dom.nextNightBtn.textContent = isFinalNight ? "Play Again" : "Next Night";
+}
+
+function advanceNight() {
+  if (state.currentNight < 10) {
+    state.currentNight = Math.min(10, state.currentNight + 1);
+  }
+  state.nightProfile = getNightProfile();
+  resetGame();
 }
 
 function resetGame() {
@@ -1681,6 +1710,7 @@ function resetGame() {
   state.robotMood = null;
   state.robotMoodTicks = 0;
   state.nightProfile = getNightProfile();
+  state.completedNight = null;
   state.sawPlayerHide = false;
   state.robotDisabled = true;
   state.alertTicks = 0;
@@ -2050,11 +2080,19 @@ function renderMap() {
       x: mapPositions[room.id].x,
       y: mapPositions[room.id].y - 4,
     });
+    const poi = createSvgElement("text", {
+      x: mapPositions[room.id].x,
+      y: mapPositions[room.id].y + 16,
+      class: "map-poi",
+      "text-anchor": "middle",
+      "dominant-baseline": "middle",
+    });
     const title = room.name.split(" ")[0];
     text.appendChild(createSvgElement("tspan", { x: mapPositions[room.id].x, dy: 4 }, title));
     group.appendChild(pressure);
     group.appendChild(circle);
     group.appendChild(text);
+    group.appendChild(poi);
     group.addEventListener("click", () => {
       setRoutePreview(room.id);
       setSelectedRoom(room.id);
@@ -2139,6 +2177,34 @@ function updateMap() {
     node.classList.toggle("preview", roomId === state.routePreviewRoom);
     node.classList.toggle("adjacent", playerAdjacents.has(roomId));
     node.classList.toggle("robot-adjacent", showRobotVision && roomId === state.robotScanTarget);
+    node.classList.toggle("robot-target", roomId === state.robotPlannedTarget);
+    node.classList.toggle("robot-sweep", state.robotSweepQueue.includes(roomId));
+    const poi = node.querySelector(".map-poi");
+    if (poi) {
+      const room = rooms[roomId];
+      const discoveriesEnabled = state.escapeConsoleInspected;
+      const hasItem = discoveriesEnabled && Boolean(room.item) && !state.inventory.has(room.item);
+      const hasSchematic = discoveriesEnabled &&
+        Boolean(room.schematic) &&
+        !state.foundSchematics.has(room.schematic);
+      const isExit = Boolean(room.isExit);
+      let marker = "";
+      if (isExit) {
+        marker = "⎋";
+      } else if (hasSchematic) {
+        marker = "◇";
+      } else if (hasItem) {
+        marker = "●";
+      }
+      poi.textContent = marker;
+      poi.classList.toggle("poi-item", hasItem && !isExit && !hasSchematic);
+      poi.classList.toggle("poi-schematic", hasSchematic && !isExit);
+      poi.classList.toggle("poi-exit", isExit);
+      const allowBlink = !state.objectiveBlocked;
+      const shouldBlink = allowBlink && (hasItem || hasSchematic || (isExit && state.escapeReady));
+      poi.classList.toggle("poi-blink", shouldBlink);
+      poi.classList.toggle("poi-exit-ready", isExit && state.escapeReady);
+    }
   });
 
   updateRouteInfo(path);
