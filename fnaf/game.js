@@ -455,7 +455,6 @@ const state = {
   alertTicks: 0,
   objectiveBlocked: false,
   escapeConsoleInspected: false,
-  devicesUnlocked: true,
   noiseLures: 3,
   playerPath: [],
   playerTravelMode: "sneak",
@@ -739,7 +738,7 @@ function updateSchematicsInventory() {
   dom.schematicInventory.innerHTML = "";
   if (!state.unlocks.crafting) {
     const locked = document.createElement("li");
-    const unlockNight = getNextUnlockNight("crafting");
+    const unlockNight = getFirstUnlockNight("crafting");
     locked.textContent = unlockNight
       ? `Crafting locked until Night ${unlockNight}.`
       : "Crafting locked.";
@@ -772,7 +771,7 @@ function updateSchematicList() {
   dom.schematicList.innerHTML = "";
   if (!state.unlocks.crafting) {
     const locked = document.createElement("li");
-    const unlockNight = getNextUnlockNight("crafting");
+    const unlockNight = getFirstUnlockNight("crafting");
     locked.textContent = unlockNight
       ? `Crafting locked until Night ${unlockNight}.`
       : "Crafting locked.";
@@ -807,7 +806,7 @@ function updateSchematicList() {
 
 function updateBuildButton() {
   if (!state.unlocks.crafting) {
-    const unlockNight = getNextUnlockNight("crafting");
+    const unlockNight = getFirstUnlockNight("crafting");
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = unlockNight
       ? `Crafting locked until Night ${unlockNight}`
@@ -948,7 +947,7 @@ function getUnlocks() {
   };
 }
 
-function getNextUnlockNight(feature) {
+function getFirstUnlockNight(feature) {
   const nights = Object.keys(NIGHT_UNLOCKS)
     .map((value) => Number(value))
     .sort((a, b) => a - b);
@@ -959,18 +958,30 @@ function getNextUnlockNight(feature) {
   return null;
 }
 
+function getNextUnlockNightFromNow(feature) {
+  const nights = Object.keys(NIGHT_UNLOCKS)
+    .map((value) => Number(value))
+    .sort((a, b) => a - b);
+  for (const night of nights) {
+    if (night < state.currentNight) continue;
+    const unlocks = NIGHT_UNLOCKS[night];
+    if (unlocks?.[feature]) return night;
+  }
+  return null;
+}
+
 function listNewUnlockMessages(prevUnlocks, nextUnlocks) {
   const messages = [];
   const labelMap = {
-    devices: "Devices",
-    crafting: "Crafting",
-    slowRewire: "Slow Rewire",
-    doorJams: "Door Jams",
-    showMap: "Map Access",
+    devices: "Devices online: Scanner reads pressure; Noise Lure pulls it away.",
+    slowRewire: "Slow Rewire unlocked: reduce signal after sneaking.",
+    crafting: "Fabrication unlocked: scan schematics and build tools.",
+    doorJams: "Door Jams unlocked: wedge doors to block paths (briefly).",
+    showMap: "Map Access unlocked.",
   };
   Object.keys(labelMap).forEach((key) => {
     if (!prevUnlocks?.[key] && nextUnlocks?.[key]) {
-      messages.push(`Night ${state.currentNight} unlocked: ${labelMap[key]}.`);
+      messages.push(labelMap[key]);
     }
   });
   return messages;
@@ -1036,7 +1047,6 @@ function setCurrentNight(night) {
     state.requiredEscapeSchematic = null;
     state.selectedSchematic = null;
     state.escapeConsoleInspected = false;
-    state.devicesUnlocked = state.unlocks.devices;
   }
   updateNextNightButton();
   updateUI();
@@ -1331,11 +1341,13 @@ function updateRoomActions() {
     const isDataMission = state.missionType === MISSION_TYPES.DATA;
     const scanLabel = isDataMission
       ? "Recover Data Fragment"
-      : `Scan Schematic: ${room.schematic}`;
+      : state.unlocks.crafting
+        ? `Scan Schematic: ${room.schematic}`
+        : `Schematic Scan (Night ${getFirstUnlockNight("crafting") ?? "?"})`;
     actions.push({
       label: scanLabel,
       onClick: () => collectSchematic(room.id),
-      disabled: state.hidden || blocked,
+      disabled: state.hidden || blocked || (!isDataMission && !state.unlocks.crafting),
       risk: "Quiet",
       highlight: isDataMission,
     });
@@ -1747,7 +1759,7 @@ function handleAction(action) {
 
   if (action === "scan" || action === "noise") {
     if (!state.unlocks.devices) {
-      const unlockNight = getNextUnlockNight("devices");
+      const unlockNight = getFirstUnlockNight("devices");
       pushStatus(
         unlockNight ? `Devices unlock on Night ${unlockNight}.` : "Devices locked.",
         3
@@ -2068,7 +2080,6 @@ function resetGame() {
   state.requiredEscapeSchematic = null;
   state.escapeReady = false;
   state.escapeConsoleInspected = false;
-  state.devicesUnlocked = state.unlocks.devices;
   state.noiseLures = 3;
   state.roomSignals.clear();
   state.checkedRooms.clear();
@@ -2698,6 +2709,7 @@ function updateMap() {
       const discoveriesEnabled = state.escapeConsoleInspected;
       const hasItem = discoveriesEnabled && Boolean(room.item) && !state.inventory.has(room.item);
       const hasSchematic = discoveriesEnabled &&
+        state.unlocks.crafting &&
         Boolean(room.schematic) &&
         !state.foundSchematics.has(room.schematic);
       const isExit = Boolean(room.isExit);
@@ -3018,7 +3030,7 @@ function craftItem() {
   const craftable = getSelectedSchematic();
   if (!craftable) return;
   if (!state.unlocks.crafting) {
-    const unlockNight = getNextUnlockNight("crafting");
+    const unlockNight = getFirstUnlockNight("crafting");
     pushStatus(
       unlockNight ? `Crafting locked until Night ${unlockNight}.` : "Crafting locked.",
       3
@@ -3028,7 +3040,7 @@ function craftItem() {
   if (!state.foundSchematics.has(craftable.name)) return;
   if (craftable.name !== "Door Jam" && state.craftedItems.has(craftable.name)) return;
   if (craftable.name === "Door Jam" && !state.unlocks.doorJams) {
-    const unlockNight = getNextUnlockNight("doorJams");
+    const unlockNight = getFirstUnlockNight("doorJams");
     pushStatus(
       unlockNight ? `Door jams unlock on Night ${unlockNight}.` : "Door jams locked.",
       3
@@ -3125,7 +3137,7 @@ function updateUseList() {
 
   if (options.length === 0) {
     const empty = document.createElement("li");
-    const unlockNight = getNextUnlockNight("devices");
+    const unlockNight = getFirstUnlockNight("devices");
     empty.textContent = state.unlocks.devices
       ? "No usable items."
       : unlockNight
