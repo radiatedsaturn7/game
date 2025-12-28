@@ -211,6 +211,19 @@ const TICK_MS = 1200;
 const DEBUG_AI = false;
 const DEBUG_UI = true;
 
+const MISSION_TYPES = {
+  ESCAPE: "escape",
+  STABILIZE: "stabilize",
+  DATA: "data",
+};
+
+const STABILIZE_SYSTEMS = [
+  { room: "Power Junction", part: "Power Cell", tool: "Signal Scrambler" },
+  { room: "Coolant Vault", part: "Capacitors", tool: "Signal Scrambler" },
+  { room: "Hydraulic Core", part: "Servo Motor", tool: "Motion Dampener" },
+  { room: "Server Nest", part: "Microcontroller", tool: "Override Key" },
+];
+
 const NIGHT_PROFILES = {
   1: {
     signalStrength: { sneak: 0.5, run: 0.9, device: 0.8 },
@@ -228,6 +241,7 @@ const NIGHT_PROFILES = {
     sneakBreakRooms: 2,
     sneakDecayBoost: 0.06,
     deviceFatigue: 0.8,
+    sneakLastKnownScale: 1,
   },
   2: {
     signalStrength: { sneak: 0.55, run: 0.95, device: 0.85 },
@@ -245,6 +259,7 @@ const NIGHT_PROFILES = {
     sneakBreakRooms: 2,
     sneakDecayBoost: 0.05,
     deviceFatigue: 0.85,
+    sneakLastKnownScale: 0.95,
   },
   3: {
     signalStrength: { sneak: 0.6, run: 1.0, device: 0.9 },
@@ -262,6 +277,7 @@ const NIGHT_PROFILES = {
     sneakBreakRooms: 2,
     sneakDecayBoost: 0.05,
     deviceFatigue: 0.9,
+    sneakLastKnownScale: 0.9,
   },
   4: {
     signalStrength: { sneak: 0.65, run: 1.05, device: 0.95 },
@@ -279,6 +295,7 @@ const NIGHT_PROFILES = {
     sneakBreakRooms: 2,
     sneakDecayBoost: 0.04,
     deviceFatigue: 0.95,
+    sneakLastKnownScale: 0.85,
   },
   5: {
     signalStrength: { sneak: 0.7, run: 1.1, device: 1.0 },
@@ -296,6 +313,7 @@ const NIGHT_PROFILES = {
     sneakBreakRooms: 3,
     sneakDecayBoost: 0.04,
     deviceFatigue: 1.0,
+    sneakLastKnownScale: 0.8,
   },
   6: {
     signalStrength: { sneak: 0.75, run: 1.15, device: 1.05 },
@@ -313,6 +331,7 @@ const NIGHT_PROFILES = {
     sneakBreakRooms: 3,
     sneakDecayBoost: 0.035,
     deviceFatigue: 1.05,
+    sneakLastKnownScale: 0.75,
   },
   7: {
     signalStrength: { sneak: 0.8, run: 1.2, device: 1.1 },
@@ -330,6 +349,7 @@ const NIGHT_PROFILES = {
     sneakBreakRooms: 3,
     sneakDecayBoost: 0.03,
     deviceFatigue: 1.1,
+    sneakLastKnownScale: 0.7,
   },
   8: {
     signalStrength: { sneak: 0.85, run: 1.25, device: 1.15 },
@@ -347,6 +367,7 @@ const NIGHT_PROFILES = {
     sneakBreakRooms: 3,
     sneakDecayBoost: 0.025,
     deviceFatigue: 1.15,
+    sneakLastKnownScale: 0.65,
   },
   9: {
     signalStrength: { sneak: 0.9, run: 1.3, device: 1.2 },
@@ -364,6 +385,7 @@ const NIGHT_PROFILES = {
     sneakBreakRooms: 4,
     sneakDecayBoost: 0.02,
     deviceFatigue: 1.2,
+    sneakLastKnownScale: 0.6,
   },
   10: {
     signalStrength: { sneak: 0.95, run: 1.35, device: 1.25 },
@@ -381,6 +403,7 @@ const NIGHT_PROFILES = {
     sneakBreakRooms: 4,
     sneakDecayBoost: 0.02,
     deviceFatigue: 1.25,
+    sneakLastKnownScale: 0.55,
   },
 };
 
@@ -442,6 +465,11 @@ const state = {
   currentNight: 1,
   completedNight: null,
   nightProfile: null,
+  missionType: MISSION_TYPES.ESCAPE,
+  stabilizeTargets: [],
+  stabilizedTargets: new Set(),
+  dataFragmentsNeeded: 0,
+  dataFragmentsFound: new Set(),
   dayCount: 1,
   baseDate: new Date("2326-12-25T00:00:00Z"),
   isAlive: true,
@@ -464,6 +492,12 @@ const state = {
   burnedHidingSpots: new Set(),
   jammedEdges: new Map(),
   doorJams: 1,
+  robotTask: null,
+  robotFocusLinger: 0,
+  scanPulseTicks: 0,
+  scanFocusRoom: null,
+  hiddenTurns: 0,
+  lastMoveType: "sneak",
   ohShitTriggered: false,
   runMoments: [],
   runSummary: "",
@@ -538,6 +572,7 @@ function init() {
   state.nightProfile = getNightProfile();
   renderMap();
   assignRoomFinds();
+  setupMissionForNight();
   updateSchematicList();
   updatePlayerTrail(state.playerRoom);
   updateUI();
@@ -821,6 +856,26 @@ function updatePlayerTrail(roomId) {
   }
 }
 
+function hasPart(name) {
+  return state.inventory.has(name);
+}
+
+function hasCrafted(name) {
+  return state.craftedItems.has(name);
+}
+
+function getPassiveEffects() {
+  const hasScrambler = hasCrafted("Signal Scrambler");
+  return {
+    noisePenaltyGain: hasPart("Resistors") ? 0.85 : 1,
+    signalSpike: hasPart("Capacitors") ? 0.85 : 1,
+    fatigueReliefChance: hasPart("Microcontroller") ? 0.5 : 0,
+    jamBonus: hasPart("Servo Motor") ? 1 : 0,
+    bleedBoost: hasPart("Copper Wire") || hasScrambler ? 1.1 : 1,
+    persistentBonus: hasPart("Power Cell") ? 1 : 0,
+  };
+}
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -832,6 +887,60 @@ function logDebug(event, payload) {
 
 function getNightProfile() {
   return NIGHT_PROFILES[state.currentNight] ?? NIGHT_PROFILES[1];
+}
+
+function weightedPick(options) {
+  const total = options.reduce((sum, option) => sum + option.weight, 0);
+  let roll = Math.random() * total;
+  for (const option of options) {
+    roll -= option.weight;
+    if (roll <= 0) return option.value;
+  }
+  return options[options.length - 1].value;
+}
+
+function pickMissionForNight(night) {
+  if (night <= 1) return MISSION_TYPES.ESCAPE;
+  if (night <= 3) {
+    return weightedPick([
+      { value: MISSION_TYPES.ESCAPE, weight: 0.55 },
+      { value: MISSION_TYPES.STABILIZE, weight: 0.25 },
+      { value: MISSION_TYPES.DATA, weight: 0.2 },
+    ]);
+  }
+  if (night <= 6) {
+    return weightedPick([
+      { value: MISSION_TYPES.ESCAPE, weight: 0.3 },
+      { value: MISSION_TYPES.STABILIZE, weight: 0.35 },
+      { value: MISSION_TYPES.DATA, weight: 0.35 },
+    ]);
+  }
+  return weightedPick([
+    { value: MISSION_TYPES.ESCAPE, weight: 0.15 },
+    { value: MISSION_TYPES.STABILIZE, weight: 0.45 },
+    { value: MISSION_TYPES.DATA, weight: 0.4 },
+  ]);
+}
+
+function setupMissionForNight() {
+  state.missionType = pickMissionForNight(state.currentNight);
+  state.stabilizeTargets = [];
+  state.stabilizedTargets = new Set();
+  state.dataFragmentsFound = new Set();
+  state.dataFragmentsNeeded = 0;
+
+  if (state.missionType === MISSION_TYPES.STABILIZE) {
+    const choices = [...STABILIZE_SYSTEMS].sort(() => Math.random() - 0.5);
+    const count = Math.floor(Math.random() * 2) + 2;
+    state.stabilizeTargets = choices.slice(0, count).map((entry) => ({
+      ...entry,
+      roomId: rooms.find((room) => room.name === entry.room)?.id ?? 0,
+    }));
+  }
+
+  if (state.missionType === MISSION_TYPES.DATA) {
+    state.dataFragmentsNeeded = Math.floor(Math.random() * 2) + 2;
+  }
 }
 
 function setCurrentNight(night) {
@@ -877,8 +986,9 @@ function tickPersistentSignals() {
 }
 
 function applyRoomStress(roomId) {
+  const effects = getPassiveEffects();
   const current = state.roomNoisePenalty.get(roomId) || 0;
-  const next = clamp(current + 0.05, 0, 0.2);
+  const next = clamp(current + 0.05 * effects.noisePenaltyGain, 0, 0.2);
   state.roomNoisePenalty.set(roomId, next);
 }
 
@@ -894,7 +1004,8 @@ function triggerOhShit(roomId) {
   state.ohShitTriggered = true;
   state.robotFocus = roomId;
   registerSignal(roomId, 0.9, { type: "surge", forceLastKnown: true, bleed: true });
-  state.persistentSignals.set(roomId, 3);
+  const effects = getPassiveEffects();
+  state.persistentSignals.set(roomId, 3 + effects.persistentBonus);
   showObjectiveModal("Power surge! The room erupts in noise.");
   state.runMoments.push("A sudden power surge forced you into the open.");
 }
@@ -903,6 +1014,13 @@ function buildRunSummary(outcome) {
   const lines = [];
   const night = state.completedNight ?? state.currentNight;
   lines.push(`Night ${night} log:`);
+  if (state.missionType === MISSION_TYPES.STABILIZE) {
+    lines.push("Stabilization protocol initiated.");
+  } else if (state.missionType === MISSION_TYPES.DATA) {
+    lines.push("Data recovery protocol initiated.");
+  } else {
+    lines.push("Escape protocol initiated.");
+  }
   if (outcome === "win") {
     lines.push(`You escaped the factory on Night ${night}.`);
   } else {
@@ -1096,6 +1214,18 @@ function updateRoomActions() {
     });
   }
 
+  const canRewire = !state.hidden &&
+    state.lastMoveType !== "run" &&
+    (hasPart("Resistors") || hasPart("Capacitors"));
+  if (canRewire) {
+    actions.push({
+      label: "Slow Rewire",
+      onClick: () => slowRewire(),
+      disabled: blocked,
+      risk: "Quiet",
+    });
+  }
+
   if (state.escapeConsoleInspected && room.item && !state.inventory.has(room.item)) {
     actions.push({
       label: `Collect ${room.item}`,
@@ -1106,15 +1236,20 @@ function updateRoomActions() {
   }
 
   if (state.escapeConsoleInspected && room.schematic && !state.foundSchematics.has(room.schematic)) {
+    const isDataMission = state.missionType === MISSION_TYPES.DATA;
+    const scanLabel = isDataMission
+      ? "Recover Data Fragment"
+      : `Scan Schematic: ${room.schematic}`;
     actions.push({
-      label: `Scan Schematic: ${room.schematic}`,
+      label: scanLabel,
       onClick: () => collectSchematic(room.id),
       disabled: state.hidden || blocked,
       risk: "Quiet",
+      highlight: isDataMission,
     });
   }
 
-  if (room.isExit && !state.requiredEscapeSchematic) {
+  if (room.isExit && !state.escapeConsoleInspected) {
     actions.push({
       label: "Inspect Escape Console",
       onClick: () => revealEscapeSchematic(),
@@ -1122,6 +1257,19 @@ function updateRoomActions() {
       highlight: true,
       risk: "Exposed",
     });
+  }
+
+  if (state.missionType === MISSION_TYPES.STABILIZE && state.escapeConsoleInspected) {
+    const target = getStabilizeTarget(room.id);
+    if (target && !state.stabilizedTargets.has(room.id)) {
+      actions.push({
+        label: `Stabilize ${target.room}`,
+        onClick: () => stabilizeSystem(target),
+        disabled: state.hidden || blocked || !canStabilizeTarget(target),
+        highlight: true,
+        risk: "Trace",
+      });
+    }
   }
 
   room.hideSpots.forEach((spot) => {
@@ -1133,6 +1281,15 @@ function updateRoomActions() {
       risk: burned ? "Risky" : "Quiet",
     });
   });
+
+  if (state.hidden && state.hiddenTurns >= 2) {
+    actions.push({
+      label: "Hold Breath",
+      onClick: () => holdBreath(),
+      disabled: blocked,
+      risk: "Risky",
+    });
+  }
 
   if (room.siren) {
     actions.push({
@@ -1169,6 +1326,68 @@ function updateRoomActions() {
     button.addEventListener("click", action.onClick);
     dom.roomActions.appendChild(button);
   });
+}
+
+function getStabilizeTarget(roomId) {
+  return state.stabilizeTargets.find((target) => target.roomId === roomId) ?? null;
+}
+
+function canStabilizeTarget(target) {
+  return hasPart(target.part) || hasCrafted(target.tool);
+}
+
+function stabilizeSystem(target) {
+  if (!target || state.stabilizedTargets.has(target.roomId)) return;
+  if (!canStabilizeTarget(target)) return;
+  if (hasPart(target.part)) {
+    state.inventory.delete(target.part);
+  }
+  state.stabilizedTargets.add(target.roomId);
+  const profile = getNightProfile();
+  registerSignal(
+    target.roomId,
+    0.22 * profile.signalStrength.device,
+    { type: "stabilize", lastKnownChance: 0.18 }
+  );
+  pushStatus(`${target.room} stabilized.`, 3);
+  if (state.stabilizedTargets.size >= state.stabilizeTargets.length) {
+    state.escapeReady = true;
+  }
+  updateUI();
+}
+
+function slowRewire() {
+  if (!hasPart("Resistors") && !hasPart("Capacitors")) return;
+  const current = state.roomSignals.get(state.playerRoom) || 0;
+  state.roomSignals.set(state.playerRoom, Math.max(0, current - 0.2));
+  state.signalDecayBoost.set(
+    state.playerRoom,
+    Math.max(state.signalDecayBoost.get(state.playerRoom) || 0, 0.08)
+  );
+  const profile = getNightProfile();
+  registerSignal(state.playerRoom, 0.08 * profile.signalStrength.sneak, {
+    type: "rewire",
+    lastKnownChance: 0.1,
+  });
+  pushStatus("You rewire the panel. The static softens.", 3);
+  state.turn += 1;
+  updateUI();
+}
+
+function holdBreath() {
+  if (!state.hidden || state.hiddenTurns < 2) return;
+  if (state.robotRoom === state.playerRoom && state.robotLookTurns > 0) {
+    if (Math.random() < 0.4) {
+      attemptKill();
+      return;
+    }
+    registerSignal(state.playerRoom, 0.25, { type: "breath", lastKnownChance: 0.2 });
+  }
+  state.robotTargetConfidence = Math.max(0, state.robotTargetConfidence - 0.15);
+  state.robotPredictionCooldown = Math.max(state.robotPredictionCooldown, 2);
+  pushStatus("You go still. The noise thins.", 3);
+  state.turn += 1;
+  updateUI();
 }
 
 function updateDebugUI() {
@@ -1219,15 +1438,23 @@ function updateTravelStatus() {
 }
 
 function revealEscapeSchematic() {
-  if (state.requiredEscapeSchematic) return;
-  const options = craftableItems
-    .map((item) => item.name)
-    .filter((name) => name !== "Door Jam");
-  state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
-  state.selectedSchematic = state.requiredEscapeSchematic;
+  if (state.escapeConsoleInspected) return;
+  if (state.missionType === MISSION_TYPES.ESCAPE) {
+    const options = craftableItems
+      .map((item) => item.name)
+      .filter((name) => name !== "Door Jam");
+    state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
+    state.selectedSchematic = state.requiredEscapeSchematic;
+  }
   state.robotDisabled = false;
   state.escapeConsoleInspected = true;
-  showObjectiveModal(`Objective unlocked: Build ${state.requiredEscapeSchematic}.`);
+  if (state.missionType === MISSION_TYPES.ESCAPE) {
+    showObjectiveModal(`Objective unlocked: Build ${state.requiredEscapeSchematic}.`);
+  } else if (state.missionType === MISSION_TYPES.STABILIZE) {
+    showObjectiveModal("Objective unlocked: Stabilize core systems.");
+  } else {
+    showObjectiveModal("Objective unlocked: Recover data fragments.");
+  }
   queueRobotAlert("Warning: Robot online.");
   updateUI();
 }
@@ -1254,10 +1481,32 @@ function assignRoomFinds() {
 
 function getObjectiveText() {
   if (!state.escapeConsoleInspected) {
-    return "Inspect the Escape Workshop console to learn which schematic is required.";
+    return "Inspect the Escape Workshop console to receive your mission.";
   }
-  if (!state.escapeReady && state.requiredEscapeSchematic) {
-    return `Find and build the ${state.requiredEscapeSchematic} schematic, then escape.`;
+  if (state.missionType === MISSION_TYPES.ESCAPE) {
+    if (!state.escapeReady && state.requiredEscapeSchematic) {
+      return `Find and build the ${state.requiredEscapeSchematic} schematic, then escape.`;
+    }
+  }
+  if (state.missionType === MISSION_TYPES.STABILIZE) {
+    const total = state.stabilizeTargets.length;
+    const done = state.stabilizedTargets.size;
+    if (!state.escapeReady) {
+      const targets = state.stabilizeTargets
+        .map((target) => {
+          const marker = state.stabilizedTargets.has(target.roomId) ? "✓" : "•";
+          return `${marker} ${target.room}`;
+        })
+        .join(" ");
+      return `Stabilize ${done}/${total} systems (${targets}), then escape.`;
+    }
+  }
+  if (state.missionType === MISSION_TYPES.DATA) {
+    const done = state.dataFragmentsFound.size;
+    const total = state.dataFragmentsNeeded;
+    if (!state.escapeReady) {
+      return `Recover ${done}/${total} data fragments to assemble the Lock Override.`;
+    }
   }
   if (state.escapeReady) {
     return "Return to the Escape Workshop and press Escape.";
@@ -1348,6 +1597,15 @@ function collectSchematic(roomId) {
     const profile = getNightProfile();
     const strength = 0.2 * profile.signalStrength.sneak;
     registerSignal(roomId, strength, { type: "scan", lastKnownChance: 0.12 });
+    if (state.missionType === MISSION_TYPES.DATA && state.escapeConsoleInspected) {
+      if (!state.dataFragmentsFound.has(roomId)) {
+        state.dataFragmentsFound.add(roomId);
+        if (state.dataFragmentsFound.size >= state.dataFragmentsNeeded) {
+          state.escapeReady = true;
+          pushStatus("Lock Override assembled from fragments.", 3);
+        }
+      }
+    }
   }
   updateUI();
 }
@@ -1358,11 +1616,13 @@ function setHidden(spot) {
     state.hidden = false;
     state.hiddenSpot = null;
     state.sawPlayerHide = false;
+    state.hiddenTurns = 0;
     updateUI();
     return;
   }
   state.hidden = true;
   state.hiddenSpot = spot;
+  state.hiddenTurns = 0;
   state.sawPlayerHide = state.robotRoom === state.playerRoom && state.robotLookTurns > 0;
   const hideCount = state.hideHistory.get(state.playerRoom) || 0;
   const nextCount = hideCount + 1;
@@ -1403,11 +1663,15 @@ function handleAction(action) {
 
 function useDevice(type) {
   const profile = getNightProfile();
+  const effects = getPassiveEffects();
   const history = state.usedDevices.get(type) || [];
   history.push(state.turn);
   state.usedDevices.set(type, history.slice(-4));
 
-  const fatigueLevel = deviceLearned(type, profile.deviceFatigue);
+  let fatigueLevel = deviceLearned(type, profile.deviceFatigue);
+  if (fatigueLevel > 0 && effects.fatigueReliefChance > 0 && Math.random() < effects.fatigueReliefChance) {
+    fatigueLevel = Math.max(0, fatigueLevel - 1);
+  }
   const strengthMultiplier = fatigueLevel === 2 ? 0.35 : fatigueLevel === 1 ? 0.6 : 1;
   const durationPenalty = fatigueLevel > 0 ? 1 : 0;
   if (fatigueLevel > 0 && state.turn - state.lastDeviceFatigueTick > 3) {
@@ -1423,24 +1687,35 @@ function useDevice(type) {
   applyRobotPause("distract");
   if (type === "scan") {
     registerSignal(state.playerRoom, 0.3 * profile.signalStrength.device * strengthMultiplier);
+    state.scanFocusRoom = pickScannerFocusRoom();
+    state.scanPulseTicks = 3;
+    if (state.scanFocusRoom !== null) {
+      pushStatus(`Scanner sweep: attention toward ${rooms[state.scanFocusRoom].name}.`, 3);
+    }
   }
   if (type === "noise") {
     state.noiseLures = Math.max(0, state.noiseLures - 1);
-    registerSignal(diversion, 0.4 * profile.signalStrength.device * strengthMultiplier, {
+    registerSignal(diversion, 0.4 * profile.signalStrength.device * strengthMultiplier * effects.signalSpike, {
       type: "noise",
       forceLastKnown: true,
       bleed: true,
     });
     const decoyDelay = Math.max(1, 2 - durationPenalty);
-    scheduleSignal(diversion, 0.5 * profile.signalStrength.device * strengthMultiplier, decoyDelay, {
-      type: "decoy",
-      forceLastKnown: true,
-      bleed: true,
-    });
-    const lingerDuration = Math.max(0, 2 - durationPenalty);
+    scheduleSignal(
+      diversion,
+      0.5 * profile.signalStrength.device * strengthMultiplier * effects.signalSpike,
+      decoyDelay,
+      {
+        type: "decoy",
+        forceLastKnown: true,
+        bleed: true,
+      }
+    );
+    const lingerDuration = Math.max(0, 2 - durationPenalty + effects.persistentBonus);
     if (lingerDuration > 0) {
       state.persistentSignals.set(diversion, lingerDuration);
     }
+    state.robotFocusLinger = Math.max(state.robotFocusLinger, 2 - durationPenalty);
   }
 }
 
@@ -1469,6 +1744,10 @@ function advanceRobot() {
     return;
   }
 
+  if (runRobotTask()) {
+    return;
+  }
+
   if (state.robotInvestigateTurns > 0) {
     state.robotInvestigateTurns -= 1;
     setRobotMode("investigate");
@@ -1494,6 +1773,7 @@ function advanceRobot() {
       applyRobotPause("failed");
       setRobotMood("irritated", 4);
       applyRoomStress(state.robotRoom);
+      maybeStartRobotTask("failed");
     }
     setRobotMode("search");
     return;
@@ -1733,10 +2013,22 @@ function resetGame() {
   state.burnedHidingSpots.clear();
   state.jammedEdges.clear();
   state.doorJams = 1;
+  state.missionType = MISSION_TYPES.ESCAPE;
+  state.stabilizeTargets = [];
+  state.stabilizedTargets = new Set();
+  state.dataFragmentsNeeded = 0;
+  state.dataFragmentsFound = new Set();
+  state.robotTask = null;
+  state.robotFocusLinger = 0;
+  state.scanPulseTicks = 0;
+  state.scanFocusRoom = null;
+  state.hiddenTurns = 0;
+  state.lastMoveType = "sneak";
   state.ohShitTriggered = false;
   state.runMoments = [];
   state.runSummary = "";
   assignRoomFinds();
+  setupMissionForNight();
   dom.deathScreen.classList.remove("active");
   dom.deathScreen.setAttribute("aria-hidden", "true");
   dom.deathSummary.textContent = "";
@@ -1769,6 +2061,7 @@ function formatDate(baseDate, dayCount) {
 
 function registerSignal(roomId, strength, options = {}) {
   const profile = getNightProfile();
+  const effects = getPassiveEffects();
   const {
     type = "ambient",
     forceLastKnown = false,
@@ -1807,12 +2100,21 @@ function registerSignal(roomId, strength, options = {}) {
     forceLastKnown,
   });
   if (bleed) {
+    const bleedBoost = ["decoy", "noise", "siren"].includes(type) ? effects.bleedBoost : 1;
     const neighbors = roomConnections[roomId] || [];
     neighbors.forEach((neighbor) => {
-      scheduleSignal(neighbor, scaledStrength * 0.35, 1, { type: "bleed", lastKnownChance: 0.1 });
+      scheduleSignal(
+        neighbor,
+        scaledStrength * 0.35 * bleedBoost,
+        1,
+        { type: "bleed", lastKnownChance: 0.1 }
+      );
     });
   }
   if (roomId !== state.robotRoom && next >= 0.4) {
+    if (state.robotTask && scaledStrength < 0.25) {
+      return;
+    }
     interruptRobotTask(roomId);
   }
 }
@@ -1838,6 +2140,7 @@ function decaySignals() {
     if (roomId === state.lastKnownPlayerRoom && value >= 0.55 && next < 0.55) {
       applyRobotPause("lost");
       setRobotMood("cautious", 4);
+      maybeStartRobotTask("lost");
     }
   });
 }
@@ -1872,6 +2175,87 @@ function applyRobotPause(reason) {
   if (reason === "distract") base = 2;
   if (reason === "blocked") base = 2;
   state.robotDormant = Math.max(state.robotDormant, Math.ceil(base * threatFactor));
+}
+
+function getRobotTaskChance() {
+  if (state.currentNight <= 3) return 0.35;
+  if (state.currentNight <= 6) return 0.22;
+  if (state.currentNight <= 8) return 0.15;
+  return 0.08;
+}
+
+function pickRobotTaskRoute() {
+  const pool = rooms.filter((room) => !room.isExit).map((room) => room.id);
+  const targets = [];
+  const count = Math.floor(Math.random() * 2) + 2;
+  while (targets.length < count && pool.length > 0) {
+    const pick = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    if (pick !== state.robotRoom) {
+      targets.push(pick);
+    }
+  }
+  return targets;
+}
+
+function maybeStartRobotTask(reason) {
+  if (state.robotTask || state.robotDisabled) return;
+  const chance = getRobotTaskChance();
+  if (Math.random() > chance) return;
+  const turns = Math.floor(Math.random() * 4) + 3;
+  state.robotTask = {
+    type: "recalibrate",
+    turnsRemaining: turns,
+    route: pickRobotTaskRoute(),
+  };
+  pushStatus("The robot diverts to recalibrate.", 3);
+  logDebug("robot-task", { reason, turns });
+}
+
+function hasStrongSignal() {
+  if (state.turn - state.lastStrongSignalTick <= 2) return true;
+  let strong = false;
+  state.roomSignals.forEach((value) => {
+    if (value >= 0.55) {
+      strong = true;
+    }
+  });
+  return strong;
+}
+
+function runRobotTask() {
+  if (!state.robotTask) return false;
+  if (hasStrongSignal()) {
+    state.robotTask = null;
+    return false;
+  }
+  if (state.robotTask.turnsRemaining <= 0) {
+    state.robotTask = null;
+    return false;
+  }
+  const route = state.robotTask.route;
+  if (!route || route.length === 0) {
+    state.robotTask.route = pickRobotTaskRoute();
+  }
+  const nextTarget = state.robotTask.route[0];
+  if (nextTarget === undefined) {
+    state.robotTask = null;
+    return false;
+  }
+  if (state.robotRoom === nextTarget) {
+    state.robotTask.route.shift();
+    state.robotTask.turnsRemaining -= 1;
+    state.robotLinger = 1;
+    setRobotMode("investigate");
+    return true;
+  }
+  state.robotPath = getShortestPath(state.robotRoom, nextTarget).slice(1);
+  if (state.robotPath.length > 0) {
+    startRobotTravelStep();
+  } else {
+    state.robotTask.route.shift();
+  }
+  setRobotMode("investigate");
+  return true;
 }
 
 function markRoomChecked(roomId) {
@@ -1978,13 +2362,14 @@ function pickSearchSpot() {
 function triggerSiren(roomId) {
   if (!state.isAlive || state.hasEscaped) return;
   const profile = getNightProfile();
+  const effects = getPassiveEffects();
   state.robotFocus = roomId;
-  registerSignal(roomId, 0.6 * profile.signalStrength.device, {
+  registerSignal(roomId, 0.6 * profile.signalStrength.device * effects.signalSpike, {
     type: "siren",
     forceLastKnown: true,
     bleed: true,
   });
-  state.persistentSignals.set(roomId, 4);
+  state.persistentSignals.set(roomId, 4 + effects.persistentBonus);
   state.turn += 1;
   updateUI();
 }
@@ -1996,6 +2381,7 @@ function interruptRobotTask(roomId) {
   state.robotLookTurns = 0;
   state.robotSweepQueue = [];
   state.robotInvestigateTurns = 0;
+  state.robotTask = null;
   state.robotFocus = roomId;
   setRobotMode("hunt");
 }
@@ -2003,6 +2389,7 @@ function interruptRobotTask(roomId) {
 function robotStatusLabel() {
   if (state.robotDisabled) return "Robot: Disabled";
   if (state.robotDormant > 0) return "Robot: Pausing";
+  if (state.robotTask) return "Robot: Recalibrating";
   if (state.robotSearchTurns > 0) {
     return state.robotSearchSpot
       ? `Robot: Searching ${state.robotSearchSpot}`
@@ -2166,8 +2553,14 @@ function updateMap() {
     const pressure = getRoomPressure(roomId);
     const ring = node.querySelector(".map-pressure");
     if (ring) {
-      ring.style.opacity = pressure > 0.05 ? (0.15 + pressure * 0.55).toFixed(2) : "0";
-      ring.setAttribute("r", `${24 + pressure * 10}`);
+      let opacity = pressure > 0.05 ? 0.15 + pressure * 0.55 : 0;
+      let radius = 24 + pressure * 10;
+      if (state.scanPulseTicks > 0 && roomId === state.scanFocusRoom) {
+        opacity = Math.max(opacity, 0.6);
+        radius += 4;
+      }
+      ring.style.opacity = opacity.toFixed(2);
+      ring.setAttribute("r", `${radius}`);
     }
     node.classList.toggle("active", roomId === state.playerRoom);
     node.classList.toggle(
@@ -2186,6 +2579,7 @@ function updateMap() {
     node.classList.toggle("robot-adjacent", showRobotVision && roomId === state.robotScanTarget);
     node.classList.toggle("robot-target", roomId === state.robotPlannedTarget);
     node.classList.toggle("robot-sweep", state.robotSweepQueue.includes(roomId));
+    node.classList.toggle("scan-focus", state.scanPulseTicks > 0 && roomId === state.scanFocusRoom);
     const poi = node.querySelector(".map-poi");
     if (poi) {
       const room = rooms[roomId];
@@ -2407,6 +2801,7 @@ function randomizeLayout() {
   roomConnections = generateRandomConnections();
   state.routePreviewRoom = null;
   state.selectedRoom = null;
+  state.jammedEdges.clear();
   optimizeLayout();
   renderMap();
   updateUI();
@@ -2523,9 +2918,10 @@ function craftItem() {
     state.escapeReady = true;
   }
   const profile = getNightProfile();
+  const effects = getPassiveEffects();
   registerSignal(
     state.playerRoom,
-    0.28 * profile.signalStrength.device,
+    0.28 * profile.signalStrength.device * effects.signalSpike,
     { type: "build", lastKnownChance: 0.18, bleed: false }
   );
   applyRoomStress(state.playerRoom);
@@ -2546,6 +2942,17 @@ function startGameLoop() {
       state.alertTicks -= 1;
     }
     tickStatus();
+    if (state.hidden) {
+      state.hiddenTurns += 1;
+    } else {
+      state.hiddenTurns = 0;
+    }
+    if (state.scanPulseTicks > 0) {
+      state.scanPulseTicks -= 1;
+      if (state.scanPulseTicks === 0) {
+        state.scanFocusRoom = null;
+      }
+    }
     tickPlayerTravel();
     tickRobotTravel();
     processPendingSignals();
@@ -2628,10 +3035,24 @@ function useCraftedItem(name) {
   updateUI();
 }
 
+function pickScannerFocusRoom() {
+  if (state.robotPlannedTarget !== null) return state.robotPlannedTarget;
+  if (state.robotSweepQueue.length > 0) return state.robotSweepQueue[0];
+  let bestRoom = null;
+  let bestSignal = 0;
+  state.roomSignals.forEach((value, roomId) => {
+    if (value > bestSignal) {
+      bestSignal = value;
+      bestRoom = roomId;
+    }
+  });
+  return bestRoom;
+}
+
 function jamDurationForNight() {
-  if (state.currentNight <= 3) return 5;
-  if (state.currentNight <= 7) return 4;
-  return 3;
+  const effects = getPassiveEffects();
+  const base = state.currentNight <= 3 ? 5 : state.currentNight <= 7 ? 4 : 3;
+  return base + effects.jamBonus;
 }
 
 function jamDoorTo(roomId) {
@@ -2642,9 +3063,10 @@ function jamDoorTo(roomId) {
   if (!jamEdge(state.playerRoom, roomId, duration)) return;
   state.doorJams = Math.max(0, state.doorJams - 1);
   const profile = getNightProfile();
+  const effects = getPassiveEffects();
   registerSignal(
     state.playerRoom,
-    0.35 * profile.signalStrength.device,
+    0.35 * profile.signalStrength.device * effects.signalSpike,
     { type: "jam", lastKnownChance: 0.2 }
   );
   pushStatus("You wedge the door. Metal screams.", 3);
@@ -2672,18 +3094,21 @@ function tickPlayerTravel() {
   if (elapsed < state.playerTravelStepDuration) return;
   const nextRoom = state.playerPath.shift();
   state.playerRoom = nextRoom;
+  state.lastMoveType = isRun ? "run" : "sneak";
   state.hidden = false;
   state.hiddenSpot = null;
+  state.hiddenTurns = 0;
   updatePlayerTrail(nextRoom);
   const profile = getNightProfile();
+  const effects = getPassiveEffects();
   const isRun = state.playerTravelMode === "run";
   if (isRun) {
-    registerSignal(nextRoom, 0.95 * profile.signalStrength.run, {
+    registerSignal(nextRoom, 0.95 * profile.signalStrength.run * effects.signalSpike, {
       type: "run",
       forceLastKnown: true,
     });
     const noiseBoost = getRoomNoiseRisk(nextRoom);
-    registerSignal(nextRoom, Math.max(0.35, noiseBoost) * profile.signalStrength.run, {
+    registerSignal(nextRoom, Math.max(0.35, noiseBoost) * profile.signalStrength.run * effects.signalSpike, {
       type: "run",
       forceLastKnown: true,
     });
@@ -2692,7 +3117,11 @@ function tickPlayerTravel() {
     const base = 0.25;
     const noiseBoost = getRoomNoiseRisk(nextRoom);
     const strength = Math.min(0.4, base + noiseBoost * 0.2) * profile.signalStrength.sneak;
-    registerSignal(nextRoom, strength, { type: "sneak", lastKnownChance: strength * 0.5 });
+    const lastKnownScale = profile.sneakLastKnownScale ?? 1;
+    registerSignal(nextRoom, strength, {
+      type: "sneak",
+      lastKnownChance: strength * 0.5 * lastKnownScale,
+    });
     if (strength < 0.35) {
       state.sneakStepsWithoutSignal += 1;
     } else {
@@ -2763,6 +3192,7 @@ function tickRobotTravel() {
     state.robotTravelStepStart = null;
     state.robotTravelStepDuration = 0;
     state.robotPath = [];
+    state.robotPlannedTarget = null;
     return;
   }
   state.robotPath.shift();
@@ -2784,6 +3214,10 @@ function tickRobotTravel() {
       const baseInvestigate = profile.investigateTurns.min;
       const variance = Math.max(1, profile.investigateTurns.max - profile.investigateTurns.min + 1);
       state.robotInvestigateTurns = Math.floor(Math.random() * variance) + baseInvestigate;
+      if (state.robotFocus === state.robotRoom && state.robotFocusLinger > 0) {
+        state.robotInvestigateTurns += state.robotFocusLinger;
+        state.robotFocusLinger = 0;
+      }
       if (confidence >= 0.55 || state.threat >= 3) {
         buildSweepQueue(state.robotRoom);
       } else {

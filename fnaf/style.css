@@ -438,6 +438,12 @@ main {
   stroke-width: 2.4;
 }
 
+.map-node.scan-focus circle {
+  stroke: rgba(148, 236, 255, 0.9);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px rgba(120, 208, 255, 0.6));
+}
+
 .poi-blink {
   animation: poiPulse 1.6s ease-in-out infinite;
 }
