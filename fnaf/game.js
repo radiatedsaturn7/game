@@ -208,6 +208,179 @@ let roomConnections = {
 const TICK_MS = 1200;
 const DEBUG_AI = false;
 
+const NIGHT_PROFILES = {
+  1: {
+    signalStrength: { sneak: 0.5, run: 0.9, device: 0.8 },
+    signalDecay: 0.12,
+    lastKnownChance: 0.6,
+    confidenceGain: 0.8,
+    confidenceDecay: 1.1,
+    trailStaleness: 1,
+    investigateTurns: { min: 2, max: 3 },
+    sweepDepth: { low: 1, mid: 1, high: 2 },
+    sweepCooldown: 5,
+    prediction: { enabled: false, chance: 0.1, cooldown: 7, confidence: 0.8, signal: 0.75 },
+    moodChance: { irritated: 0.2, cautious: 0.4, confident: 0.2 },
+    killAggression: 0.85,
+    sneakBreakRooms: 2,
+    sneakDecayBoost: 0.06,
+    deviceFatigue: 0.8,
+  },
+  2: {
+    signalStrength: { sneak: 0.55, run: 0.95, device: 0.85 },
+    signalDecay: 0.11,
+    lastKnownChance: 0.65,
+    confidenceGain: 0.85,
+    confidenceDecay: 1.05,
+    trailStaleness: 1,
+    investigateTurns: { min: 2, max: 3 },
+    sweepDepth: { low: 1, mid: 2, high: 2 },
+    sweepCooldown: 5,
+    prediction: { enabled: false, chance: 0.12, cooldown: 7, confidence: 0.8, signal: 0.7 },
+    moodChance: { irritated: 0.25, cautious: 0.4, confident: 0.25 },
+    killAggression: 0.9,
+    sneakBreakRooms: 2,
+    sneakDecayBoost: 0.05,
+    deviceFatigue: 0.85,
+  },
+  3: {
+    signalStrength: { sneak: 0.6, run: 1.0, device: 0.9 },
+    signalDecay: 0.1,
+    lastKnownChance: 0.7,
+    confidenceGain: 0.9,
+    confidenceDecay: 1.0,
+    trailStaleness: 2,
+    investigateTurns: { min: 2, max: 4 },
+    sweepDepth: { low: 1, mid: 2, high: 3 },
+    sweepCooldown: 4,
+    prediction: { enabled: true, chance: 0.18, cooldown: 6, confidence: 0.75, signal: 0.7 },
+    moodChance: { irritated: 0.3, cautious: 0.35, confident: 0.3 },
+    killAggression: 0.95,
+    sneakBreakRooms: 2,
+    sneakDecayBoost: 0.05,
+    deviceFatigue: 0.9,
+  },
+  4: {
+    signalStrength: { sneak: 0.65, run: 1.05, device: 0.95 },
+    signalDecay: 0.095,
+    lastKnownChance: 0.72,
+    confidenceGain: 0.95,
+    confidenceDecay: 0.95,
+    trailStaleness: 2,
+    investigateTurns: { min: 3, max: 4 },
+    sweepDepth: { low: 1, mid: 2, high: 3 },
+    sweepCooldown: 4,
+    prediction: { enabled: true, chance: 0.22, cooldown: 6, confidence: 0.72, signal: 0.68 },
+    moodChance: { irritated: 0.35, cautious: 0.3, confident: 0.35 },
+    killAggression: 1.0,
+    sneakBreakRooms: 2,
+    sneakDecayBoost: 0.04,
+    deviceFatigue: 0.95,
+  },
+  5: {
+    signalStrength: { sneak: 0.7, run: 1.1, device: 1.0 },
+    signalDecay: 0.09,
+    lastKnownChance: 0.75,
+    confidenceGain: 1.0,
+    confidenceDecay: 0.9,
+    trailStaleness: 2,
+    investigateTurns: { min: 3, max: 5 },
+    sweepDepth: { low: 2, mid: 3, high: 3 },
+    sweepCooldown: 3,
+    prediction: { enabled: true, chance: 0.28, cooldown: 5, confidence: 0.7, signal: 0.65 },
+    moodChance: { irritated: 0.4, cautious: 0.25, confident: 0.4 },
+    killAggression: 1.05,
+    sneakBreakRooms: 3,
+    sneakDecayBoost: 0.04,
+    deviceFatigue: 1.0,
+  },
+  6: {
+    signalStrength: { sneak: 0.75, run: 1.15, device: 1.05 },
+    signalDecay: 0.085,
+    lastKnownChance: 0.78,
+    confidenceGain: 1.05,
+    confidenceDecay: 0.88,
+    trailStaleness: 3,
+    investigateTurns: { min: 3, max: 5 },
+    sweepDepth: { low: 2, mid: 3, high: 4 },
+    sweepCooldown: 3,
+    prediction: { enabled: true, chance: 0.32, cooldown: 5, confidence: 0.7, signal: 0.63 },
+    moodChance: { irritated: 0.45, cautious: 0.2, confident: 0.45 },
+    killAggression: 1.1,
+    sneakBreakRooms: 3,
+    sneakDecayBoost: 0.035,
+    deviceFatigue: 1.05,
+  },
+  7: {
+    signalStrength: { sneak: 0.8, run: 1.2, device: 1.1 },
+    signalDecay: 0.08,
+    lastKnownChance: 0.82,
+    confidenceGain: 1.1,
+    confidenceDecay: 0.82,
+    trailStaleness: 3,
+    investigateTurns: { min: 4, max: 6 },
+    sweepDepth: { low: 2, mid: 3, high: 4 },
+    sweepCooldown: 2,
+    prediction: { enabled: true, chance: 0.36, cooldown: 4, confidence: 0.68, signal: 0.6 },
+    moodChance: { irritated: 0.5, cautious: 0.15, confident: 0.5 },
+    killAggression: 1.15,
+    sneakBreakRooms: 3,
+    sneakDecayBoost: 0.03,
+    deviceFatigue: 1.1,
+  },
+  8: {
+    signalStrength: { sneak: 0.85, run: 1.25, device: 1.15 },
+    signalDecay: 0.075,
+    lastKnownChance: 0.85,
+    confidenceGain: 1.15,
+    confidenceDecay: 0.78,
+    trailStaleness: 3,
+    investigateTurns: { min: 4, max: 6 },
+    sweepDepth: { low: 2, mid: 4, high: 4 },
+    sweepCooldown: 2,
+    prediction: { enabled: true, chance: 0.4, cooldown: 4, confidence: 0.66, signal: 0.6 },
+    moodChance: { irritated: 0.55, cautious: 0.15, confident: 0.55 },
+    killAggression: 1.2,
+    sneakBreakRooms: 3,
+    sneakDecayBoost: 0.025,
+    deviceFatigue: 1.15,
+  },
+  9: {
+    signalStrength: { sneak: 0.9, run: 1.3, device: 1.2 },
+    signalDecay: 0.07,
+    lastKnownChance: 0.88,
+    confidenceGain: 1.2,
+    confidenceDecay: 0.75,
+    trailStaleness: 4,
+    investigateTurns: { min: 4, max: 7 },
+    sweepDepth: { low: 3, mid: 4, high: 5 },
+    sweepCooldown: 2,
+    prediction: { enabled: true, chance: 0.45, cooldown: 3, confidence: 0.64, signal: 0.58 },
+    moodChance: { irritated: 0.6, cautious: 0.1, confident: 0.6 },
+    killAggression: 1.25,
+    sneakBreakRooms: 4,
+    sneakDecayBoost: 0.02,
+    deviceFatigue: 1.2,
+  },
+  10: {
+    signalStrength: { sneak: 0.95, run: 1.35, device: 1.25 },
+    signalDecay: 0.065,
+    lastKnownChance: 0.9,
+    confidenceGain: 1.25,
+    confidenceDecay: 0.7,
+    trailStaleness: 4,
+    investigateTurns: { min: 5, max: 7 },
+    sweepDepth: { low: 3, mid: 5, high: 5 },
+    sweepCooldown: 2,
+    prediction: { enabled: true, chance: 0.5, cooldown: 3, confidence: 0.62, signal: 0.55 },
+    moodChance: { irritated: 0.65, cautious: 0.1, confident: 0.65 },
+    killAggression: 1.3,
+    sneakBreakRooms: 4,
+    sneakDecayBoost: 0.02,
+    deviceFatigue: 1.25,
+  },
+};
+
 const state = {
   playerRoom: 0,
   robotRoom: 0,
@@ -263,6 +436,8 @@ const state = {
   robotPredictionCooldown: 0,
   robotMood: null,
   robotMoodTicks: 0,
+  currentNight: 1,
+  nightProfile: null,
   dayCount: 1,
   baseDate: new Date("2326-12-25T00:00:00Z"),
   isAlive: true,
@@ -341,11 +516,14 @@ const dom = {
   roomStatus: document.querySelector(".room-status"),
   deathSummary: document.getElementById("deathSummary"),
   victorySummary: document.getElementById("victorySummary"),
+  nightLabel: document.getElementById("nightLabel"),
+  nightSelect: document.getElementById("nightSelect"),
 };
 
 let gameLoopId = null;
 
 function init() {
+  state.nightProfile = getNightProfile();
   renderMap();
   assignRoomFinds();
   updateSchematicList();
@@ -376,6 +554,10 @@ function attachEvents() {
   dom.ackObjectiveBtn.addEventListener("click", acknowledgeObjective);
   dom.ackRobotAlertBtn.addEventListener("click", acknowledgeRobotAlert);
   dom.escapeBtn.addEventListener("click", handleEscape);
+  dom.nightSelect.addEventListener("change", (event) => {
+    const next = Number(event.target.value);
+    setCurrentNight(next);
+  });
   dom.menuPanel.addEventListener("click", (event) => {
     if (event.target === dom.menuPanel) {
       closeMenu();
@@ -421,6 +603,8 @@ function updateUI() {
   updateTravelStatus();
   dom.threatLevel.textContent = threatLabel();
   dom.dateLabel.textContent = formatDate(state.baseDate, state.dayCount);
+  dom.nightLabel.textContent = `${state.currentNight}`.padStart(2, "0");
+  dom.nightSelect.value = String(state.currentNight);
   dom.selectedRoom.textContent = state.selectedRoom === null
     ? "None"
     : rooms[state.selectedRoom].name;
@@ -589,6 +773,9 @@ function setRobotMode(mode) {
 
 function setRobotMood(mood, ticks) {
   if (!mood || ticks <= 0) return;
+  const profile = getNightProfile();
+  const chance = profile.moodChance[mood] ?? 0.3;
+  if (Math.random() > chance) return;
   if (state.robotMood === mood) {
     state.robotMoodTicks = Math.max(state.robotMoodTicks, ticks);
     return;
@@ -619,6 +806,18 @@ function clamp(value, min, max) {
 function logDebug(event, payload) {
   if (!DEBUG_AI) return;
   console.log(`[AI] ${event}`, payload);
+}
+
+function getNightProfile() {
+  return NIGHT_PROFILES[state.currentNight] ?? NIGHT_PROFILES[1];
+}
+
+function setCurrentNight(night) {
+  const next = clamp(Math.floor(night), 1, 10);
+  state.currentNight = next;
+  state.nightProfile = getNightProfile();
+  updateUI();
+  pushStatus(`Night ${next} protocols loaded.`, 3);
 }
 
 function scheduleSignal(roomId, strength, delay, options = {}) {
@@ -679,10 +878,20 @@ function triggerOhShit(roomId) {
 
 function buildRunSummary(outcome) {
   const lines = [];
+  lines.push(`Night ${state.currentNight} log:`);
   if (outcome === "win") {
-    lines.push("You escaped the factory, but the machine kept learning.");
+    lines.push(`You escaped the factory on Night ${state.currentNight}.`);
   } else {
     lines.push(`You were caught in ${rooms[state.playerRoom].name}.`);
+  }
+  if (state.currentNight >= 6) {
+    lines.push(`By Night ${state.currentNight}, the robot anticipated your routes.`);
+  }
+  if (state.currentNight >= 8) {
+    lines.push(`Your tricks stopped working by Night ${state.currentNight}.`);
+  }
+  if (outcome === "win" && state.currentNight >= 9) {
+    lines.push(`You escaped on Night ${state.currentNight} by breaking the trail one last time.`);
   }
   if (state.learnedHidingSpots.size > 0) {
     lines.push("The robot adapted to your hiding habits.");
@@ -1160,12 +1369,13 @@ function handleAction(action) {
 }
 
 function useDevice(type) {
+  const profile = getNightProfile();
   const device = deviceTypes[type];
   const history = state.usedDevices.get(type) || [];
   history.push(state.turn);
   state.usedDevices.set(type, history.slice(-4));
 
-  if (deviceLearned(type)) {
+  if (deviceLearned(type, profile.deviceFatigue)) {
     state.robotFocus = null;
     return;
   }
@@ -1177,19 +1387,27 @@ function useDevice(type) {
   state.robotFocus = diversion;
   applyRobotPause("distract");
   if (type === "scan") {
-    registerSignal(state.playerRoom, 0.3);
+    registerSignal(state.playerRoom, 0.3 * profile.signalStrength.device);
   }
   if (type === "noise") {
     state.noiseLures = Math.max(0, state.noiseLures - 1);
-    registerSignal(diversion, 0.4, { type: "noise", forceLastKnown: true, bleed: true });
-    scheduleSignal(diversion, 0.5, 2, { type: "decoy", forceLastKnown: true, bleed: true });
+    registerSignal(diversion, 0.4 * profile.signalStrength.device, {
+      type: "noise",
+      forceLastKnown: true,
+      bleed: true,
+    });
+    scheduleSignal(diversion, 0.5 * profile.signalStrength.device, 2, {
+      type: "decoy",
+      forceLastKnown: true,
+      bleed: true,
+    });
   }
 }
 
-function deviceLearned(type) {
+function deviceLearned(type, fatigue = 1) {
   const history = state.usedDevices.get(type) || [];
   const recentUses = history.filter((turn) => state.turn - turn <= 4);
-  return recentUses.length >= 3;
+  return recentUses.length >= Math.ceil(3 * fatigue);
 }
 
 function isRobotTraveling() {
@@ -1247,10 +1465,12 @@ function advanceRobot() {
     return;
   }
 
-  const strongWindow = state.robotMood === "confident" ? 5 : 4;
+  const profile = getNightProfile();
+  const strongWindow = state.robotMood === "confident" ? profile.trailStaleness + 2 : profile.trailStaleness + 1;
   const hasRecentStrongSignal = state.turn - state.lastStrongSignalTick <= strongWindow;
-  const confidenceThreshold = state.robotMood === "irritated" ? 0.65 : 0.7;
-  const cautiousThreshold = state.robotMood === "cautious" ? 0.8 : confidenceThreshold;
+  const baseThreshold = profile.prediction.confidence;
+  const confidenceThreshold = state.robotMood === "irritated" ? baseThreshold - 0.05 : baseThreshold;
+  const cautiousThreshold = state.robotMood === "cautious" ? baseThreshold + 0.1 : confidenceThreshold;
   const commitAllowed = state.robotTargetConfidence >= cautiousThreshold && hasRecentStrongSignal;
   if (state.robotSweepQueue.length > 0) {
     const nextSweep = state.robotSweepQueue.shift();
@@ -1322,7 +1542,8 @@ function checkThreat() {
   const learned = state.learnedHidingSpots.has(state.playerRoom);
   const signal = state.roomSignals.get(state.playerRoom) || 0;
   const baseChance = state.hidden ? (learned ? 0.55 : 0.35) : 0.75;
-  const killChance = Math.min(0.9, baseChance + signal * 0.3);
+  const profile = getNightProfile();
+  const killChance = Math.min(0.9, baseChance * profile.killAggression + signal * 0.3);
   const killed = Math.random() < killChance;
   if (killed) {
     triggerDeath();
@@ -1342,7 +1563,8 @@ function attemptKill() {
   const baseChance = state.hidden
     ? (state.sawPlayerHide ? (learned ? 0.5 : 0.3) : 0.05)
     : 0.7;
-  const killChance = Math.min(0.85, baseChance + signal * 0.4);
+  const profile = getNightProfile();
+  const killChance = Math.min(0.85, baseChance * profile.killAggression + signal * 0.4);
   if (Math.random() < killChance) {
     triggerDeath();
   } else if (Math.random() < 0.4) {
@@ -1416,6 +1638,7 @@ function resetGame() {
   state.robotPredictionCooldown = 0;
   state.robotMood = null;
   state.robotMoodTicks = 0;
+  state.nightProfile = getNightProfile();
   state.sawPlayerHide = false;
   state.robotDisabled = true;
   state.alertTicks = 0;
@@ -1478,6 +1701,7 @@ function formatDate(baseDate, dayCount) {
 }
 
 function registerSignal(roomId, strength, options = {}) {
+  const profile = getNightProfile();
   const {
     type = "ambient",
     forceLastKnown = false,
@@ -1485,26 +1709,30 @@ function registerSignal(roomId, strength, options = {}) {
     bleed = false,
   } = options;
   const current = state.roomSignals.get(roomId) || 0;
-  const next = Math.min(1, current + strength);
+  const scaledStrength = strength * profile.confidenceGain;
+  const next = Math.min(1, current + scaledStrength);
   state.roomSignals.set(roomId, next);
   if (type === "sneak") {
-    state.signalDecayBoost.set(roomId, Math.max(state.signalDecayBoost.get(roomId) || 0, 0.05));
+    state.signalDecayBoost.set(
+      roomId,
+      Math.max(state.signalDecayBoost.get(roomId) || 0, profile.sneakDecayBoost)
+    );
   }
   if (current < 0.6 && next >= 0.6) {
     pushStatus("A pressure spike ripples through the halls.", 3);
   }
-  const updateChance = lastKnownChance ?? next;
+  const updateChance = (lastKnownChance ?? next) * profile.lastKnownChance;
   if (forceLastKnown || Math.random() < updateChance) {
     state.lastKnownPlayerRoom = roomId;
-    state.trailTurns = 2;
+    state.trailTurns = profile.trailStaleness;
   }
-  if (strength >= 0.6 || next >= 0.7) {
+  if (scaledStrength >= 0.6 || next >= 0.7) {
     state.lastStrongSignalTick = state.turn;
     state.lastStrongSignalRoom = roomId;
   }
   logDebug("signal", {
     roomId,
-    strength,
+    strength: scaledStrength,
     next,
     type,
     lastKnown: state.lastKnownPlayerRoom,
@@ -1513,7 +1741,7 @@ function registerSignal(roomId, strength, options = {}) {
   if (bleed) {
     const neighbors = roomConnections[roomId] || [];
     neighbors.forEach((neighbor) => {
-      scheduleSignal(neighbor, strength * 0.35, 1, { type: "bleed", lastKnownChance: 0.1 });
+      scheduleSignal(neighbor, scaledStrength * 0.35, 1, { type: "bleed", lastKnownChance: 0.1 });
     });
   }
   if (roomId !== state.robotRoom && next >= 0.4) {
@@ -1522,9 +1750,10 @@ function registerSignal(roomId, strength, options = {}) {
 }
 
 function decaySignals() {
+  const profile = getNightProfile();
   state.roomSignals.forEach((value, roomId) => {
     const boost = state.signalDecayBoost.get(roomId) || 0;
-    const next = Math.max(0, value - 0.08 - boost);
+    const next = Math.max(0, value - profile.signalDecay - boost * profile.confidenceDecay);
     if (boost > 0) {
       const nextBoost = Math.max(0, boost - 0.02);
       if (nextBoost <= 0) {
@@ -1564,21 +1793,22 @@ function markRoomChecked(roomId) {
 }
 
 function buildSweepQueue(roomId) {
+  const profile = getNightProfile();
   if (state.robotSweepCooldown > 0) return;
   const neighbors = roomConnections[roomId];
   const available = neighbors.filter((neighbor) => !state.robotCheckedCooldown.has(neighbor));
   const confidence = getRoomConfidence(roomId);
   let count = 1;
   if (confidence >= 0.75 || state.threat >= 4) {
-    count = Math.min(available.length, 3);
+    count = Math.min(available.length, profile.sweepDepth.high);
   } else if (confidence >= 0.5 || state.threat >= 3) {
-    count = Math.min(available.length, 2);
+    count = Math.min(available.length, profile.sweepDepth.mid);
   } else {
-    count = Math.min(available.length, 1);
+    count = Math.min(available.length, profile.sweepDepth.low);
   }
   const shuffled = [...available].sort(() => Math.random() - 0.5);
   state.robotSweepQueue = shuffled.slice(0, count);
-  state.robotSweepCooldown = 4;
+  state.robotSweepCooldown = profile.sweepCooldown;
 }
 
 function predictNextRoom() {
@@ -1618,14 +1848,18 @@ function pickRobotTarget() {
     state.lastKnownPlayerRoom !== null &&
     state.robotPredictionCooldown === 0
   ) {
+    const profile = getNightProfile();
+    if (!profile.prediction.enabled) return null;
     const confidence = getRoomConfidence(state.lastKnownPlayerRoom);
     const lastSignal = state.roomSignals.get(state.lastKnownPlayerRoom) || 0;
     const moodBoost = state.robotMood === "confident" ? 0.1 : 0;
     const moodPenalty = state.robotMood === "cautious" ? -0.1 : 0;
-    const chance = clamp(0.25 + moodBoost + moodPenalty, 0.1, 0.45);
-    const signalThreshold = state.robotMood === "cautious" ? 0.75 : 0.65;
-    if (confidence >= 0.7 && lastSignal >= signalThreshold && Math.random() < chance) {
-      state.robotPredictionCooldown = 5;
+    const chance = clamp(profile.prediction.chance + moodBoost + moodPenalty, 0.1, 0.6);
+    const signalThreshold = state.robotMood === "cautious"
+      ? profile.prediction.signal + 0.05
+      : profile.prediction.signal;
+    if (confidence >= profile.prediction.confidence && lastSignal >= signalThreshold && Math.random() < chance) {
+      state.robotPredictionCooldown = profile.prediction.cooldown;
       logDebug("predict", { predicted, confidence, lastSignal });
       return predicted;
     }
@@ -1652,8 +1886,13 @@ function pickSearchSpot() {
 
 function triggerSiren(roomId) {
   if (!state.isAlive || state.hasEscaped) return;
+  const profile = getNightProfile();
   state.robotFocus = roomId;
-  registerSignal(roomId, 0.6, { type: "siren", forceLastKnown: true, bleed: true });
+  registerSignal(roomId, 0.6 * profile.signalStrength.device, {
+    type: "siren",
+    forceLastKnown: true,
+    bleed: true,
+  });
   state.persistentSignals.set(roomId, 4);
   state.turn += 1;
   updateUI();
@@ -2210,23 +2449,30 @@ function tickPlayerTravel() {
   state.hidden = false;
   state.hiddenSpot = null;
   updatePlayerTrail(nextRoom);
+  const profile = getNightProfile();
   const isRun = state.playerTravelMode === "run";
   if (isRun) {
-    registerSignal(nextRoom, 0.95, { type: "run", forceLastKnown: true });
+    registerSignal(nextRoom, 0.95 * profile.signalStrength.run, {
+      type: "run",
+      forceLastKnown: true,
+    });
     const noiseBoost = getRoomNoiseRisk(nextRoom);
-    registerSignal(nextRoom, Math.max(0.35, noiseBoost), { type: "run", forceLastKnown: true });
+    registerSignal(nextRoom, Math.max(0.35, noiseBoost) * profile.signalStrength.run, {
+      type: "run",
+      forceLastKnown: true,
+    });
     state.sneakStepsWithoutSignal = 0;
   } else {
     const base = 0.25;
     const noiseBoost = getRoomNoiseRisk(nextRoom);
-    const strength = Math.min(0.4, base + noiseBoost * 0.2);
+    const strength = Math.min(0.4, base + noiseBoost * 0.2) * profile.signalStrength.sneak;
     registerSignal(nextRoom, strength, { type: "sneak", lastKnownChance: strength * 0.5 });
     if (strength < 0.35) {
       state.sneakStepsWithoutSignal += 1;
     } else {
       state.sneakStepsWithoutSignal = 0;
     }
-    if (state.sneakStepsWithoutSignal >= 2) {
+    if (state.sneakStepsWithoutSignal >= profile.sneakBreakRooms) {
       state.trailTurns = Math.max(0, state.trailTurns - 1);
       if (state.lastKnownPlayerRoom !== null) {
         const currentSignal = state.roomSignals.get(state.lastKnownPlayerRoom) || 0;
@@ -2279,9 +2525,10 @@ function tickRobotTravel() {
     state.robotTravelStepStart = null;
     state.robotTravelStepDuration = 0;
     if (state.robotPlannedTarget !== null && state.robotRoom === state.robotPlannedTarget) {
+      const profile = getNightProfile();
       const confidence = Math.max(state.robotTargetConfidence, getRoomConfidence(state.robotRoom));
-      const baseInvestigate = confidence >= 0.7 ? 4 : 2;
-      const variance = confidence >= 0.7 ? 2 : 1;
+      const baseInvestigate = profile.investigateTurns.min;
+      const variance = Math.max(1, profile.investigateTurns.max - profile.investigateTurns.min + 1);
       state.robotInvestigateTurns = Math.floor(Math.random() * variance) + baseInvestigate;
       if (confidence >= 0.55 || state.threat >= 3) {
         buildSweepQueue(state.robotRoom);
