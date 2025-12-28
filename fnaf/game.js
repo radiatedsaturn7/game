@@ -485,6 +485,7 @@ const state = {
   dayCount: 1,
   baseDate: new Date("2326-12-25T00:00:00Z"),
   unlocks: {},
+  skipNextObjectiveModal: false,
   isAlive: true,
   hasEscaped: false,
   robotAlertQueued: false,
@@ -738,7 +739,7 @@ function updateSchematicsInventory() {
   dom.schematicInventory.innerHTML = "";
   if (!state.unlocks.crafting) {
     const locked = document.createElement("li");
-    const unlockNight = getFirstUnlockNight("crafting");
+    const unlockNight = getNextUnlockNightFromNow("crafting");
     locked.textContent = unlockNight
       ? `Crafting locked until Night ${unlockNight}.`
       : "Crafting locked.";
@@ -771,7 +772,7 @@ function updateSchematicList() {
   dom.schematicList.innerHTML = "";
   if (!state.unlocks.crafting) {
     const locked = document.createElement("li");
-    const unlockNight = getFirstUnlockNight("crafting");
+    const unlockNight = getNextUnlockNightFromNow("crafting");
     locked.textContent = unlockNight
       ? `Crafting locked until Night ${unlockNight}.`
       : "Crafting locked.";
@@ -806,10 +807,10 @@ function updateSchematicList() {
 
 function updateBuildButton() {
   if (!state.unlocks.crafting) {
-    const unlockNight = getFirstUnlockNight("crafting");
+    const unlockNight = getNextUnlockNightFromNow("crafting");
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = unlockNight
-      ? `Crafting locked until Night ${unlockNight}`
+      ? `Crafting locked (Night ${unlockNight})`
       : "Crafting locked";
     return;
   }
@@ -938,7 +939,11 @@ function getNightProfile() {
 }
 
 function getUnlocks() {
-  return NIGHT_UNLOCKS[state.currentNight] ?? {
+  return getUnlocksForNight(state.currentNight);
+}
+
+function getUnlocksForNight(night) {
+  return NIGHT_UNLOCKS[night] ?? {
     devices: true,
     crafting: true,
     slowRewire: true,
@@ -1343,7 +1348,7 @@ function updateRoomActions() {
       ? "Recover Data Fragment"
       : state.unlocks.crafting
         ? `Scan Schematic: ${room.schematic}`
-        : `Schematic Scan (Night ${getFirstUnlockNight("crafting") ?? "?"})`;
+        : `Schematic Scan (Night ${getNextUnlockNightFromNow("crafting") ?? "?"})`;
     actions.push({
       label: scanLabel,
       onClick: () => collectSchematic(room.id),
@@ -1759,7 +1764,7 @@ function handleAction(action) {
 
   if (action === "scan" || action === "noise") {
     if (!state.unlocks.devices) {
-      const unlockNight = getFirstUnlockNight("devices");
+      const unlockNight = getNextUnlockNightFromNow("devices");
       pushStatus(
         unlockNight ? `Devices unlock on Night ${unlockNight}.` : "Devices locked.",
         3
@@ -2043,7 +2048,7 @@ function updateNextNightButton() {
 }
 
 function advanceNight() {
-  const prevUnlocks = state.unlocks;
+  const previousNight = state.currentNight;
   if (state.currentNight >= 10) {
     state.currentNight = 1;
   } else {
@@ -2051,10 +2056,15 @@ function advanceNight() {
   }
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
+  const prevUnlocks = getUnlocksForNight(previousNight);
+  const nextUnlocks = getUnlocksForNight(state.currentNight);
+  const messages = listNewUnlockMessages(prevUnlocks, nextUnlocks);
+  state.skipNextObjectiveModal = messages.length > 0;
   resetGame();
-  const messages = listNewUnlockMessages(prevUnlocks, state.unlocks);
   if (messages.length > 0) {
     showObjectiveModal(messages.join(" "));
+  } else {
+    showObjectiveModal(getObjectiveText());
   }
 }
 
@@ -2161,7 +2171,11 @@ function resetGame() {
   dom.robotAlertModal.classList.remove("active");
   dom.robotAlertModal.setAttribute("aria-hidden", "true");
   updateUI();
-  showObjectiveModal(getObjectiveText());
+  if (!state.skipNextObjectiveModal) {
+    showObjectiveModal(getObjectiveText());
+  } else {
+    state.skipNextObjectiveModal = false;
+  }
 }
 
 function threatLabel() {
@@ -3030,7 +3044,7 @@ function craftItem() {
   const craftable = getSelectedSchematic();
   if (!craftable) return;
   if (!state.unlocks.crafting) {
-    const unlockNight = getFirstUnlockNight("crafting");
+    const unlockNight = getNextUnlockNightFromNow("crafting");
     pushStatus(
       unlockNight ? `Crafting locked until Night ${unlockNight}.` : "Crafting locked.",
       3
@@ -3040,7 +3054,7 @@ function craftItem() {
   if (!state.foundSchematics.has(craftable.name)) return;
   if (craftable.name !== "Door Jam" && state.craftedItems.has(craftable.name)) return;
   if (craftable.name === "Door Jam" && !state.unlocks.doorJams) {
-    const unlockNight = getFirstUnlockNight("doorJams");
+    const unlockNight = getNextUnlockNightFromNow("doorJams");
     pushStatus(
       unlockNight ? `Door jams unlock on Night ${unlockNight}.` : "Door jams locked.",
       3
@@ -3137,11 +3151,11 @@ function updateUseList() {
 
   if (options.length === 0) {
     const empty = document.createElement("li");
-    const unlockNight = getFirstUnlockNight("devices");
+    const unlockNight = getNextUnlockNightFromNow("devices");
     empty.textContent = state.unlocks.devices
       ? "No usable items."
       : unlockNight
-        ? `Devices locked until Night ${unlockNight}.`
+        ? `Devices locked (Night ${unlockNight})`
         : "Devices locked.";
     dom.useList.appendChild(empty);
     return;
