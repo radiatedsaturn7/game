@@ -577,7 +577,7 @@ main {
 }
 
 .map-node .map-hazard {
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   opacity: 0.9;
 }
@@ -592,7 +592,7 @@ main {
 
 .map-jam {
   fill: rgba(235, 240, 255, 0.9);
-  font-size: 10px;
+  font-size: 12px;
   opacity: 0;
   pointer-events: none;
 }
@@ -601,9 +601,13 @@ main {
   opacity: 0.9;
 }
 
+.map-jam.perma {
+  fill: rgba(255, 190, 140, 0.95);
+}
+
 .map-node .map-poi {
   fill: rgba(230, 238, 255, 0.85);
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   pointer-events: none;
   opacity: 0.9;

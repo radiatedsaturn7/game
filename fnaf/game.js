@@ -166,6 +166,7 @@ const componentDescriptions = {
   "Door Jam": "Temporarily wedges a nearby door to slow pursuit.",
   "Pulse Scanner": "A toggleable scanner that hums with static to reveal nearby robot intel.",
   "Noise Lure": "Creates a loud distraction to pull the robot off your trail.",
+  "Blowtorch": "Burns through permanent jams. Loud, but it frees a locked edge.",
 };
 
 const deviceTypes = {
@@ -339,7 +340,7 @@ const SCANNER_TICK_SIGNAL = 0.08;
 const SCANNER_BLEED_SIGNAL = 0.04;
 const ALARM_TICK_SIGNAL = 0.07;
 const ALARM_BLEED_SIGNAL = 0.03;
-const SCANNER_ROOM_ID = 0;
+const PICKUP_START_ROOM = 0;
 
 const LURE_TYPES = {
   siren: {
@@ -682,11 +683,19 @@ const state = {
   scannerIntroPending: false,
   scannerHighlight: false,
   alarmedRooms: new Set(),
+  triggeredAlarms: new Set(),
   disabledAlarmedRooms: new Set(),
   alarmDisableProgress: new Map(),
   alarmedRoomsRequired: 0,
   activeLures: new Map(),
   sunlitRooms: new Set(),
+  specialPickups: new Map(),
+  requiredPickup: null,
+  toolCollected: new Set(),
+  nightIntroLine: null,
+  storyQueue: [],
+  objectiveHoldUntil: 0,
+  containmentLineShown: false,
   weather: null,
   weatherAnnounced: false,
   surgeCountdown: null,
@@ -708,6 +717,7 @@ const state = {
   mapTargetSourceRoom: null,
   mapTargetSelection: null,
   robotLastRoom: null,
+  permaJammedEdges: new Set(),
 };
 
 let travelAnimationId = null;
@@ -727,6 +737,7 @@ const dom = {
   schematicInventory: document.getElementById("schematicInventory"),
   schematicList: document.getElementById("schematicList"),
   floorplanMap: document.getElementById("floorplanMap"),
+  mapWeatherLabel: document.getElementById("mapWeatherLabel"),
   randomizeBtn: document.getElementById("randomizeBtn"),
   selectedRoom: document.getElementById("selectedRoom"),
   menuBtn: document.getElementById("menuBtn"),
@@ -789,7 +800,7 @@ function init() {
   updateUI();
   attachEvents();
   startGameLoop();
-  showObjectiveModal(getObjectiveText());
+  showObjectiveModal(getInitialObjectiveModalText());
 }
 
 function attachEvents() {
@@ -877,6 +888,7 @@ function updateUI() {
   dom.actionStatus.classList.toggle("hidden", state.statusTicks <= 0);
   updateActionLockUI();
   updateTravelStatus();
+  updateMapWeatherLabel();
   if (dom.dateLabel) {
     dom.dateLabel.textContent = formatDate(state.baseDate, state.currentNight + 1);
   }
@@ -889,7 +901,9 @@ function updateUI() {
     } else {
       dom.selectedRoom.textContent = state.mapTargetMode === "noise"
         ? "Select noise target"
-        : "Select door to jam";
+        : state.mapTargetMode === "jam"
+          ? "Select door to jam"
+          : "Select door to unjam";
     }
   } else {
     dom.selectedRoom.textContent = state.selectedRoom === null
@@ -1116,6 +1130,8 @@ function updateMapActionControls() {
     dom.mapConfirmBtn.textContent = "Deploy Noise Lure here";
   } else if (state.mapTargetMode === "jam") {
     dom.mapConfirmBtn.textContent = "Deploy Door Jam here";
+  } else if (state.mapTargetMode === "unjam") {
+    dom.mapConfirmBtn.textContent = "Use Blowtorch here";
   } else {
     dom.mapConfirmBtn.textContent = "Confirm";
   }
@@ -1257,6 +1273,15 @@ function requiresScannerPickup() {
   return state.currentNight === 4 && !state.scannerCollected;
 }
 
+function hasCollectedTool(name) {
+  return state.toolCollected.has(name) || state.inventory.has(name);
+}
+
+function isRequiredPickupComplete() {
+  if (!state.requiredPickup) return true;
+  return hasCollectedTool(state.requiredPickup.itemName);
+}
+
 function canUseScanner() {
   return state.unlocks.allowScannerToggle && !requiresScannerPickup();
 }
@@ -1384,6 +1409,8 @@ function setupEnvironmentForNight() {
   setupAlarmedRooms();
   setupLureRooms();
   setupSunlitRooms();
+  setupContainmentForNight();
+  setupSpecialPickupsForNight();
   state.robotAlarmVisits.clear();
   state.robotAlarmStreak = 0;
   state.robotAlarmLoopEdge = null;
@@ -1391,18 +1418,21 @@ function setupEnvironmentForNight() {
 }
 
 function setupWeatherForNight() {
-  if (state.currentNight < 4) {
-    state.weather = {
-      type: "Still",
-      description: "The air is calm. The factory waits.",
-      modifiers: {
-        signalStrength: 1,
-        signalDecay: 1,
-        scannerFog: false,
-        surgeBonus: 0,
-        bleedMultiplier: 1,
-      },
-    };
+  const scriptedWeather = {
+    1: "Rain",
+    2: "Rain",
+    3: "Rain",
+    4: "Clear",
+    5: "Fog",
+    6: "Storm",
+    10: "Rain",
+  };
+  const scriptedType = scriptedWeather[state.currentNight];
+  if (scriptedType) {
+    state.weather = WEATHER_TYPES.find((entry) => entry.type === scriptedType) ?? WEATHER_TYPES[0];
+  } else if (state.currentNight >= 7 && state.currentNight <= 9) {
+    const options = WEATHER_TYPES.filter((entry) => ["Clear", "Fog", "Storm"].includes(entry.type));
+    state.weather = options[Math.floor(Math.random() * options.length)];
   } else {
     state.weather = WEATHER_TYPES[Math.floor(Math.random() * WEATHER_TYPES.length)];
   }
@@ -1412,6 +1442,7 @@ function setupWeatherForNight() {
 
 function setupAlarmedRooms() {
   state.alarmedRooms = new Set();
+  state.triggeredAlarms = new Set();
   state.disabledAlarmedRooms = new Set();
   state.alarmDisableProgress = new Map();
   state.alarmedRoomsRequired = 0;
@@ -1480,6 +1511,161 @@ function setupSunlitRooms() {
     selected.push(remaining.shift());
   }
   state.sunlitRooms = new Set(selected);
+}
+
+function pickRandomRoomId(exclusions = new Set()) {
+  const eligible = rooms
+    .filter((room) => !room.isExit && !exclusions.has(room.id))
+    .map((room) => room.id);
+  if (eligible.length === 0) return PICKUP_START_ROOM;
+  return eligible[Math.floor(Math.random() * eligible.length)];
+}
+
+function setupSpecialPickupsForNight() {
+  state.specialPickups = new Map();
+  state.requiredPickup = null;
+  state.nightIntroLine = null;
+  state.storyQueue = [];
+  state.objectiveHoldUntil = 0;
+  state.toolCollected = new Set();
+
+  if (state.currentNight === 4) {
+    const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
+    state.requiredPickup = {
+      itemName: "Pulse Scanner",
+      roomId,
+      caitIntroLine: `Cait: I found a Pulse Scanner in ${rooms[roomId].name}. Go. Before it learns you.`,
+      caitWarnLine: "Cait: Look… stay out of the sun. I know you know what happens.",
+      blocksEscapeConsole: true,
+      warned: false,
+    };
+    state.specialPickups.set(roomId, "Pulse Scanner");
+    state.nightIntroLine = state.requiredPickup.caitIntroLine;
+    state.sunlitRooms.add(roomId);
+    state.scannerCollected = false;
+  }
+
+  if (state.currentNight === 5) {
+    const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
+    state.requiredPickup = {
+      itemName: "Noise Lure",
+      roomId,
+      caitIntroLine: `Cait: I found a Noise Lure in ${rooms[roomId].name}. It’ll be loud. Use it smart.`,
+      caitWarnLine: null,
+      blocksEscapeConsole: true,
+      warned: false,
+    };
+    state.specialPickups.set(roomId, "Noise Lure");
+    state.nightIntroLine = state.requiredPickup.caitIntroLine;
+    state.noiseLures = 0;
+  }
+
+  if (state.currentNight === 6) {
+    const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
+    state.requiredPickup = {
+      itemName: "Door Jam",
+      roomId,
+      caitIntroLine: `Cait: Door Jam kit in ${rooms[roomId].name}. If we get pinned, it buys seconds.`,
+      caitWarnLine: null,
+      blocksEscapeConsole: true,
+      warned: false,
+    };
+    state.specialPickups.set(roomId, "Door Jam");
+    state.nightIntroLine = state.requiredPickup.caitIntroLine;
+    state.doorJams = 0;
+  }
+
+  if (state.currentNight === 7) {
+    const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
+    state.requiredPickup = {
+      itemName: "Blowtorch",
+      roomId,
+      caitIntroLine: null,
+      caitWarnLine: null,
+      blocksEscapeConsole: true,
+      warned: false,
+    };
+    state.nightIntroLine = "Cait: Robtergeist… I’m so sorry… we weren’t fast enough.";
+    state.objectiveHoldUntil = 3;
+    state.storyQueue.push({
+      triggerTurn: 2,
+      type: "night7-lockdown",
+      roomId,
+    });
+  }
+}
+
+function isGraphConnectedWithEdgeBlocked(blockedEdges) {
+  const start = PICKUP_START_ROOM;
+  const visited = new Set();
+  const queue = [start];
+  while (queue.length) {
+    const current = queue.shift();
+    if (visited.has(current)) continue;
+    visited.add(current);
+    (roomConnections[current] || []).forEach((neighbor) => {
+      const key = edgeKey(current, neighbor);
+      if (blockedEdges.has(key)) return;
+      if (!visited.has(neighbor)) {
+        queue.push(neighbor);
+      }
+    });
+  }
+  return visited.size === rooms.length;
+}
+
+function addPermaJam(edge) {
+  state.permaJammedEdges.add(edge);
+}
+
+function removePermaJam(edge) {
+  state.permaJammedEdges.delete(edge);
+}
+
+function pickPermaJamEdge() {
+  const edges = [];
+  rooms.forEach((room) => {
+    (roomConnections[room.id] || []).forEach((neighbor) => {
+      if (neighbor < room.id) return;
+      edges.push(edgeKey(room.id, neighbor));
+    });
+  });
+  const shuffled = edges.sort(() => Math.random() - 0.5);
+  for (const edge of shuffled) {
+    if (state.permaJammedEdges.has(edge)) continue;
+    const blocked = new Set(state.permaJammedEdges);
+    blocked.add(edge);
+    if (isGraphConnectedWithEdgeBlocked(blocked)) {
+      return edge;
+    }
+  }
+  return null;
+}
+
+function jamEscapeEdges() {
+  const exitRoom = rooms.find((room) => room.isExit)?.id ?? 13;
+  (roomConnections[exitRoom] || []).forEach((neighbor) => {
+    addPermaJam(edgeKey(exitRoom, neighbor));
+  });
+}
+
+function setupContainmentForNight() {
+  state.permaJammedEdges = new Set();
+  state.containmentLineShown = false;
+  if (state.currentNight === 2) {
+    jamEscapeEdges();
+    return;
+  }
+  if (state.currentNight === 3) {
+    const edge = pickPermaJamEdge();
+    if (edge) addPermaJam(edge);
+    return;
+  }
+  if (state.currentNight >= 7) {
+    jamEscapeEdges();
+    const edge = pickPermaJamEdge();
+    if (edge) addPermaJam(edge);
+  }
 }
 
 function announceWeather() {
@@ -1568,7 +1754,7 @@ function tickAlarmedRooms() {
   const base = ALARM_TICK_SIGNAL * profile.signalStrength.device;
   const bleed = ALARM_BLEED_SIGNAL * profile.signalStrength.device;
   state.alarmedRooms.forEach((roomId) => {
-    if (!isRoomAlarmed(roomId)) return;
+    if (!isAlarmTriggered(roomId)) return;
     registerSignal(roomId, base, { type: "alarm", lastKnownChance: 0.08 });
     const neighbors = roomConnections[roomId] || [];
     neighbors.forEach((neighbor) => {
@@ -1588,6 +1774,30 @@ function tickSunlitRooms() {
     neighbors.forEach((neighbor) => {
       registerSignal(neighbor, bleed, { type: "sunlight-bleed", lastKnownChance: 0.02 });
     });
+  });
+}
+
+function tickStoryQueue() {
+  if (!state.storyQueue.length) return;
+  const ready = state.storyQueue.filter((entry) => state.turn >= entry.triggerTurn);
+  if (ready.length === 0) return;
+  state.storyQueue = state.storyQueue.filter((entry) => state.turn < entry.triggerTurn);
+  ready.forEach((entry) => {
+    if (entry.type === "night7-lockdown") {
+      showObjectiveModal("Cait: They… they managed to lock you in.");
+      state.storyQueue.push({
+        triggerTurn: state.turn + 1,
+        type: "night7-blowtorch",
+        roomId: entry.roomId,
+      });
+    }
+    if (entry.type === "night7-blowtorch") {
+      const roomId = entry.roomId;
+      state.specialPickups.set(roomId, "Blowtorch");
+      showObjectiveModal(
+        `Cait: Wait— I found a Blowtorch in ${rooms[roomId].name}. It’ll unjam those doors. It’s gonna be loud.`
+      );
+    }
   });
 }
 
@@ -1645,7 +1855,10 @@ function triggerPowerSurge(roomId) {
   registerSignal(roomId, 0.85, { type: "surge", forceLastKnown: true, bleed: true });
   const effects = getPassiveEffects();
   state.persistentSignals.set(roomId, 3 + effects.persistentBonus);
-  showObjectiveModal("Power surge! The room erupts in noise.");
+  showObjectiveModal("Cait: Power surge. That room just blew open.");
+  if (isRoomAlarmed(roomId)) {
+    state.triggeredAlarms.add(roomId);
+  }
   state.runMoments.push("A sudden power surge forced you into the open.");
   if (firstSurge) {
     adjustSanity(-0.14, "surge");
@@ -1887,6 +2100,7 @@ function closeMenu() {
 
 function openMap() {
   togglePanel(dom.mapPanel);
+  updateMapWeatherLabel();
 }
 
 function closeMap() {
@@ -1986,6 +2200,10 @@ function isRoomAlarmed(roomId) {
   return state.alarmedRooms.has(roomId) && !state.disabledAlarmedRooms.has(roomId);
 }
 
+function isAlarmTriggered(roomId) {
+  return state.triggeredAlarms.has(roomId) && isRoomAlarmed(roomId);
+}
+
 function getActiveLure(roomId) {
   return state.activeLures.get(roomId) || null;
 }
@@ -1995,20 +2213,20 @@ function hasActiveLure(roomId) {
 }
 
 function recordRobotAlarmVisit(roomId) {
-  if (!isRoomAlarmed(roomId)) return;
+  if (!isAlarmTriggered(roomId)) return;
   const current = state.robotAlarmVisits.get(roomId) || 0;
   state.robotAlarmVisits.set(roomId, current + 1);
 }
 
 function alarmVisitPenalty(roomId) {
-  if (!isRoomAlarmed(roomId)) return 0;
+  if (!isAlarmTriggered(roomId)) return 0;
   const visits = state.robotAlarmVisits.get(roomId) || 0;
   return visits * 0.12;
 }
 
 function pickNonAlarmedNeighbor(roomId) {
   const neighbors = roomConnections[roomId] || [];
-  const options = neighbors.filter((neighbor) => !isRoomAlarmed(neighbor));
+  const options = neighbors.filter((neighbor) => !isAlarmTriggered(neighbor));
   if (options.length === 0) return null;
   return options[Math.floor(Math.random() * options.length)];
 }
@@ -2018,7 +2236,7 @@ function pickHighestPressureNonAlarmedRoom() {
   let bestScore = 0;
   rooms.forEach((room) => {
     if (room.isExit) return;
-    if (isRoomAlarmed(room.id)) return;
+    if (isAlarmTriggered(room.id)) return;
     const score = getRoomPressure(room.id);
     if (score > bestScore) {
       bestScore = score;
@@ -2080,6 +2298,7 @@ function applyAlarmDisableStep(roomId, step, totalSteps) {
     return;
   }
   state.disabledAlarmedRooms.add(roomId);
+  state.triggeredAlarms.delete(roomId);
   state.alarmDisableProgress.delete(roomId);
   state.threat = Math.max(1, state.threat - 0.2);
   pushStatus("Alarm silenced. The air thins.", 3);
@@ -2125,10 +2344,11 @@ function updateRoomActions() {
     });
   }
 
-  if (requiresScannerPickup() && room.id === SCANNER_ROOM_ID) {
+  const specialPickup = state.specialPickups.get(room.id);
+  if (specialPickup && !hasCollectedTool(specialPickup)) {
     actions.push({
-      label: "Collect Pulse Scanner",
-      onClick: () => startScannerPickup(room.id),
+      label: `Collect ${specialPickup}`,
+      onClick: () => startSpecialPickup(room.id),
       disabled: state.hidden || blocked,
       highlight: true,
       risk: "Trace",
@@ -2161,13 +2381,23 @@ function updateRoomActions() {
   }
 
   if (room.isExit && !state.escapeConsoleInspected) {
-    actions.push({
-      label: "Inspect Escape Console",
-      onClick: () => startEscapeConsoleInspect(),
-      disabled: state.hidden || blocked,
-      highlight: true,
-      risk: "Exposed",
-    });
+    const requiredBlocked = state.requiredPickup?.blocksEscapeConsole && !isRequiredPickupComplete();
+    if (requiredBlocked) {
+      const pickupName = state.requiredPickup?.itemName ?? "tool";
+      actions.push({
+        label: `Cait: Get the ${pickupName} first. The console can wait.`,
+        disabled: true,
+        info: true,
+      });
+    } else {
+      actions.push({
+        label: "Inspect Escape Console",
+        onClick: () => startEscapeConsoleInspect(),
+        disabled: state.hidden || blocked,
+        highlight: true,
+        risk: "Exposed",
+      });
+    }
   }
 
   if (state.missionType === MISSION_TYPES.STABILIZE && state.escapeConsoleInspected) {
@@ -2205,11 +2435,13 @@ function updateRoomActions() {
       highlight: state.alarmedRoomsRequired > 0,
       risk: "Trace",
     });
-    actions.push({
-      label: "An alarm drones here. Sneaking won’t help.",
-      disabled: true,
-      info: true,
-    });
+    if (isAlarmTriggered(room.id)) {
+      actions.push({
+        label: "An alarm drones here. Sneaking won’t help.",
+        disabled: true,
+        info: true,
+      });
+    }
   }
 
   if (state.sunlitRooms.has(room.id)) {
@@ -2459,18 +2691,28 @@ function talkToCait() {
 
 function holdBreath() {
   if (!state.hidden || state.hiddenTurns < 2) return;
-  if (state.robotRoom === state.playerRoom && state.robotLookTurns > 0) {
-    if (Math.random() < 0.4) {
-      attemptKill();
-      return;
-    }
-    registerSignal(state.playerRoom, 0.25, { type: "breath", lastKnownChance: 0.2 });
-  }
-  state.robotTargetConfidence = Math.max(0, state.robotTargetConfidence - 0.15);
-  state.robotPredictionCooldown = Math.max(state.robotPredictionCooldown, 2);
-  pushStatus("You go still. The noise thins.", 3);
-  state.turn += 1;
-  updateUI();
+  runLockedAction({
+    label: "Holding breath…",
+    steps: 2,
+    onStep: (step, total) => {
+      pulseActionSignal(state.playerRoom, "quiet");
+      const currentSignal = state.roomSignals.get(state.playerRoom) || 0;
+      state.roomSignals.set(state.playerRoom, Math.max(0, currentSignal - 0.05));
+      state.turn += 1;
+      if (step < total) {
+        updateUI();
+        return;
+      }
+      state.robotTargetConfidence = Math.max(0, state.robotTargetConfidence - 0.2);
+      state.robotPredictionCooldown = Math.max(state.robotPredictionCooldown, 2);
+      if (state.robotRoom === state.playerRoom && state.robotLookTurns > 0) {
+        const signal = state.roomSignals.get(state.playerRoom) || 0;
+        state.roomSignals.set(state.playerRoom, Math.max(0, signal - 0.2));
+      }
+      pushStatus("You go still. The noise thins.", 3);
+      updateUI();
+    },
+  });
 }
 
 function updateDebugUI() {
@@ -2520,6 +2762,15 @@ function updateTravelStatus() {
   }
 }
 
+function updateMapWeatherLabel() {
+  if (!dom.mapWeatherLabel) return;
+  if (!state.weather) {
+    dom.mapWeatherLabel.textContent = "Weather: Unknown";
+    return;
+  }
+  dom.mapWeatherLabel.textContent = `Weather: ${state.weather.type} — ${state.weather.description}`;
+}
+
 function revealEscapeSchematic() {
   if (state.escapeConsoleInspected) return;
   state.escapeReady = false;
@@ -2540,14 +2791,14 @@ function revealEscapeSchematic() {
   state.escapeConsoleInspected = true;
   if (state.missionType === MISSION_TYPES.ESCAPE) {
     if (state.escapeMode === "manual") {
-      showObjectiveModal("Objective unlocked: Align the override nodes.");
+      showObjectiveModal("Cait: Override nodes are live. Line them up.");
     } else {
-      showObjectiveModal(`Objective unlocked: Build ${state.requiredEscapeSchematic}.`);
+      showObjectiveModal(`Cait: Build ${state.requiredEscapeSchematic}.`);
     }
   } else if (state.missionType === MISSION_TYPES.STABILIZE) {
-    showObjectiveModal("Objective unlocked: Stabilize core systems.");
+    showObjectiveModal("Cait: Stabilize the core systems.");
   } else {
-    showObjectiveModal("Objective unlocked: Recover data fragments.");
+    showObjectiveModal("Cait: Recover the data fragments.");
   }
   if (state.unlocks.robotActive) {
     state.robotDisabled = false;
@@ -2590,8 +2841,11 @@ function alarmObjectiveText() {
 
 function getObjectiveText() {
   let objective = "";
-  if (requiresScannerPickup()) {
-    objective = "Collect the Pulse Scanner in the Control Bay.";
+  if (state.objectiveHoldUntil > 0 && state.turn < state.objectiveHoldUntil) {
+    objective = "Keep moving. Listen for Cait.";
+  } else if (state.requiredPickup && !isRequiredPickupComplete()) {
+    const roomName = rooms[state.requiredPickup.roomId]?.name ?? "a nearby room";
+    objective = `Collect the ${state.requiredPickup.itemName} in ${roomName}.`;
   } else if (!state.escapeConsoleInspected) {
     objective = "Inspect the Escape Workshop console to receive your mission.";
   } else {
@@ -2637,10 +2891,15 @@ function getObjectiveText() {
       objective = "Explore the factory and collect components.";
     }
   }
-  if (state.currentNight >= 4 && state.weather) {
-    return `Weather: ${state.weather.type} — ${state.weather.description} ${objective}`;
-  }
   return objective;
+}
+
+function getInitialObjectiveModalText() {
+  const text = state.nightIntroLine ?? getObjectiveText();
+  if (text.startsWith("Cait:")) {
+    return text;
+  }
+  return `Cait: ${text}`;
 }
 
 function isPlayerTraveling() {
@@ -2762,7 +3021,21 @@ function getMapTargetCandidates() {
     });
     return new Set(valid);
   }
+  if (state.mapTargetMode === "unjam") {
+    const valid = adjacent.filter((roomId) => {
+      const key = edgeKey(source, roomId);
+      return state.permaJammedEdges.has(key);
+    });
+    return new Set(valid);
+  }
   return null;
+}
+
+function getMapTargetCandidatesForBlowtorch() {
+  const source = state.playerRoom;
+  const adjacent = roomConnections[source] || [];
+  const valid = adjacent.filter((roomId) => state.permaJammedEdges.has(edgeKey(source, roomId)));
+  return new Set(valid);
 }
 
 function handleMapSelection(roomId) {
@@ -2788,6 +3061,8 @@ function confirmMapTarget() {
     deployNoiseLure(target);
   } else if (mode === "jam") {
     deployDoorJam(target);
+  } else if (mode === "unjam") {
+    useBlowtorch(target);
   }
 }
 
@@ -2836,19 +3111,32 @@ function startCollectItem(roomId) {
   });
 }
 
-function collectScanner(roomId, { force = false } = {}) {
+function collectSpecialPickup(roomId, { force = false } = {}) {
   if (isActionLocked() && !force) return;
   if (state.hidden) return;
-  if (!requiresScannerPickup()) return;
-  if (roomId !== SCANNER_ROOM_ID) return;
-  state.inventory.add("Pulse Scanner");
-  state.scannerCollected = true;
-  state.scannerOn = false;
-  state.scannerHighlight = true;
-  state.scannerIntroPending = true;
-  showObjectiveModal(
-    "Pulse Scanner collected. It's noisy—use it from the map screen to locate the robot."
-  );
+  const itemName = state.specialPickups.get(roomId);
+  if (!itemName || hasCollectedTool(itemName)) return;
+  state.toolCollected.add(itemName);
+  state.inventory.add(itemName);
+  state.specialPickups.delete(roomId);
+  if (itemName === "Pulse Scanner") {
+    state.scannerCollected = true;
+    state.scannerOn = false;
+    state.scannerHighlight = true;
+    state.scannerIntroPending = true;
+    showObjectiveModal("Cait: Scanner’s loud. Use it from the map when you need eyes.");
+  }
+  if (itemName === "Noise Lure") {
+    state.noiseLures = Math.max(state.noiseLures, 3);
+    showObjectiveModal("Cait: Lure’s armed. Remember: loud buys time, not safety.");
+  }
+  if (itemName === "Door Jam") {
+    state.doorJams = Math.max(state.doorJams, 1);
+    showObjectiveModal("Cait: Jam kit’s live. Use it when the footsteps close in.");
+  }
+  if (itemName === "Blowtorch") {
+    showObjectiveModal("Cait: Blowtorch online. Pick the right door.");
+  }
   updateUI();
 }
 
@@ -2878,14 +3166,16 @@ function collectSchematic(roomId, { force = false } = {}) {
   updateUI();
 }
 
-function startScannerPickup(roomId) {
+function startSpecialPickup(roomId) {
+  const itemName = state.specialPickups.get(roomId);
+  if (!itemName) return;
   runLockedAction({
-    label: "Collecting Pulse Scanner…",
+    label: `Collecting ${itemName}…`,
     steps: 1,
     onStep: () => {
       pulseActionSignal(roomId, "quiet");
       state.turn += 1;
-      collectScanner(roomId, { force: true });
+      collectSpecialPickup(roomId, { force: true });
     },
   });
 }
@@ -2903,6 +3193,11 @@ function startSchematicScan(roomId) {
 }
 
 function startEscapeConsoleInspect() {
+  if (state.requiredPickup?.blocksEscapeConsole && !isRequiredPickupComplete()) {
+    const pickupName = state.requiredPickup?.itemName ?? "tool";
+    showObjectiveModal(`Cait: Not yet. Grab the ${pickupName}.`);
+    return;
+  }
   runLockedAction({
     label: "Inspecting console…",
     steps: 1,
@@ -3155,7 +3450,7 @@ function advanceRobot() {
   }
 
   if (!state.robotMovedThisTick) {
-    if (isRoomAlarmed(state.robotRoom)) {
+    if (isAlarmTriggered(state.robotRoom)) {
       recordRobotAlarmVisit(state.robotRoom);
       state.robotAlarmStreak += 1;
     } else {
@@ -3234,8 +3529,8 @@ function advanceRobot() {
   let target = pickRobotTarget();
   if (
     target !== null &&
-    isRoomAlarmed(state.robotRoom) &&
-    isRoomAlarmed(target) &&
+    isAlarmTriggered(state.robotRoom) &&
+    isAlarmTriggered(target) &&
     Math.random() < 0.6
   ) {
     const redirect = pickNonAlarmedNeighbor(state.robotRoom) ?? pickHighestPressureNonAlarmedRoom();
@@ -3271,14 +3566,14 @@ function advanceRobot() {
   } else {
     state.robotPlannedTarget = null;
     state.robotTargetConfidence = 0;
-    const avoidAlarmLoop = isRoomAlarmed(state.robotRoom);
+    const avoidAlarmLoop = isAlarmTriggered(state.robotRoom);
     const roamRooms = roomConnections[state.robotRoom].filter((id) => id !== state.robotRoom);
     const roamOptions = avoidAlarmLoop
-      ? roamRooms.filter((id) => !isRoomAlarmed(id))
+      ? roamRooms.filter((id) => !isAlarmTriggered(id))
       : roamRooms;
     const fallbackOptions = roamOptions.length > 0
       ? roamOptions
-      : roamRooms.filter((id) => !(id === state.robotLastRoom && isRoomAlarmed(id)));
+      : roamRooms.filter((id) => !(id === state.robotLastRoom && isAlarmTriggered(id)));
     if (Math.random() < 0.4 && roamOptions.length > 0) {
       const roamTarget = (fallbackOptions.length > 0
         ? fallbackOptions
@@ -3392,9 +3687,9 @@ function advanceNight() {
   state.skipNextObjectiveModal = messages.length > 0;
   resetGame();
   if (messages.length > 0) {
-    showObjectiveModal(messages.join(" "));
+    showObjectiveModal(`Cait: ${messages.join(" ")}`);
   } else {
-    showObjectiveModal(getObjectiveText());
+    showObjectiveModal(getInitialObjectiveModalText());
   }
 }
 
@@ -3503,11 +3798,19 @@ function resetGame() {
   state.scanFocusRoom = null;
   resetScannerState();
   state.alarmedRooms = new Set();
+  state.triggeredAlarms = new Set();
   state.disabledAlarmedRooms = new Set();
   state.alarmDisableProgress = new Map();
   state.alarmedRoomsRequired = 0;
   state.activeLures.clear();
   state.sunlitRooms.clear();
+  state.specialPickups = new Map();
+  state.requiredPickup = null;
+  state.toolCollected = new Set();
+  state.nightIntroLine = null;
+  state.storyQueue = [];
+  state.objectiveHoldUntil = 0;
+  state.containmentLineShown = false;
   state.weather = null;
   state.weatherAnnounced = false;
   state.surgeCountdown = null;
@@ -3520,6 +3823,7 @@ function resetGame() {
   state.mapTargetSourceRoom = null;
   state.mapTargetSelection = null;
   state.unlocks = getUnlocks();
+  state.permaJammedEdges = new Set();
   if (!state.unlocks.robotActive) {
     state.robotDisabled = true;
   }
@@ -3546,7 +3850,7 @@ function resetGame() {
   dom.robotAlertModal.setAttribute("aria-hidden", "true");
   updateUI();
   if (!state.skipNextObjectiveModal) {
-    showObjectiveModal(getObjectiveText());
+    showObjectiveModal(getInitialObjectiveModalText());
   } else {
     state.skipNextObjectiveModal = false;
   }
@@ -3824,7 +4128,7 @@ function predictNextRoom() {
 
 function pickRobotTarget() {
   if (state.robotFocus !== null) return state.robotFocus;
-  const avoidAlarmLoop = isRoomAlarmed(state.robotRoom);
+  const avoidAlarmLoop = isAlarmTriggered(state.robotRoom);
   const signals = Array.from(state.roomSignals.entries())
     .map(([roomId, value]) => ({
       roomId,
@@ -3835,7 +4139,7 @@ function pickRobotTarget() {
   for (const entry of signals) {
     const { roomId, value, adjusted } = entry;
     if (adjusted <= 0.2) continue;
-    if (avoidAlarmLoop && roomId === state.robotLastRoom && isRoomAlarmed(roomId)) continue;
+    if (avoidAlarmLoop && roomId === state.robotLastRoom && isAlarmTriggered(roomId)) continue;
     if (!state.robotCheckedCooldown.has(roomId)) return roomId;
     if (value >= 0.7 && adjusted >= 0.4) return roomId;
   }
@@ -3846,7 +4150,7 @@ function pickRobotTarget() {
     if (
       avoidAlarmLoop &&
       state.lastKnownPlayerRoom === state.robotLastRoom &&
-      isRoomAlarmed(state.lastKnownPlayerRoom)
+      isAlarmTriggered(state.lastKnownPlayerRoom)
     ) {
       return null;
     }
@@ -4119,6 +4423,7 @@ function renderMap() {
 function canSeeRobotIntel() {
   if (!state.unlocks.showRobotIntelOnMap) return false;
   if (state.robotDisabled) return false;
+  if (state.robotRoom === state.playerRoom) return true;
   const weatherMods = getWeatherModifiers();
   if (state.scannerOn) {
     if (weatherMods.scannerFog) {
@@ -4126,9 +4431,6 @@ function canSeeRobotIntel() {
     }
     return true;
   }
-  if (state.robotRoom === state.playerRoom) return true;
-  const adj = new Set(roomConnections[state.playerRoom] || []);
-  if (adj.has(state.robotRoom)) return true;
   return false;
 }
 
@@ -4158,7 +4460,7 @@ function updateMap() {
   }
   const actionTargets = getMapTargetCandidates();
   const actionEdges = new Set();
-  if (state.mapTargetMode === "jam") {
+  if (state.mapTargetMode === "jam" || state.mapTargetMode === "unjam") {
     const source = state.mapTargetSourceRoom ?? state.playerRoom;
     (roomConnections[source] || []).forEach((neighbor) => {
       const key = edgeKey(source, neighbor);
@@ -4171,19 +4473,24 @@ function updateMap() {
   dom.floorplanMap.querySelectorAll(".map-link").forEach((line) => {
     const edge = line.getAttribute("data-edge");
     line.classList.toggle("robot-plan", showRobotIntel && robotEdges.has(edge));
-    line.classList.toggle("edge-jammed", state.jammedEdges.has(edge));
+    line.classList.toggle(
+      "edge-jammed",
+      state.jammedEdges.has(edge) || state.permaJammedEdges.has(edge)
+    );
     line.classList.toggle("active", plannedEdges.has(edge));
     line.classList.toggle("action-edge", actionEdges.has(edge));
     line.classList.toggle(
       "action-edge-selected",
       state.mapTargetSelection !== null &&
-        state.mapTargetMode === "jam" &&
+        (state.mapTargetMode === "jam" || state.mapTargetMode === "unjam") &&
         edge === edgeKey(state.mapTargetSourceRoom ?? state.playerRoom, state.mapTargetSelection)
     );
   });
   dom.floorplanMap.querySelectorAll(".map-jam").forEach((marker) => {
     const edge = marker.getAttribute("data-edge");
-    marker.classList.toggle("active", state.jammedEdges.has(edge));
+    const active = state.jammedEdges.has(edge) || state.permaJammedEdges.has(edge);
+    marker.classList.toggle("active", active);
+    marker.classList.toggle("perma", state.permaJammedEdges.has(edge));
   });
   dom.floorplanMap.querySelectorAll(".map-travel").forEach((line) => {
     applyTravelProgress(line, line.getAttribute("data-edge"));
@@ -4392,7 +4699,8 @@ function edgeKey(a, b) {
 }
 
 function isEdgeJammed(a, b) {
-  return state.jammedEdges.has(edgeKey(a, b));
+  const key = edgeKey(a, b);
+  return state.jammedEdges.has(key) || state.permaJammedEdges.has(key);
 }
 
 function jamEdge(a, b, duration) {
@@ -4473,6 +4781,7 @@ function randomizeLayout() {
   state.routePreviewRoom = null;
   state.selectedRoom = null;
   state.jammedEdges.clear();
+  state.permaJammedEdges.clear();
   optimizeLayout();
   renderMap();
   updateUI();
@@ -4628,6 +4937,7 @@ function startGameLoop() {
       state.alertTicks -= 1;
     }
     tickStatus();
+    tickStoryQueue();
     if (state.sanityGlitchCooldown > 0) {
       state.sanityGlitchCooldown -= 1;
     }
@@ -4729,6 +5039,22 @@ function updateUseList() {
       action: () => beginMapTarget("jam"),
       help: "Door Jam",
       disabled: validTargets.length === 0 || isPlayerTraveling() || state.mapTargetMode,
+    });
+  }
+  if (hasCollectedTool("Blowtorch")) {
+    options.push({
+      label: "Blowtorch",
+      action: () => {
+        const targets = getMapTargetCandidatesForBlowtorch();
+        if (targets.size === 0) {
+          pushBanner("Cait: Not here. Wrong door.", 3);
+          closeUse();
+          return;
+        }
+        beginMapTarget("unjam");
+      },
+      help: "Blowtorch",
+      disabled: isPlayerTraveling() || state.mapTargetMode,
     });
   }
   state.craftedItems.forEach((item) => {
@@ -4857,6 +5183,38 @@ function jamDoorTo(roomId) {
   updateUI();
 }
 
+function useBlowtorch(roomId) {
+  const source = state.mapTargetSourceRoom ?? state.playerRoom;
+  if (!(roomConnections[source] || []).includes(roomId)) return;
+  const key = edgeKey(source, roomId);
+  if (!state.permaJammedEdges.has(key)) {
+    pushBanner("Cait: Not here. Wrong door.", 3);
+    return;
+  }
+  runLockedAction({
+    label: "Cutting through jam…",
+    steps: 2,
+    onStep: (step, total) => {
+      pulseActionSignal(state.playerRoom, "trace");
+      const profile = getNightProfile();
+      registerSignal(
+        state.playerRoom,
+        0.32 * profile.signalStrength.device,
+        { type: "blowtorch", lastKnownChance: 0.25 }
+      );
+      state.turn += 1;
+      if (step < total) {
+        updateUI();
+        return;
+      }
+      removePermaJam(key);
+      pushStatus("The jam melts away.", 3);
+      closeUse();
+      updateUI();
+    },
+  });
+}
+
 function handleEscape() {
   if (!state.escapeReady) return;
   if (!rooms[state.playerRoom].isExit) return;
@@ -4926,8 +5284,20 @@ function tickPlayerTravel() {
       state.sneakStepsWithoutSignal = 0;
     }
   }
-  if (isRoomAlarmed(nextRoom)) {
-    pushStatus("An alarm drones here. Sneaking won’t help.", 3);
+  if (isRoomAlarmed(nextRoom) && !isAlarmTriggered(nextRoom)) {
+    state.triggeredAlarms.add(nextRoom);
+    pushBanner("Cait: …that room just lit up. Move.", 4);
+  }
+  if (state.currentNight === 2 && rooms[nextRoom]?.isExit && !state.containmentLineShown) {
+    state.containmentLineShown = true;
+    pushBanner("Cait: Hey—hurry. They’re trying to contain you.", 4);
+  }
+  if (state.requiredPickup &&
+    state.requiredPickup.caitWarnLine &&
+    state.requiredPickup.roomId === nextRoom &&
+    !state.requiredPickup.warned) {
+    state.requiredPickup.warned = true;
+    pushBanner(state.requiredPickup.caitWarnLine, 4);
   }
   if (state.sunlitRooms.has(nextRoom)) {
     pushStatus("Sunlight spills across the floor. It doesn’t care how quiet you are.", 3);
@@ -4969,16 +5339,19 @@ function tickRobotTravel() {
   const nextRoom = state.robotPath[0];
   if (nextRoom !== undefined && isEdgeJammed(state.robotRoom, nextRoom)) {
     const key = edgeKey(state.robotRoom, nextRoom);
-    const remaining = state.jammedEdges.get(key) || 0;
-    const moodBoost = state.robotMood === "irritated" || state.robotMood === "confident";
-    const nightBoost = state.currentNight >= 7 ? 0.55 : 0.35;
-    const breakChance = moodBoost ? nightBoost + 0.2 : nightBoost;
-    if (Math.random() < breakChance) {
-      const next = Math.max(0, remaining - 1);
-      if (next <= 0) {
-        state.jammedEdges.delete(key);
-      } else {
-        state.jammedEdges.set(key, next);
+    const isPerma = state.permaJammedEdges.has(key);
+    if (!isPerma) {
+      const remaining = state.jammedEdges.get(key) || 0;
+      const moodBoost = state.robotMood === "irritated" || state.robotMood === "confident";
+      const nightBoost = state.currentNight >= 7 ? 0.55 : 0.35;
+      const breakChance = moodBoost ? nightBoost + 0.2 : nightBoost;
+      if (Math.random() < breakChance) {
+        const next = Math.max(0, remaining - 1);
+        if (next <= 0) {
+          state.jammedEdges.delete(key);
+        } else {
+          state.jammedEdges.set(key, next);
+        }
       }
     }
     applyRobotPause("blocked");
@@ -4997,12 +5370,12 @@ function tickRobotTravel() {
   state.robotMovedThisTick = true;
   markRoomChecked(state.robotRoom);
   recordRobotAlarmVisit(state.robotRoom);
-  if (isRoomAlarmed(state.robotRoom)) {
+  if (isAlarmTriggered(state.robotRoom)) {
     state.robotAlarmStreak += 1;
   } else {
     state.robotAlarmStreak = 0;
   }
-  if (isRoomAlarmed(state.robotRoom) && isRoomAlarmed(previousRoom)) {
+  if (isAlarmTriggered(state.robotRoom) && isAlarmTriggered(previousRoom)) {
     const loopEdge = edgeKey(state.robotRoom, previousRoom);
     if (state.robotAlarmLoopEdge === loopEdge) {
       state.robotAlarmLoopTurns += 1;
