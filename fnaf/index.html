@@ -93,11 +93,11 @@
       <div class="floorplan-header">
         <div class="floorplan-status">
           <span>Date</span>
-          <strong id="dateLabel">Dec 25 2326</strong>
+          <strong id="dateLabel" class="date-label">Dec 25 2326</strong>
         </div>
         <div class="floorplan-status">
           <span>Weather</span>
-          <strong id="mapWeatherLabel">Unknown</strong>
+          <strong id="mapWeatherLabel" class="weather-symbol">Unknown</strong>
         </div>
       </div>
       <div class="map-shell">
@@ -108,17 +108,17 @@
         </div>
       </div>
       <div class="map-controls">
-        <button id="cancelBtn">Cancel</button>
-        <button id="mapConfirmBtn" class="primary hidden">Confirm</button>
-        <button id="scannerToggleBtn">Scanner: OFF</button>
-      </div>
-      <div class="movement-controls hidden" id="movementControls">
-        <div class="quick-actions compact">
-          <div class="quick-buttons">
-            <button id="goBtn">Sneak</button>
-            <button id="runBtn">Run</button>
+        <div class="movement-controls hidden" id="movementControls">
+          <div class="quick-actions compact">
+            <div class="quick-buttons">
+              <button id="goBtn">Sneak</button>
+              <button id="runBtn">Run</button>
+            </div>
           </div>
         </div>
+        <button id="cancelBtn">Cancel</button>
+        <button id="mapConfirmBtn" class="primary hidden">Confirm</button>
+        <button id="scannerToggleBtn">Motion Sensor: OFF</button>
       </div>
     </div>
   </div>
