@@ -467,6 +467,7 @@ main {
   padding: 10px;
   border: 1px solid rgba(140, 169, 255, 0.2);
   min-height: 320px;
+  position: relative;
 }
 
 #floorplanMap {
@@ -479,13 +480,18 @@ main {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 10px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-radius: 12px;
-  background: rgba(9, 14, 26, 0.7);
+  background: rgba(9, 14, 26, 0.85);
   border: 1px solid rgba(140, 169, 255, 0.2);
   color: #9fb2de;
   font-size: 0.85rem;
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+  z-index: 2;
+  pointer-events: none;
 }
 
 .map-controls {
@@ -638,6 +644,11 @@ main {
 .map-node.preview circle {
   fill: rgba(255, 194, 86, 0.85);
   stroke: rgba(255, 224, 156, 0.9);
+}
+
+.map-node.action-target circle {
+  stroke: rgba(107, 255, 159, 0.85);
+  stroke-width: 2.6;
 }
 
 .map-node.adjacent circle {
