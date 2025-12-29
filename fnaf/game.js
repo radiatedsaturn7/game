@@ -339,6 +339,7 @@ const SCANNER_TICK_SIGNAL = 0.08;
 const SCANNER_BLEED_SIGNAL = 0.04;
 const ALARM_TICK_SIGNAL = 0.07;
 const ALARM_BLEED_SIGNAL = 0.03;
+const SCANNER_ROOM_ID = 0;
 
 const MISSION_TYPES = {
   ESCAPE: "escape",
@@ -634,6 +635,9 @@ const state = {
   scanPulseTicks: 0,
   scanFocusRoom: null,
   scannerOn: false,
+  scannerCollected: false,
+  scannerIntroPending: false,
+  scannerHighlight: false,
   alarmedRooms: new Set(),
   disabledAlarmedRooms: new Set(),
   alarmDisableProgress: new Map(),
@@ -714,6 +718,7 @@ let gameLoopId = null;
 function init() {
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
+  resetScannerState();
   renderMap();
   assignRoomFinds();
   setupMissionForNight();
@@ -1115,6 +1120,21 @@ function getNightProfile() {
 
 function getUnlocks() {
   return getUnlocksForNight(state.currentNight);
+}
+
+function resetScannerState() {
+  state.scannerCollected = state.currentNight !== 4;
+  state.scannerIntroPending = false;
+  state.scannerHighlight = false;
+  state.scannerOn = false;
+}
+
+function requiresScannerPickup() {
+  return state.currentNight === 4 && !state.scannerCollected;
+}
+
+function canUseScanner() {
+  return state.unlocks.allowScannerToggle && !requiresScannerPickup();
 }
 
 function getUnlocksForNight(night) {
@@ -1646,6 +1666,11 @@ function acknowledgeObjective() {
   dom.objectiveModal.classList.remove("active");
   dom.objectiveModal.setAttribute("aria-hidden", "true");
   state.objectiveBlocked = false;
+  if (state.scannerIntroPending) {
+    state.scannerIntroPending = false;
+    openMap();
+    updateUI();
+  }
   if (state.robotAlertQueued) {
     showRobotAlert();
   }
@@ -1748,6 +1773,16 @@ function updateRoomActions() {
       onClick: () => slowRewire(),
       disabled: blocked,
       risk: "Quiet",
+    });
+  }
+
+  if (requiresScannerPickup() && room.id === SCANNER_ROOM_ID) {
+    actions.push({
+      label: "Collect Pulse Scanner",
+      onClick: () => collectScanner(room.id),
+      disabled: state.hidden || blocked,
+      highlight: true,
+      risk: "Trace",
     });
   }
 
@@ -2125,6 +2160,9 @@ function alarmObjectiveText() {
 }
 
 function getObjectiveText() {
+  if (requiresScannerPickup()) {
+    return "Collect the Pulse Scanner in the Control Bay.";
+  }
   if (!state.escapeConsoleInspected) {
     return "Inspect the Escape Workshop console to receive your mission.";
   }
@@ -2260,6 +2298,22 @@ function collectItem(roomId) {
   updateUI();
 }
 
+function collectScanner(roomId) {
+  if (isActionLocked()) return;
+  if (state.hidden) return;
+  if (!requiresScannerPickup()) return;
+  if (roomId !== SCANNER_ROOM_ID) return;
+  state.inventory.add("Pulse Scanner");
+  state.scannerCollected = true;
+  state.scannerOn = false;
+  state.scannerHighlight = true;
+  state.scannerIntroPending = true;
+  showObjectiveModal(
+    "Pulse Scanner collected. It's noisy—use it from the map screen to locate the robot."
+  );
+  updateUI();
+}
+
 function collectSchematic(roomId) {
   if (isActionLocked()) return;
   if (state.hidden) return;
@@ -2328,7 +2382,12 @@ function toggleScanner() {
     );
     return false;
   }
+  if (requiresScannerPickup()) {
+    pushStatus("Pulse Scanner not collected.", 3);
+    return false;
+  }
   state.scannerOn = !state.scannerOn;
+  state.scannerHighlight = false;
   if (state.scannerOn) {
     const profile = getNightProfile();
     registerSignal(
@@ -2748,7 +2807,7 @@ function resetGame() {
   state.robotFocusLinger = 0;
   state.scanPulseTicks = 0;
   state.scanFocusRoom = null;
-  state.scannerOn = false;
+  resetScannerState();
   state.alarmedRooms = new Set();
   state.disabledAlarmedRooms = new Set();
   state.alarmDisableProgress = new Map();
@@ -3849,16 +3908,12 @@ function updateUseList() {
 function updateScannerToggleButton() {
   if (!dom.scannerToggleBtn) return;
   const controlBlocked = state.objectiveBlocked || isActionLocked();
-  if (state.unlocks.allowScannerToggle) {
-    dom.scannerToggleBtn.textContent = state.scannerOn ? "Scanner: ON" : "Scanner: OFF";
-    dom.scannerToggleBtn.disabled = controlBlocked;
-    return;
-  }
-  const unlockNight = getNextUnlockNightFromNow("allowScannerToggle");
-  dom.scannerToggleBtn.textContent = unlockNight
-    ? `Scanner locked (Night ${unlockNight})`
-    : "Scanner locked";
-  dom.scannerToggleBtn.disabled = true;
+  const showScanner = canUseScanner();
+  dom.scannerToggleBtn.classList.toggle("hidden", !showScanner);
+  if (!showScanner) return;
+  dom.scannerToggleBtn.textContent = state.scannerOn ? "Scanner: ON" : "Scanner: OFF";
+  dom.scannerToggleBtn.disabled = controlBlocked;
+  dom.scannerToggleBtn.classList.toggle("objective-highlight", state.scannerHighlight);
 }
 
 function useCraftedItem(name) {
