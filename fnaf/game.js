@@ -2972,21 +2972,71 @@ function interruptRobotTask(roomId) {
   setRobotMode("hunt");
 }
 
+function getRobotDistance() {
+  const path = getShortestPath(state.playerRoom, state.robotRoom);
+  if (!path.length) return null;
+  return Math.max(0, path.length - 1);
+}
+
+function getRobotRoomHint(roomId) {
+  const hints = {
+    1: "Metal clatters on the line.",
+    2: "It smells like something is burning.",
+    3: "Cold vapor hisses somewhere.",
+    5: "Fans whine in the dark.",
+    6: "Servos hum against steel.",
+    8: "Switches snap on their own.",
+    11: "Pistons thump in the distance.",
+  };
+  return hints[roomId] || "";
+}
+
 function robotStatusLabel() {
-  if (state.robotDisabled) return "Robot: Disabled";
-  if (state.robotDormant > 0) return "Robot: Pausing";
-  if (state.robotTask) return "Robot: Recalibrating";
-  if (state.robotSearchTurns > 0) {
-    return state.robotSearchSpot
-      ? `Robot: Searching ${state.robotSearchSpot}`
-      : "Robot: Searching";
+  if (state.robotDisabled) return "It's strangely quiet.";
+  if (state.robotDormant > 0) return "The halls fall quiet.";
+
+  const distance = getRobotDistance();
+  const distanceLabel = distance === 0
+    ? "in the room"
+    : distance === 1
+      ? "just outside"
+      : distance === 2
+        ? "nearby"
+        : distance === null
+          ? "somewhere"
+          : "far away";
+
+  let primary = "";
+  if (distance === 0) {
+    if (state.hidden && state.robotLookTurns > 0) {
+      primary = "You think it's looking right at you.";
+    } else if (state.hidden) {
+      primary = "It sounds like footsteps entered the room.";
+    } else if (state.robotLookTurns > 0) {
+      primary = "It's looking down the hallways.";
+    } else {
+      primary = "Footsteps scrape across the room.";
+    }
+  } else if (distance === 1 && state.hidden) {
+    primary = "Footsteps hover outside the room.";
+  } else if (state.robotLookTurns > 0) {
+    primary = `You hear servos moving ${distanceLabel}.`;
+  } else if (state.robotSweepQueue.length > 0) {
+    primary = `It sounds like something is running ${distanceLabel}.`;
+  } else if (state.robotSearchTurns > 0) {
+    primary = `You hear footsteps searching ${distanceLabel}.`;
+  } else if (state.robotInvestigateTurns > 0) {
+    primary = `Footsteps slow ${distanceLabel}.`;
+  } else if (state.robotTask) {
+    primary = `Relays tick ${distanceLabel}.`;
+  } else if (distance === 1) {
+    primary = "You think you saw something move.";
+  } else {
+    primary = `You hear footsteps ${distanceLabel}.`;
   }
-  if (state.robotInvestigateTurns > 0) return "Robot: Investigating";
-  if (state.robotSweepQueue.length > 0) return "Robot: Sweeping halls";
-  if (state.robotLookTurns > 0) return "Robot: Scanning halls";
-  if (state.robotLinger > 0) return "Robot: Lurking";
-  if (state.robotFocus !== null) return `Robot: Distracted by ${rooms[state.robotFocus].name}`;
-  return "Robot: Searching";
+
+  const roomHint = distance > 0 ? getRobotRoomHint(state.robotRoom) : "";
+  return roomHint ? `${primary} ${roomHint}` : primary;
 }
 
 function renderMap() {
