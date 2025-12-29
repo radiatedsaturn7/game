@@ -95,9 +95,6 @@
           <span>Date</span>
           <strong id="dateLabel">Dec 25 2326</strong>
         </div>
-        <div class="floorplan-room">
-          <strong class="current-room">Control Bay</strong>
-        </div>
       </div>
       <div class="map-shell">
         <svg id="floorplanMap" viewBox="0 0 520 420" width="520" height="420" role="img" aria-label="Factory floorplan"></svg>
@@ -106,13 +103,15 @@
         <span>Selected</span>
         <strong id="selectedRoom">None</strong>
       </div>
+      <div class="map-controls">
+        <button id="cancelBtn">Cancel</button>
+        <button id="scannerToggleBtn">Scanner: OFF</button>
+      </div>
       <div class="movement-controls hidden" id="movementControls">
         <div class="quick-actions compact">
           <div class="quick-buttons">
             <button id="goBtn">Sneak</button>
             <button id="runBtn">Run</button>
-            <button id="cancelBtn">Cancel</button>
-            <button id="scannerToggleBtn">Scanner: OFF</button>
           </div>
         </div>
       </div>
