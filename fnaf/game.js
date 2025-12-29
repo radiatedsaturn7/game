@@ -570,6 +570,7 @@ const state = {
   escapeReady: false,
   alertTicks: 0,
   objectiveBlocked: false,
+  actionLock: null,
   escapeConsoleInspected: false,
   noiseLures: 3,
   playerPath: [],
@@ -646,6 +647,9 @@ const state = {
 };
 
 let travelAnimationId = null;
+let actionLockTimeoutId = null;
+let actionLockStepTimeoutId = null;
+const ACTION_LOCK_MS = 1200;
 
 const dom = {
   threatLevel: document.getElementById("threatLevel"),
@@ -668,10 +672,6 @@ const dom = {
   useBtn: document.getElementById("useBtn"),
   debugBtn: document.getElementById("debugBtn"),
   toggleRobotBtn: document.getElementById("toggleRobotBtn"),
-  closeMenuBtn: document.getElementById("closeMenuBtn"),
-  closeMapBtn: document.getElementById("closeMapBtn"),
-  closeUseBtn: document.getElementById("closeUseBtn"),
-  closeDebugBtn: document.getElementById("closeDebugBtn"),
   menuPanel: document.getElementById("menuPanel"),
   mapPanel: document.getElementById("mapPanel"),
   usePanel: document.getElementById("usePanel"),
@@ -681,10 +681,8 @@ const dom = {
   componentTitle: document.getElementById("componentTitle"),
   componentDetails: document.getElementById("componentDetails"),
   componentCount: document.getElementById("componentCount"),
-  closeComponentBtn: document.getElementById("closeComponentBtn"),
   tasksPanel: document.getElementById("tasksPanel"),
   tasksText: document.getElementById("tasksText"),
-  closeTasksBtn: document.getElementById("closeTasksBtn"),
   objectiveModal: document.getElementById("objectiveModal"),
   objectiveModalText: document.getElementById("objectiveModalText"),
   ackObjectiveBtn: document.getElementById("ackObjectiveBtn"),
@@ -701,7 +699,9 @@ const dom = {
   victoryScreen: document.getElementById("victoryScreen"),
   retryBtn: document.getElementById("retryBtn"),
   nextNightBtn: document.getElementById("nextNightBtn"),
-  roomStatus: document.querySelector(".room-status"),
+  actionStatus: document.getElementById("actionStatus"),
+  actionLock: document.getElementById("actionLock"),
+  actionLockLabel: document.getElementById("actionLockLabel"),
   deathSummary: document.getElementById("deathSummary"),
   victorySummary: document.getElementById("victorySummary"),
   nightLabel: document.getElementById("nightLabel"),
@@ -739,12 +739,6 @@ function attachEvents() {
   dom.useBtn.addEventListener("click", openUse);
   dom.debugBtn.addEventListener("click", openDebug);
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
-  dom.closeMenuBtn.addEventListener("click", closeMenu);
-  dom.closeMapBtn.addEventListener("click", closeMap);
-  dom.closeUseBtn.addEventListener("click", closeUse);
-  dom.closeDebugBtn.addEventListener("click", closeDebug);
-  dom.closeComponentBtn.addEventListener("click", closeComponent);
-  dom.closeTasksBtn.addEventListener("click", closeTasks);
   dom.ackObjectiveBtn.addEventListener("click", acknowledgeObjective);
   dom.ackRobotAlertBtn.addEventListener("click", acknowledgeRobotAlert);
   dom.escapeBtn.addEventListener("click", handleEscape);
@@ -797,8 +791,9 @@ function updateUI() {
   dom.robotStatuses.forEach((node) => {
     node.textContent = robotStatusLabel();
   });
-  dom.roomStatus.textContent = state.statusMessage;
-  dom.roomStatus.classList.toggle("hidden", state.statusTicks <= 0);
+  dom.actionStatus.textContent = state.statusMessage;
+  dom.actionStatus.classList.toggle("hidden", state.statusTicks <= 0);
+  updateActionLockUI();
   updateTravelStatus();
   dom.threatLevel.textContent = threatLabel();
   dom.dateLabel.textContent = formatDate(state.baseDate, state.dayCount);
@@ -824,14 +819,24 @@ function updateUI() {
     dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
   }
   dom.tasksText.textContent = getObjectiveText();
+  const controlBlocked = state.objectiveBlocked || state.actionLock;
   if (dom.useBtn) {
     const allowUse = true;
     dom.useBtn.classList.toggle("hidden", !allowUse);
-    dom.useBtn.disabled = !allowUse;
+    dom.useBtn.disabled = !allowUse || controlBlocked;
   }
   if (dom.mapBtn) {
     dom.mapBtn.classList.toggle("hidden", !state.unlocks.showMap);
-    dom.mapBtn.disabled = !state.unlocks.showMap;
+    dom.mapBtn.disabled = !state.unlocks.showMap || controlBlocked;
+  }
+  if (dom.menuBtn) {
+    dom.menuBtn.disabled = controlBlocked;
+  }
+  if (dom.tasksBtn) {
+    dom.tasksBtn.disabled = controlBlocked;
+  }
+  if (dom.debugBtn) {
+    dom.debugBtn.disabled = controlBlocked;
   }
   updateDebugUI();
 }
@@ -972,7 +977,12 @@ function updateBuildButton() {
 function updateMoveButtons() {
   const canMove = state.selectedRoom !== null &&
     getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
-  const blocked = !canMove || !state.isAlive || state.hasEscaped || isPlayerTraveling();
+  const blocked = !canMove ||
+    !state.isAlive ||
+    state.hasEscaped ||
+    isPlayerTraveling() ||
+    state.objectiveBlocked ||
+    state.actionLock;
   setButtonLabel(dom.goBtn, "Sneak", "Quiet");
   setButtonLabel(dom.runBtn, "Run", "Trace");
   dom.goBtn.disabled = blocked;
@@ -1451,73 +1461,141 @@ function tickRobotMemory() {
   });
 }
 
+function isActionLocked() {
+  return Boolean(state.actionLock);
+}
+
+function clearActionLock() {
+  if (actionLockTimeoutId) {
+    clearTimeout(actionLockTimeoutId);
+    actionLockTimeoutId = null;
+  }
+  if (actionLockStepTimeoutId) {
+    clearTimeout(actionLockStepTimeoutId);
+    actionLockStepTimeoutId = null;
+  }
+  state.actionLock = null;
+  updateActionLockUI();
+}
+
+function setActionLock(label, durationMs) {
+  closePanels();
+  state.actionLock = {
+    label,
+    durationMs,
+    startedAt: Date.now(),
+  };
+  if (actionLockTimeoutId) {
+    clearTimeout(actionLockTimeoutId);
+  }
+  actionLockTimeoutId = setTimeout(() => {
+    clearActionLock();
+    updateUI();
+  }, durationMs);
+  updateActionLockUI();
+}
+
+function updateActionLockUI() {
+  if (!dom.actionLock) return;
+  if (!state.actionLock) {
+    dom.actionLock.classList.add("hidden");
+    return;
+  }
+  dom.actionLockLabel.textContent = state.actionLock.label;
+  dom.actionLock.style.setProperty("--action-duration", `${state.actionLock.durationMs}ms`);
+  dom.actionLock.classList.remove("hidden");
+}
+
+function runLockedAction({ label, steps, onStep }) {
+  if (isActionLocked()) return;
+  const durationMs = ACTION_LOCK_MS * steps;
+  setActionLock(label, durationMs);
+  let currentStep = 0;
+  const runStep = () => {
+    currentStep += 1;
+    onStep(currentStep, steps);
+    if (currentStep < steps) {
+      actionLockStepTimeoutId = setTimeout(runStep, ACTION_LOCK_MS);
+    }
+  };
+  runStep();
+}
+
+function openPanel(panel) {
+  panel.classList.add("active");
+  panel.setAttribute("aria-hidden", "false");
+}
+
+function closePanel(panel) {
+  panel.classList.remove("active");
+  panel.setAttribute("aria-hidden", "true");
+}
+
+function closePanels() {
+  [dom.menuPanel, dom.mapPanel, dom.usePanel, dom.debugPanel, dom.componentPanel, dom.tasksPanel]
+    .forEach((panel) => closePanel(panel));
+}
+
+function togglePanel(panel) {
+  if (state.objectiveBlocked || isActionLocked()) return;
+  const shouldOpen = !panel.classList.contains("active");
+  closePanels();
+  if (shouldOpen) {
+    openPanel(panel);
+  }
+}
+
 function openMenu() {
-  if (state.objectiveBlocked) return;
-  dom.menuPanel.classList.add("active");
-  dom.menuPanel.setAttribute("aria-hidden", "false");
+  togglePanel(dom.menuPanel);
 }
 
 function closeMenu() {
-  dom.menuPanel.classList.remove("active");
-  dom.menuPanel.setAttribute("aria-hidden", "true");
+  closePanel(dom.menuPanel);
 }
 
 function openMap() {
-  if (state.objectiveBlocked) return;
-  dom.mapPanel.classList.add("active");
-  dom.mapPanel.setAttribute("aria-hidden", "false");
+  togglePanel(dom.mapPanel);
 }
 
 function closeMap() {
-  dom.mapPanel.classList.remove("active");
-  dom.mapPanel.setAttribute("aria-hidden", "true");
+  closePanel(dom.mapPanel);
   clearSelectedRoom();
 }
 
 function openUse() {
-  if (state.objectiveBlocked) return;
-  dom.usePanel.classList.add("active");
-  dom.usePanel.setAttribute("aria-hidden", "false");
+  togglePanel(dom.usePanel);
 }
 
 function closeUse() {
-  dom.usePanel.classList.remove("active");
-  dom.usePanel.setAttribute("aria-hidden", "true");
+  closePanel(dom.usePanel);
 }
 
 function openDebug() {
-  if (state.objectiveBlocked) return;
-  dom.debugPanel.classList.add("active");
-  dom.debugPanel.setAttribute("aria-hidden", "false");
+  togglePanel(dom.debugPanel);
 }
 
 function closeDebug() {
-  dom.debugPanel.classList.remove("active");
-  dom.debugPanel.setAttribute("aria-hidden", "true");
+  closePanel(dom.debugPanel);
 }
 
 function openComponent(part) {
+  closePanels();
   dom.componentTitle.textContent = part;
   dom.componentDetails.textContent = componentDescriptions[part] || "Critical component.";
   dom.componentCount.textContent = `You have ${countInventory(part)}.`;
-  dom.componentPanel.classList.add("active");
-  dom.componentPanel.setAttribute("aria-hidden", "false");
+  openPanel(dom.componentPanel);
 }
 
 function closeComponent() {
-  dom.componentPanel.classList.remove("active");
-  dom.componentPanel.setAttribute("aria-hidden", "true");
+  closePanel(dom.componentPanel);
 }
 
 function openTasks() {
-  if (state.objectiveBlocked) return;
-  dom.tasksPanel.classList.add("active");
-  dom.tasksPanel.setAttribute("aria-hidden", "false");
+  togglePanel(dom.tasksPanel);
 }
 
 function closeTasks() {
-  dom.tasksPanel.classList.remove("active");
-  dom.tasksPanel.setAttribute("aria-hidden", "true");
+  closePanel(dom.tasksPanel);
 }
 
 function showObjectiveModal(text) {
@@ -1569,10 +1647,9 @@ function alarmDisableTurnsRequired() {
   return canRewire ? 1 : 2;
 }
 
-function disableAlarm(roomId) {
+function applyAlarmDisableStep(roomId, step, totalSteps) {
   if (!isRoomAlarmed(roomId)) return;
   const progress = state.alarmDisableProgress.get(roomId) || 0;
-  const required = alarmDisableTurnsRequired();
   const next = progress + 1;
   state.alarmDisableProgress.set(roomId, next);
   const profile = getNightProfile();
@@ -1581,8 +1658,12 @@ function disableAlarm(roomId) {
     0.22 * profile.signalStrength.device,
     { type: "alarm", lastKnownChance: 0.2 }
   );
-  pushStatus("You reach for the alarm panel.", 3);
-  if (next < required) {
+  if (step === 1) {
+    pushStatus("You reach for the alarm panel.", 3);
+  } else if (step < totalSteps) {
+    pushStatus("You keep pressure on the alarm switch.", 2);
+  }
+  if (next < totalSteps) {
     state.turn += 1;
     updateUI();
     return;
@@ -1596,11 +1677,21 @@ function disableAlarm(roomId) {
   updateUI();
 }
 
+function disableAlarm(roomId) {
+  if (!isRoomAlarmed(roomId)) return;
+  const required = alarmDisableTurnsRequired();
+  runLockedAction({
+    label: required > 1 ? "Disabling alarm system…" : "Disabling alarm…",
+    steps: required,
+    onStep: (step, total) => applyAlarmDisableStep(roomId, step, total),
+  });
+}
+
 function updateRoomActions() {
   dom.roomActions.innerHTML = "";
   const room = rooms[state.playerRoom];
   const actions = [];
-  const blocked = state.objectiveBlocked;
+  const blocked = state.objectiveBlocked || isActionLocked();
 
   if (state.hidden) {
     actions.push({
@@ -1687,7 +1778,7 @@ function updateRoomActions() {
 
   if (isRoomAlarmed(room.id)) {
     actions.push({
-      label: alarmDisableTurnsRequired() > 1 ? "Disable Alarm (2 turns)" : "Disable Alarm",
+      label: "Disable Alarm",
       onClick: () => disableAlarm(room.id),
       disabled: state.hidden || blocked,
       highlight: state.alarmedRoomsRequired > 0,
@@ -1843,20 +1934,26 @@ function updateEscapeReadiness() {
 
 function slowRewire() {
   if (!hasPart("Resistors") && !hasPart("Capacitors")) return;
-  const current = state.roomSignals.get(state.playerRoom) || 0;
-  state.roomSignals.set(state.playerRoom, Math.max(0, current - 0.2));
-  state.signalDecayBoost.set(
-    state.playerRoom,
-    Math.max(state.signalDecayBoost.get(state.playerRoom) || 0, 0.08)
-  );
-  const profile = getNightProfile();
-  registerSignal(state.playerRoom, 0.08 * profile.signalStrength.sneak, {
-    type: "rewire",
-    lastKnownChance: 0.1,
+  runLockedAction({
+    label: "Rewiring panel…",
+    steps: 1,
+    onStep: () => {
+      const current = state.roomSignals.get(state.playerRoom) || 0;
+      state.roomSignals.set(state.playerRoom, Math.max(0, current - 0.2));
+      state.signalDecayBoost.set(
+        state.playerRoom,
+        Math.max(state.signalDecayBoost.get(state.playerRoom) || 0, 0.08)
+      );
+      const profile = getNightProfile();
+      registerSignal(state.playerRoom, 0.08 * profile.signalStrength.sneak, {
+        type: "rewire",
+        lastKnownChance: 0.1,
+      });
+      pushStatus("You rewire the panel. The static softens.", 3);
+      state.turn += 1;
+      updateUI();
+    },
   });
-  pushStatus("You rewire the panel. The static softens.", 3);
-  state.turn += 1;
-  updateUI();
 }
 
 function holdBreath() {
@@ -2041,7 +2138,7 @@ function isPlayerTraveling() {
 
 function movePlayer(roomId, isRun) {
   if (!state.isAlive || state.hasEscaped) return;
-  if (state.objectiveBlocked) return;
+  if (state.objectiveBlocked || isActionLocked()) return;
   if (roomId === state.playerRoom) return;
   const path = getShortestPath(state.playerRoom, roomId);
   if (path.length <= 1) return;
@@ -2055,12 +2152,14 @@ function movePlayer(roomId, isRun) {
 
 function setRoutePreview(roomId) {
   if (!state.isAlive || state.hasEscaped) return;
+  if (isActionLocked()) return;
   state.routePreviewRoom = roomId;
   updateMap();
 }
 
 function setSelectedRoom(roomId) {
   if (!state.isAlive || state.hasEscaped) return;
+  if (isActionLocked()) return;
   state.selectedRoom = roomId;
   updateUI();
 }
@@ -2088,6 +2187,7 @@ function startRobotTravelStep() {
 }
 
 function moveSelected(isRun) {
+  if (isActionLocked()) return;
   if (state.selectedRoom === null) return;
   movePlayer(state.selectedRoom, isRun);
 }
@@ -2098,6 +2198,7 @@ function clearSelectedRoom() {
 }
 
 function collectItem(roomId) {
+  if (isActionLocked()) return;
   if (state.hidden) return;
   const room = rooms[roomId];
   if (room.item && !state.inventory.has(room.item)) {
@@ -2111,6 +2212,7 @@ function collectItem(roomId) {
 }
 
 function collectSchematic(roomId) {
+  if (isActionLocked()) return;
   if (state.hidden) return;
   if (!state.unlocks.allowCrafting && state.missionType !== MISSION_TYPES.DATA) {
     pushStatus("You note the diagram, but you can't assemble it yet.", 3);
@@ -2137,6 +2239,7 @@ function collectSchematic(roomId) {
 
 function setHidden(spot) {
   if (!state.isAlive || state.hasEscaped) return;
+  if (isActionLocked()) return;
   if (!spot) {
     state.hidden = false;
     state.hiddenSpot = null;
@@ -2167,6 +2270,7 @@ function setHidden(spot) {
 }
 
 function toggleScanner() {
+  if (isActionLocked()) return false;
   if (!state.unlocks.allowScannerToggle) {
     const unlockNight = getNextUnlockNightFromNow("allowScannerToggle");
     pushStatus(
@@ -2196,7 +2300,7 @@ function toggleScanner() {
 
 function handleAction(action) {
   if (!state.isAlive || state.hasEscaped) return;
-  if (state.objectiveBlocked) return;
+  if (state.objectiveBlocked || isActionLocked()) return;
   if (action === "hide") {
     const room = rooms[state.playerRoom];
     setHidden(room.hideSpots[0]);
@@ -2454,6 +2558,7 @@ function attemptKill() {
 
 function triggerDeath() {
   state.isAlive = false;
+  clearActionLock();
   closeMap();
   state.runSummary = buildRunSummary("loss");
   dom.deathSummary.textContent = state.runSummary;
@@ -2502,6 +2607,7 @@ function advanceNight() {
 }
 
 function resetGame() {
+  clearActionLock();
   state.playerRoom = 0;
   state.robotRoom = 0;
   state.hidden = false;
@@ -3662,6 +3768,7 @@ function startGameLoop() {
 
 function updateUseList() {
   dom.useList.innerHTML = "";
+  const controlBlocked = state.objectiveBlocked || isActionLocked();
   const options = [];
   const lockedEntries = [];
   if (state.unlocks.allowScannerToggle) {
@@ -3720,13 +3827,12 @@ function updateUseList() {
     const li = document.createElement("li");
     const button = document.createElement("button");
     button.textContent = `Use ${item.label}`;
-    if (item.disabled) {
-      button.disabled = true;
-    }
+    button.disabled = Boolean(item.disabled) || controlBlocked;
     button.addEventListener("click", item.action);
     li.appendChild(button);
     const help = document.createElement("button");
     help.textContent = "Help";
+    help.disabled = controlBlocked;
     help.addEventListener("click", () => openComponent(item.help));
     li.appendChild(help);
     dom.useList.appendChild(li);

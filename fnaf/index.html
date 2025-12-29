@@ -12,11 +12,13 @@
       <section class="room-view">
         <div class="room-media" id="roomMedia">
           <div class="room-topline">
-            <p class="robot-status"></p>
+            <div class="status-stack">
+              <p class="robot-status"></p>
+              <p id="actionStatus" class="action-status hidden"></p>
+            </div>
           </div>
           <div class="room-overlay">
             <p class="room-description hidden"></p>
-            <p class="room-status hidden"></p>
             <p id="travelStatus" class="travel-status hidden"></p>
           </div>
           <div class="room-actions-overlay">
@@ -29,6 +31,12 @@
             <button id="useBtn">Use</button>
             <button id="debugBtn">Debug</button>
             <button id="escapeBtn" class="primary hidden">Escape</button>
+          </div>
+          <div id="actionLock" class="action-lock hidden" aria-live="polite">
+            <p id="actionLockLabel"></p>
+            <div class="action-bar">
+              <span></span>
+            </div>
           </div>
         </div>
       </section>
@@ -57,7 +65,6 @@
     <div class="menu-card">
       <div class="menu-header">
         <h3>Inventory</h3>
-        <button id="closeMenuBtn">Close</button>
       </div>
       <div class="menu-content">
         <div>
@@ -81,7 +88,6 @@
     <div class="map-card">
       <div class="menu-header">
         <h3>Floor Plan</h3>
-        <button id="closeMapBtn">Close</button>
       </div>
       <div class="floorplan-header">
         <div class="floorplan-status">
@@ -121,7 +127,6 @@
     <div class="menu-card">
       <div class="menu-header">
         <h3>Use Items</h3>
-        <button id="closeUseBtn">Close</button>
       </div>
       <div class="menu-content">
         <ul id="useList" class="list"></ul>
@@ -133,7 +138,6 @@
     <div class="menu-card">
       <div class="menu-header">
         <h3>Debug</h3>
-        <button id="closeDebugBtn">Close</button>
       </div>
       <div class="menu-content">
         <div class="map-buttons">
@@ -163,7 +167,6 @@
     <div class="menu-card">
       <div class="menu-header">
         <h3 id="componentTitle">Component</h3>
-        <button id="closeComponentBtn">Close</button>
       </div>
       <div class="menu-content">
         <p id="componentDetails" class="component-details"></p>
@@ -176,7 +179,6 @@
     <div class="menu-card">
       <div class="menu-header">
         <h3>Tasks</h3>
-        <button id="closeTasksBtn">Close</button>
       </div>
       <div class="menu-content">
         <p id="tasksText" class="component-details"></p>
@@ -184,7 +186,7 @@
     </div>
   </div>
 
-  <div id="objectiveModal" class="menu-panel" aria-hidden="true">
+  <div id="objectiveModal" class="menu-panel modal-panel" aria-hidden="true">
     <div class="menu-card">
       <div class="menu-header">
         <h3>Objective Updated</h3>
@@ -196,7 +198,7 @@
     </div>
   </div>
 
-  <div id="robotAlertModal" class="menu-panel" aria-hidden="true">
+  <div id="robotAlertModal" class="menu-panel modal-panel" aria-hidden="true">
     <div class="menu-card">
       <div class="menu-header">
         <h3>Alert</h3>
