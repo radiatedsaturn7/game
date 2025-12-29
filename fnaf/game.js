@@ -5,7 +5,6 @@ const rooms = [
     description: "Camera consoles hum. The robot hates the light.",
     theme: "linear-gradient(135deg, rgba(73, 103, 146, 0.5), rgba(9, 16, 28, 0.9))",
     hideSpots: ["Console Shadow", "Cable Duct"],
-    siren: "Alarm Beacon",
     noiseRisk: 0.2,
   },
   {
@@ -15,7 +14,6 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(126, 98, 62, 0.55), rgba(15, 12, 8, 0.9))",
     item: "Copper Wire",
     hideSpots: ["Crate Stack", "Hydraulic Pit"],
-    siren: "Conveyor Siren",
     noiseRisk: 0.3,
   },
   {
@@ -25,7 +23,6 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(96, 151, 142, 0.55), rgba(10, 16, 18, 0.9))",
     item: "Power Cell",
     hideSpots: ["Breaker Alcove", "Voltage Cabinet"],
-    siren: "Surge Tone",
     noiseRisk: 0.4,
   },
   {
@@ -34,7 +31,6 @@ const rooms = [
     description: "Cold vapor hides footsteps but muffles sound.",
     theme: "linear-gradient(135deg, rgba(80, 135, 184, 0.45), rgba(6, 9, 15, 0.95))",
     hideSpots: ["Cryo Rack", "Frosted Duct"],
-    siren: "Coolant Alarm",
     noiseRisk: 0.25,
   },
   {
@@ -44,7 +40,6 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(67, 84, 115, 0.55), rgba(5, 7, 10, 0.9))",
     item: "Resistors",
     hideSpots: ["Tool Cage", "Vent Crawlspace"],
-    siren: "Service Klaxon",
     noiseRisk: 0.35,
   },
   {
@@ -54,7 +49,6 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(96, 66, 146, 0.5), rgba(12, 8, 18, 0.92))",
     schematic: "Signal Scrambler",
     hideSpots: ["Server Rack", "Data Alcove"],
-    siren: "Rack Resonator",
     noiseRisk: 0.3,
   },
   {
@@ -64,7 +58,6 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(112, 94, 124, 0.5), rgba(9, 7, 12, 0.92))",
     item: "Capacitors",
     hideSpots: ["Drone Cradle", "Workbench Shadow"],
-    siren: "Lab Chime",
     noiseRisk: 0.28,
   },
   {
@@ -73,7 +66,6 @@ const rooms = [
     description: "Crates are stacked in impossible patterns.",
     theme: "linear-gradient(135deg, rgba(92, 78, 66, 0.55), rgba(9, 7, 5, 0.9))",
     hideSpots: ["Crate Maze", "Lift Platform"],
-    siren: "Forklift Horn",
     noiseRisk: 0.32,
   },
   {
@@ -83,7 +75,6 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(86, 106, 88, 0.55), rgba(7, 10, 8, 0.9))",
     item: "Servo Motor",
     hideSpots: ["Fuse Closet", "Service Bay"],
-    siren: "Switch Alarm",
     noiseRisk: 0.3,
   },
   {
@@ -92,7 +83,6 @@ const rooms = [
     description: "Your vitals read on cold glass.",
     theme: "linear-gradient(135deg, rgba(61, 120, 140, 0.6), rgba(8, 12, 15, 0.95))",
     hideSpots: ["Scanner Bed", "Supply Locker"],
-    siren: "Vitals Ping",
     noiseRisk: 0.22,
   },
   {
@@ -102,7 +92,6 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(59, 99, 122, 0.55), rgba(6, 9, 13, 0.95))",
     schematic: "Motion Dampener",
     hideSpots: ["Dock Bay", "Cargo Net"],
-    siren: "Fog Horn",
     noiseRisk: 0.3,
   },
   {
@@ -112,7 +101,6 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(132, 82, 70, 0.55), rgba(13, 8, 8, 0.9))",
     item: "Microcontroller",
     hideSpots: ["Pump Alcove", "Oil Pit"],
-    siren: "Hydraulic Whistle",
     noiseRisk: 0.4,
   },
   {
@@ -122,7 +110,6 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(95, 89, 129, 0.55), rgba(9, 8, 13, 0.95))",
     schematic: "Override Key",
     hideSpots: ["Prototype Pod", "Blueprint Archive"],
-    siren: "Research Bell",
     noiseRisk: 0.28,
   },
   {
@@ -132,7 +119,6 @@ const rooms = [
     theme: "linear-gradient(135deg, rgba(147, 111, 75, 0.55), rgba(13, 9, 6, 0.9))",
     isExit: true,
     hideSpots: ["Assembly Pit", "Scrap Curtain"],
-    siren: "Exit Klaxon",
     noiseRisk: 0.35,
   },
 ];
@@ -679,8 +665,6 @@ const state = {
   scanPulseTicks: 0,
   scanFocusRoom: null,
   scannerOn: false,
-  scannerCollected: false,
-  scannerIntroPending: false,
   scannerHighlight: false,
   alarmedRooms: new Set(),
   triggeredAlarms: new Set(),
@@ -789,7 +773,6 @@ let gameLoopId = null;
 function init() {
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
-  resetScannerState();
   renderMap();
   assignRoomFinds();
   setupMissionForNight();
@@ -1269,17 +1252,6 @@ function getUnlocks() {
   return getUnlocksForNight(state.currentNight);
 }
 
-function resetScannerState() {
-  state.scannerCollected = state.currentNight !== 4;
-  state.scannerIntroPending = false;
-  state.scannerHighlight = false;
-  state.scannerOn = false;
-}
-
-function requiresScannerPickup() {
-  return state.currentNight === 4 && !state.scannerCollected;
-}
-
 function hasCollectedTool(name) {
   return state.toolCollected.has(name) || state.inventory.has(name);
 }
@@ -1290,7 +1262,7 @@ function isRequiredPickupComplete() {
 }
 
 function canUseScanner() {
-  return state.unlocks.allowScannerToggle && !requiresScannerPickup();
+  return state.unlocks.allowScannerToggle && hasCollectedTool("Pulse Scanner");
 }
 
 function getUnlocksForNight(night) {
@@ -1535,6 +1507,9 @@ function setupSpecialPickupsForNight() {
   state.storyQueue = [];
   state.objectiveHoldUntil = 0;
   state.toolCollected = new Set();
+  if (state.unlocks.allowScannerToggle && state.currentNight !== 4) {
+    state.toolCollected.add("Pulse Scanner");
+  }
 
   if (state.currentNight === 4) {
     const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
@@ -1549,7 +1524,7 @@ function setupSpecialPickupsForNight() {
     state.specialPickups.set(roomId, "Pulse Scanner");
     state.nightIntroLine = state.requiredPickup.caitIntroLine;
     state.sunlitRooms.add(roomId);
-    state.scannerCollected = false;
+    state.unlocks.allowScannerToggle = false;
   }
 
   if (state.currentNight === 5) {
@@ -1601,7 +1576,10 @@ function setupSpecialPickupsForNight() {
     });
   }
 
-  if (state.unlocks.robotActive && !state.nightIntroLine) {
+  if (!state.nightIntroLine && state.unlocks.robotActive && isTwistNight(state.currentNight)) {
+    state.nightIntroLine = "Cait: The escape room isn’t empty.";
+  }
+  if (state.unlocks.robotActive && !state.nightIntroLine && state.currentNight === 2) {
     state.nightIntroLine = "Cait: Be careful out there... I think something is moving.";
   }
 }
@@ -1664,7 +1642,8 @@ function setupContainmentForNight() {
   state.permaJammedEdges = new Set();
   state.containmentLineShown = false;
   if (state.currentNight === 2) {
-    jamEscapeEdges();
+    const edge = pickPermaJamEdge();
+    if (edge) addPermaJam(edge);
     return;
   }
   if (state.currentNight === 3) {
@@ -1673,9 +1652,11 @@ function setupContainmentForNight() {
     return;
   }
   if (state.currentNight >= 7) {
-    jamEscapeEdges();
-    const edge = pickPermaJamEdge();
-    if (edge) addPermaJam(edge);
+    const exitRoom = rooms.find((room) => room.isExit)?.id ?? 13;
+    const exitEdges = (roomConnections[exitRoom] || [])
+      .map((neighbor) => edgeKey(exitRoom, neighbor));
+    const shuffled = [...exitEdges].sort(() => Math.random() - 0.5);
+    shuffled.slice(0, 2).forEach((edge) => addPermaJam(edge));
   }
 }
 
@@ -1867,7 +1848,7 @@ function triggerPowerSurge(roomId) {
   const effects = getPassiveEffects();
   state.persistentSignals.set(roomId, 3 + effects.persistentBonus);
   showObjectiveModal("Cait: Power surge. That room just blew open.");
-  if (isRoomAlarmed(roomId)) {
+  if (isAlarmCapable(roomId)) {
     state.triggeredAlarms.add(roomId);
   }
   state.runMoments.push("A sudden power surge forced you into the open.");
@@ -2174,11 +2155,6 @@ function acknowledgeObjective() {
   dom.objectiveModal.classList.remove("active");
   dom.objectiveModal.setAttribute("aria-hidden", "true");
   state.objectiveBlocked = false;
-  if (state.scannerIntroPending) {
-    state.scannerIntroPending = false;
-    openMap();
-    updateUI();
-  }
   if (state.robotAlertQueued) {
     showRobotAlert();
   }
@@ -2207,12 +2183,12 @@ function acknowledgeRobotAlert() {
   state.objectiveBlocked = false;
 }
 
-function isRoomAlarmed(roomId) {
+function isAlarmCapable(roomId) {
   return state.alarmedRooms.has(roomId) && !state.disabledAlarmedRooms.has(roomId);
 }
 
 function isAlarmTriggered(roomId) {
-  return state.triggeredAlarms.has(roomId) && isRoomAlarmed(roomId);
+  return state.triggeredAlarms.has(roomId) && isAlarmCapable(roomId);
 }
 
 function getActiveLure(roomId) {
@@ -2288,7 +2264,7 @@ function alarmDisableTurnsRequired() {
 }
 
 function applyAlarmDisableStep(roomId, step, totalSteps) {
-  if (!isRoomAlarmed(roomId)) return;
+  if (!isAlarmCapable(roomId)) return;
   const progress = state.alarmDisableProgress.get(roomId) || 0;
   const next = progress + 1;
   state.alarmDisableProgress.set(roomId, next);
@@ -2319,7 +2295,7 @@ function applyAlarmDisableStep(roomId, step, totalSteps) {
 }
 
 function disableAlarm(roomId) {
-  if (!isRoomAlarmed(roomId)) return;
+  if (!isAlarmCapable(roomId)) return;
   const required = alarmDisableTurnsRequired();
   runLockedAction({
     label: required > 1 ? "Disabling alarm system…" : "Disabling alarm…",
@@ -2438,7 +2414,7 @@ function updateRoomActions() {
     });
   }
 
-  if (isRoomAlarmed(room.id)) {
+  if (isAlarmCapable(room.id)) {
     actions.push({
       label: "Disable Alarm",
       onClick: () => disableAlarm(room.id),
@@ -2495,7 +2471,7 @@ function updateRoomActions() {
       label: "Hold Breath",
       onClick: () => holdBreath(),
       disabled: blocked,
-      risk: "Risky",
+      risk: "Time",
     });
   }
 
@@ -2788,7 +2764,8 @@ function updateMapWeatherLabel() {
     Storm: "⛈️",
   };
   const symbol = weatherSymbols[state.weather.type] ?? "❔";
-  dom.mapWeatherLabel.textContent = symbol;
+  const label = state.weather.type ?? "Unknown";
+  dom.mapWeatherLabel.textContent = `${symbol} ${label}`;
   dom.mapWeatherLabel.setAttribute("title", `${state.weather.type}: ${state.weather.description}`);
   dom.mapWeatherLabel.setAttribute("aria-label", `Weather: ${state.weather.type}. ${state.weather.description}`);
 }
@@ -3139,10 +3116,9 @@ function collectSpecialPickup(roomId, { force = false } = {}) {
   state.inventory.add(itemName);
   state.specialPickups.delete(roomId);
   if (itemName === "Pulse Scanner") {
-    state.scannerCollected = true;
+    state.unlocks.allowScannerToggle = true;
     state.scannerOn = false;
     state.scannerHighlight = true;
-    state.scannerIntroPending = true;
     showObjectiveModal("Cait: Scanner’s loud. Use it from the map when you need eyes.");
   }
   if (itemName === "Noise Lure") {
@@ -3320,7 +3296,7 @@ function toggleScanner() {
     );
     return false;
   }
-  if (requiresScannerPickup()) {
+  if (!hasCollectedTool("Pulse Scanner")) {
     pushStatus("Pulse Scanner not collected.", 3);
     return false;
   }
@@ -3815,7 +3791,8 @@ function resetGame() {
   state.robotFocusLinger = 0;
   state.scanPulseTicks = 0;
   state.scanFocusRoom = null;
-  resetScannerState();
+  state.scannerOn = false;
+  state.scannerHighlight = false;
   state.alarmedRooms = new Set();
   state.triggeredAlarms = new Set();
   state.disabledAlarmedRooms = new Set();
@@ -4327,19 +4304,27 @@ function robotStatusLabel() {
   const roomHint = distance > 0 ? getRobotRoomHint(state.robotRoom) : "";
   const base = roomHint ? `${primary} ${roomHint}` : primary;
   if (state.currentNight >= 4 && state.sanity < 0.4) {
-    const distorted = state.sanity < 0.2
-      ? [
-        "…metal in every corridor…",
-        "Static floods the halls.",
-        "The signal splinters. Footsteps everywhere.",
-      ]
-      : [
-        "The signal smears. Something moves.",
-        "Footsteps blur into the walls.",
-        "You can't tell if it's near or far.",
-      ];
-    if (Math.random() < 0.6) {
-      return distorted[Math.floor(Math.random() * distorted.length)];
+    const nearRobot = distance !== null && distance <= 2;
+    const inTriggeredAlarm = isAlarmTriggered(state.playerRoom);
+    const inSunlit = state.sunlitRooms.has(state.playerRoom);
+    const pressure = getSignalPressure(state.playerRoom);
+    const allowHallucination = nearRobot || inTriggeredAlarm || inSunlit || pressure >= 0.6;
+    if (allowHallucination) {
+      const distorted = state.sanity < 0.2
+        ? [
+          "Static claws at your ears.",
+          "The signal fractures in your skull.",
+          "Every corridor feels too close.",
+        ]
+        : [
+          "Static drifts across your thoughts.",
+          "The signal warps for a breath.",
+          "Your pulse drowns the noise.",
+        ];
+      const chance = state.sanity < 0.2 ? 0.45 : 0.25;
+      if (Math.random() < chance) {
+        return `${distorted[Math.floor(Math.random() * distorted.length)]} ${base}`;
+      }
     }
   }
   return base;
@@ -4442,6 +4427,7 @@ function renderMap() {
 function canSeeRobotIntel() {
   if (!state.unlocks.showRobotIntelOnMap) return false;
   if (state.robotDisabled) return false;
+  if (!hasCollectedTool("Pulse Scanner")) return false;
   if (state.robotRoom === state.playerRoom) return true;
   const weatherMods = getWeatherModifiers();
   if (state.scannerOn) {
@@ -4468,12 +4454,10 @@ function updateMap() {
     robotEdges.add(`${a}-${b}`);
   }
   const showRobotIntel = canSeeRobotIntel();
-  const showPlannedPath = state.routePreviewRoom !== null &&
-    !isPlayerTraveling() &&
-    !roomConnections[state.playerRoom]?.includes(state.routePreviewRoom);
-  const plannedPath = showPlannedPath
+  const plannedPath = state.routePreviewRoom !== null
     ? getShortestPath(state.playerRoom, state.routePreviewRoom)
     : [];
+  const showPlannedPath = !isPlayerTraveling() && plannedPath.length > 1;
   const plannedEdges = new Set();
   for (let i = 0; i < plannedPath.length - 1; i += 1) {
     const a = Math.min(plannedPath[i], plannedPath[i + 1]);
@@ -4590,11 +4574,24 @@ function updateMap() {
       poi.classList.toggle("poi-exit-ready", isExit && state.escapeReady);
     }
     if (hazard) {
-      const alarmed = isRoomAlarmed(roomId);
+      const alarmTriggered = isAlarmTriggered(roomId);
+      const alarmCapable = isAlarmCapable(roomId);
       const sunlit = state.sunlitRooms.has(roomId);
-      hazard.textContent = sunlit && alarmed ? "☀⚠" : sunlit ? "☀" : alarmed ? "⚠" : "";
+      hazard.classList.remove("hazard-dormant", "hazard-triggered");
+      if (alarmTriggered) {
+        hazard.textContent = sunlit ? "☀⚠" : "⚠";
+        hazard.classList.add("hazard-triggered");
+        hazard.style.opacity = "0.95";
+      } else if (alarmCapable) {
+        hazard.textContent = sunlit ? "☀⚠" : "⚠";
+        hazard.classList.add("hazard-dormant");
+        hazard.style.opacity = "0.45";
+      } else {
+        hazard.textContent = sunlit ? "☀" : "";
+        hazard.style.opacity = sunlit ? "0.95" : "0";
+      }
       hazard.classList.toggle("hazard-sun", sunlit);
-      hazard.classList.toggle("hazard-alarm", alarmed);
+      hazard.classList.toggle("hazard-alarm", alarmTriggered);
     }
   });
 
@@ -5064,19 +5061,12 @@ function updateUseList() {
     });
   }
   if (hasCollectedTool("Blowtorch")) {
+    const blowtorchTargets = getMapTargetCandidatesForBlowtorch();
     options.push({
       label: "Blowtorch",
-      action: () => {
-        const targets = getMapTargetCandidatesForBlowtorch();
-        if (targets.size === 0) {
-          showObjectiveModal("Cait: Not here. Wrong door.");
-          closeUse();
-          return;
-        }
-        beginMapTarget("unjam");
-      },
+      action: () => beginMapTarget("unjam"),
       help: "Blowtorch",
-      disabled: isPlayerTraveling() || state.mapTargetMode,
+      disabled: blowtorchTargets.size === 0 || isPlayerTraveling() || state.mapTargetMode,
     });
   }
   state.craftedItems.forEach((item) => {
@@ -5306,7 +5296,7 @@ function tickPlayerTravel() {
       state.sneakStepsWithoutSignal = 0;
     }
   }
-  if (isRoomAlarmed(nextRoom) && !isAlarmTriggered(nextRoom)) {
+  if (isAlarmCapable(nextRoom) && !isAlarmTriggered(nextRoom)) {
     state.triggeredAlarms.add(nextRoom);
     showObjectiveModal("Cait: …that room just lit up. Move.");
   }

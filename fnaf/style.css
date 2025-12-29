@@ -577,7 +577,7 @@ main {
 
 .map-node text {
   fill: #d8e1f7;
-  font-size: 12px;
+  font-size: 14px;
   text-anchor: middle;
   pointer-events: none;
 }
@@ -613,7 +613,7 @@ main {
 
 .map-node .map-poi {
   fill: rgba(230, 238, 255, 0.85);
-  font-size: 14px;
+  font-size: 16px;
   letter-spacing: 0.08em;
   pointer-events: none;
   opacity: 0.9;
