@@ -150,6 +150,13 @@ main {
   pointer-events: none;
 }
 
+.status-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(420px, 80vw);
+}
+
 .robot-status {
   margin: 0;
   padding: 6px 12px;
@@ -159,6 +166,16 @@ main {
   color: #e0e8ff;
   font-size: 0.8rem;
   letter-spacing: 0.02em;
+}
+
+.action-status {
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(140, 169, 255, 0.2);
+  background: rgba(6, 10, 18, 0.65);
+  color: #c6d3f3;
+  font-size: 0.8rem;
 }
 
 .room-overlay {
@@ -182,12 +199,6 @@ main {
   color: #b8c2d6;
 }
 
-.room-status {
-  margin-top: 6px;
-  color: #c6d3f3;
-  font-size: 0.85rem;
-}
-
 .objective-text {
   margin-top: 8px;
   color: #6bff9f;
@@ -208,7 +219,7 @@ main {
 
 .room-actions-overlay {
   position: absolute;
-  inset: 16px 16px 80px;
+  inset: 16px 16px 120px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -234,13 +245,66 @@ main {
 }
 
 .overlay-footer {
-  position: absolute;
-  bottom: 16px;
+  position: fixed;
+  bottom: max(16px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   gap: 12px;
-  z-index: 3;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(8, 12, 20, 0.75);
+  border: 1px solid rgba(140, 169, 255, 0.25);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  z-index: 40;
+}
+
+.action-lock {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(140, 169, 255, 0.3);
+  background: rgba(6, 10, 18, 0.8);
+  color: #d2dcf5;
+  font-size: 0.85rem;
+  z-index: 5;
+  pointer-events: none;
+  min-width: min(240px, 70vw);
+}
+
+.action-lock p {
+  margin: 0;
+}
+
+.action-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(140, 169, 255, 0.2);
+  overflow: hidden;
+}
+
+.action-bar span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, rgba(140, 169, 255, 0.6), rgba(107, 255, 159, 0.75));
+  animation: actionProgress var(--action-duration, 1200ms) linear forwards;
+  transform-origin: left;
+}
+
+@keyframes actionProgress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 .room-meta {
@@ -626,6 +690,10 @@ main {
   align-items: center;
   justify-content: center;
   z-index: 30;
+}
+
+.menu-panel.modal-panel {
+  z-index: 60;
 }
 
 .menu-panel.active {
