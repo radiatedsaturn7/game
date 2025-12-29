@@ -665,7 +665,7 @@ main {
 
 .floorplan-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: flex-start;
   gap: 12px;
   margin-bottom: 8px;
@@ -674,6 +674,7 @@ main {
 .floorplan-status {
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 4px;
   font-size: 0.8rem;
   color: #9fb2de;
