@@ -652,7 +652,6 @@ let actionLockStepTimeoutId = null;
 const ACTION_LOCK_MS = 1200;
 
 const dom = {
-  threatLevel: document.getElementById("threatLevel"),
   dateLabel: document.getElementById("dateLabel"),
   roomMedia: document.getElementById("roomMedia"),
   currentRooms: document.querySelectorAll(".current-room"),
@@ -663,11 +662,11 @@ const dom = {
   schematicInventory: document.getElementById("schematicInventory"),
   schematicList: document.getElementById("schematicList"),
   floorplanMap: document.getElementById("floorplanMap"),
-  routeInfo: document.getElementById("routeInfo"),
   randomizeBtn: document.getElementById("randomizeBtn"),
   selectedRoom: document.getElementById("selectedRoom"),
   menuBtn: document.getElementById("menuBtn"),
   mapBtn: document.getElementById("mapBtn"),
+  liveBtn: document.getElementById("liveBtn"),
   tasksBtn: document.getElementById("tasksBtn"),
   useBtn: document.getElementById("useBtn"),
   debugBtn: document.getElementById("debugBtn"),
@@ -704,7 +703,6 @@ const dom = {
   actionLockLabel: document.getElementById("actionLockLabel"),
   deathSummary: document.getElementById("deathSummary"),
   victorySummary: document.getElementById("victorySummary"),
-  nightLabel: document.getElementById("nightLabel"),
   nightSelect: document.getElementById("nightSelect"),
 };
 
@@ -732,9 +730,10 @@ function attachEvents() {
   dom.randomizeBtn.addEventListener("click", randomizeLayout);
   dom.goBtn.addEventListener("click", () => moveSelected(false));
   dom.runBtn.addEventListener("click", () => moveSelected(true));
-  dom.cancelBtn.addEventListener("click", clearSelectedRoom);
+  dom.cancelBtn.addEventListener("click", cancelMovement);
   dom.menuBtn.addEventListener("click", openMenu);
   dom.mapBtn.addEventListener("click", openMap);
+  dom.liveBtn.addEventListener("click", returnToRoom);
   dom.tasksBtn.addEventListener("click", openTasks);
   dom.useBtn.addEventListener("click", openUse);
   dom.debugBtn.addEventListener("click", openDebug);
@@ -802,9 +801,9 @@ function updateUI() {
   dom.actionStatus.classList.toggle("hidden", state.statusTicks <= 0);
   updateActionLockUI();
   updateTravelStatus();
-  dom.threatLevel.textContent = threatLabel();
-  dom.dateLabel.textContent = formatDate(state.baseDate, state.dayCount);
-  dom.nightLabel.textContent = `${state.currentNight}`.padStart(2, "0");
+  if (dom.dateLabel) {
+    dom.dateLabel.textContent = formatDate(state.baseDate, state.currentNight + 1);
+  }
   if (dom.nightSelect) {
     dom.nightSelect.value = String(state.currentNight);
   }
@@ -841,6 +840,9 @@ function updateUI() {
   }
   if (dom.tasksBtn) {
     dom.tasksBtn.disabled = controlBlocked;
+  }
+  if (dom.liveBtn) {
+    dom.liveBtn.disabled = controlBlocked;
   }
   if (dom.debugBtn) {
     dom.debugBtn.disabled = controlBlocked;
@@ -1569,6 +1571,12 @@ function closeMap() {
   clearSelectedRoom();
 }
 
+function returnToRoom() {
+  closePanels();
+  state.routePreviewRoom = null;
+  clearSelectedRoom();
+}
+
 function openUse() {
   togglePanel(dom.usePanel);
 }
@@ -2200,6 +2208,18 @@ function moveSelected(isRun) {
 }
 
 function clearSelectedRoom() {
+  state.selectedRoom = null;
+  updateUI();
+}
+
+function cancelMovement() {
+  if (state.playerPath.length > 0 || state.playerTravelStepStart !== null) {
+    state.playerPath = [];
+    state.playerTravelTotal = 0;
+    state.playerTravelStepStart = null;
+    state.playerTravelStepDuration = 0;
+  }
+  state.routePreviewRoom = null;
   state.selectedRoom = null;
   updateUI();
 }
@@ -3254,50 +3274,19 @@ function canShowRobotTravelLine() {
 }
 
 function updateMap() {
-  const path = state.routePreviewRoom === null
-    ? []
-    : getShortestPath(state.playerRoom, state.routePreviewRoom);
   const robotPath = state.robotPlannedTarget === null
     ? []
     : getShortestPath(state.robotRoom, state.robotPlannedTarget);
-  const playerTravelPath = state.playerPath.length > 0
-    ? [state.playerRoom, ...state.playerPath]
-    : [];
-  const robotTravelPath = state.robotPath.length > 0
-    ? [state.robotRoom, ...state.robotPath]
-    : [];
-  const edges = new Set();
-  for (let i = 0; i < path.length - 1; i += 1) {
-    const a = Math.min(path[i], path[i + 1]);
-    const b = Math.max(path[i], path[i + 1]);
-    edges.add(`${a}-${b}`);
-  }
   const robotEdges = new Set();
   for (let i = 0; i < robotPath.length - 1; i += 1) {
     const a = Math.min(robotPath[i], robotPath[i + 1]);
     const b = Math.max(robotPath[i], robotPath[i + 1]);
     robotEdges.add(`${a}-${b}`);
   }
-  const playerTravelEdges = new Set();
-  for (let i = 0; i < playerTravelPath.length - 1; i += 1) {
-    const a = Math.min(playerTravelPath[i], playerTravelPath[i + 1]);
-    const b = Math.max(playerTravelPath[i], playerTravelPath[i + 1]);
-    playerTravelEdges.add(`${a}-${b}`);
-  }
-  const robotTravelEdges = new Set();
-  for (let i = 0; i < robotTravelPath.length - 1; i += 1) {
-    const a = Math.min(robotTravelPath[i], robotTravelPath[i + 1]);
-    const b = Math.max(robotTravelPath[i], robotTravelPath[i + 1]);
-    robotTravelEdges.add(`${a}-${b}`);
-  }
-  const playerEdge = currentTravelEdge(state.playerRoom, state.playerPath);
-  const suppressPreviewEdge = playerEdge?.key ?? null;
   const showRobotIntel = canSeeRobotIntel();
 
   dom.floorplanMap.querySelectorAll(".map-link").forEach((line) => {
     const edge = line.getAttribute("data-edge");
-    const showPreview = edges.has(edge) && edge !== suppressPreviewEdge;
-    line.classList.toggle("active", showPreview);
     line.classList.toggle("robot-plan", showRobotIntel && robotEdges.has(edge));
     line.classList.toggle("edge-jammed", state.jammedEdges.has(edge));
   });
@@ -3378,7 +3367,7 @@ function updateMap() {
     }
   });
 
-  updateRouteInfo(path);
+  updateRouteInfo();
 }
 
 function getRoomPressure(roomId) {
@@ -3465,21 +3454,7 @@ function setLineProgress(line, startRoom, endRoom, progress) {
   line.setAttribute("y2", end.y);
 }
 
-function updateRouteInfo(path) {
-  if (state.routePreviewRoom === null) {
-    dom.routeInfo.textContent = "";
-    return;
-  }
-  if (state.routePreviewRoom === state.playerRoom) {
-    dom.routeInfo.textContent = "You are already here. Select another room for a route.";
-    return;
-  }
-  if (path.length === 0) {
-    dom.routeInfo.textContent = "No route found. Randomize the layout to regenerate paths.";
-    return;
-  }
-  const routeNames = path.map((id) => rooms[id].name).join(" → ");
-  dom.routeInfo.textContent = `Route: ${routeNames}`;
+function updateRouteInfo() {
 }
 
 function createSvgElement(tag, attrs, text) {
