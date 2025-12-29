@@ -1141,13 +1141,18 @@ function updatePanels() {
   dom.movementControls.classList.toggle("hidden", isPlayerTraveling());
 }
 
+function stripCaitPrefix(message) {
+  if (typeof message !== "string") return message;
+  return message.replace(/^Cait:\s*/i, "");
+}
+
 function pushStatus(message, ticks = 3) {
-  state.statusMessage = message;
+  state.statusMessage = stripCaitPrefix(message);
   state.statusTicks = ticks;
 }
 
 function pushBanner(message, ticks = 3) {
-  state.bannerMessage = message;
+  state.bannerMessage = stripCaitPrefix(message);
   state.bannerTicks = ticks;
 }
 
@@ -2153,7 +2158,7 @@ function closeTasks() {
 }
 
 function showObjectiveModal(text) {
-  dom.objectiveModalText.textContent = text;
+  dom.objectiveModalText.textContent = stripCaitPrefix(text);
   dom.objectiveModal.classList.add("active");
   dom.objectiveModal.setAttribute("aria-hidden", "false");
   state.objectiveBlocked = true;
@@ -2907,10 +2912,7 @@ function getObjectiveText() {
 
 function getInitialObjectiveModalText() {
   const text = state.nightIntroLine ?? getObjectiveText();
-  if (text.startsWith("Cait:")) {
-    return text;
-  }
-  return `Cait: ${text}`;
+  return stripCaitPrefix(text);
 }
 
 function isPlayerTraveling() {
