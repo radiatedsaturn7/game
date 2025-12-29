@@ -2767,7 +2767,7 @@ function updateMapWeatherLabel() {
   if (!dom.mapWeatherLabel) return;
   if (!state.weather) {
     dom.mapWeatherLabel.textContent = "—";
-    dom.mapWeatherLabel.setAttribute("title", "Unknown weather");
+    dom.mapWeatherLabel.setAttribute("title", "Unknown");
     dom.mapWeatherLabel.setAttribute("aria-label", "Weather: Unknown");
     return;
   }
@@ -2779,8 +2779,8 @@ function updateMapWeatherLabel() {
   };
   const symbol = weatherSymbols[state.weather.type] ?? "❔";
   dom.mapWeatherLabel.textContent = symbol;
-  dom.mapWeatherLabel.setAttribute("title", `${state.weather.type}: ${state.weather.description}`);
-  dom.mapWeatherLabel.setAttribute("aria-label", `Weather: ${state.weather.type}. ${state.weather.description}`);
+  dom.mapWeatherLabel.setAttribute("title", state.weather.type);
+  dom.mapWeatherLabel.setAttribute("aria-label", `Weather: ${state.weather.type}`);
 }
 
 function revealEscapeSchematic() {
