@@ -2765,10 +2765,21 @@ function updateTravelStatus() {
 function updateMapWeatherLabel() {
   if (!dom.mapWeatherLabel) return;
   if (!state.weather) {
-    dom.mapWeatherLabel.textContent = "Weather: Unknown";
+    dom.mapWeatherLabel.textContent = "—";
+    dom.mapWeatherLabel.setAttribute("title", "Unknown weather");
+    dom.mapWeatherLabel.setAttribute("aria-label", "Weather: Unknown");
     return;
   }
-  dom.mapWeatherLabel.textContent = `Weather: ${state.weather.type} — ${state.weather.description}`;
+  const weatherSymbols = {
+    Rain: "🌧️",
+    Clear: "☀️",
+    Fog: "🌫️",
+    Storm: "⛈️",
+  };
+  const symbol = weatherSymbols[state.weather.type] ?? "❔";
+  dom.mapWeatherLabel.textContent = symbol;
+  dom.mapWeatherLabel.setAttribute("title", `${state.weather.type}: ${state.weather.description}`);
+  dom.mapWeatherLabel.setAttribute("aria-label", `Weather: ${state.weather.type}. ${state.weather.description}`);
 }
 
 function revealEscapeSchematic() {
@@ -5095,7 +5106,7 @@ function updateScannerToggleButton() {
   const showScanner = canUseScanner();
   dom.scannerToggleBtn.classList.toggle("hidden", !showScanner);
   if (!showScanner) return;
-  dom.scannerToggleBtn.textContent = state.scannerOn ? "Scanner: ON" : "Scanner: OFF";
+  dom.scannerToggleBtn.textContent = state.scannerOn ? "Motion Sensor: ON" : "Motion Sensor: OFF";
   dom.scannerToggleBtn.disabled = controlBlocked;
   dom.scannerToggleBtn.classList.toggle("objective-highlight", state.scannerHighlight);
 }

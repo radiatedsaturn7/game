@@ -496,8 +496,14 @@ main {
 
 .map-controls {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.map-controls .movement-controls {
+  margin-right: auto;
 }
 
 .map-selected strong {
@@ -735,6 +741,14 @@ main {
 .floorplan-status strong {
   font-size: 1.1rem;
   color: #ffffff;
+}
+
+.floorplan-status .date-label {
+  font-size: 0.95rem;
+}
+
+.floorplan-status .weather-symbol {
+  font-size: 1.2rem;
 }
 
 .night-row {
