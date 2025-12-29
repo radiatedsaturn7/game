@@ -613,6 +613,8 @@ const state = {
   robotAlertText: "",
   statusMessage: "",
   statusTicks: 0,
+  bannerMessage: "",
+  bannerTicks: 0,
   playerTrail: [],
   signalDecayBoost: new Map(),
   lastStrongSignalTick: -999,
@@ -790,12 +792,17 @@ function updateUI() {
   const robotLabel = robotStatusLabel();
   dom.robotStatuses.forEach((node) => {
     const label = node.querySelector("span");
+    const bannerLabel = state.bannerTicks > 0 ? state.bannerMessage : robotLabel;
     if (label) {
-      label.textContent = robotLabel;
+      label.textContent = bannerLabel;
     } else {
-      node.textContent = robotLabel;
+      node.textContent = bannerLabel;
     }
-    node.classList.toggle("marquee", node.scrollWidth > node.clientWidth);
+    const labelNode = label || node;
+    const overflow = labelNode.scrollWidth - node.clientWidth;
+    const shouldMarquee = overflow > 6;
+    node.classList.toggle("marquee", shouldMarquee);
+    node.style.setProperty("--marquee-shift", `${Math.max(0, overflow)}px`);
   });
   dom.actionStatus.textContent = state.statusMessage;
   dom.actionStatus.classList.toggle("hidden", state.statusTicks <= 0);
@@ -1021,6 +1028,11 @@ function pushStatus(message, ticks = 3) {
   state.statusTicks = ticks;
 }
 
+function pushBanner(message, ticks = 3) {
+  state.bannerMessage = message;
+  state.bannerTicks = ticks;
+}
+
 function setRobotMode(mode) {
   if (state.robotMode === mode) return;
   state.robotMode = mode;
@@ -1037,7 +1049,7 @@ function setRobotMode(mode) {
 }
 
 function setRobotMood(mood, ticks) {
-  if (!mood || ticks <= 0) return;
+  if (!mood || ticks <= 0 || state.robotDisabled || state.robotDormant > 0) return;
   const profile = getNightProfile();
   const chance = profile.moodChance[mood] ?? 0.3;
   if (Math.random() > chance) return;
@@ -1435,6 +1447,12 @@ function tickStatus() {
     state.statusTicks -= 1;
     if (state.statusTicks <= 0) {
       state.statusMessage = "";
+    }
+  }
+  if (state.bannerTicks > 0) {
+    state.bannerTicks -= 1;
+    if (state.bannerTicks <= 0) {
+      state.bannerMessage = "";
     }
   }
 }
@@ -2687,6 +2705,8 @@ function resetGame() {
   state.alertTicks = 0;
   state.statusMessage = "";
   state.statusTicks = 0;
+  state.bannerMessage = "";
+  state.bannerTicks = 0;
   state.playerPath = [];
   state.playerTravelMode = "sneak";
   state.playerTravelTotal = 0;
@@ -2798,7 +2818,7 @@ function registerSignal(roomId, strength, options = {}) {
     );
   }
   if (current < 0.6 && next >= 0.6) {
-    pushStatus("A pressure spike ripples through the halls.", 3);
+    pushBanner("Pressure spike in the halls.", 3);
   }
   const updateChance = (lastKnownChance ?? next) * profile.lastKnownChance;
   if (forceLastKnown || Math.random() < updateChance) {
@@ -3113,13 +3133,13 @@ function getRobotDistance() {
 
 function getRobotRoomHint(roomId) {
   const hints = {
-    1: "Metal clatters on the line.",
-    2: "It smells like something is burning.",
-    3: "Cold vapor hisses somewhere.",
-    5: "Fans whine in the dark.",
-    6: "Servos hum against steel.",
-    8: "Switches snap on their own.",
-    11: "Pistons thump in the distance.",
+    1: "Metal clatter.",
+    2: "Burnt air.",
+    3: "Cold vapor hisses.",
+    5: "Fans whine.",
+    6: "Servos hum.",
+    8: "Switches snap.",
+    11: "Pistons thump.",
   };
   return hints[roomId] || "";
 }
@@ -3142,30 +3162,30 @@ function robotStatusLabel() {
   let primary = "";
   if (distance === 0) {
     if (state.hidden && state.robotLookTurns > 0) {
-      primary = "You think it's looking right at you.";
+      primary = "It stares right at you.";
     } else if (state.hidden) {
-      primary = "It sounds like footsteps entered the room.";
+      primary = "Footsteps enter the room.";
     } else if (state.robotLookTurns > 0) {
-      primary = "It's looking down the hallways.";
+      primary = "It scans the halls.";
     } else {
-      primary = "Footsteps scrape across the room.";
+      primary = "Footsteps scrape nearby.";
     }
   } else if (distance === 1 && state.hidden) {
-    primary = "Footsteps hover outside the room.";
+    primary = "Footsteps hover outside.";
   } else if (state.robotLookTurns > 0) {
-    primary = `You hear servos moving ${distanceLabel}.`;
+    primary = `Servos move ${distanceLabel}.`;
   } else if (state.robotSweepQueue.length > 0) {
-    primary = `It sounds like something is running ${distanceLabel}.`;
+    primary = `Something runs ${distanceLabel}.`;
   } else if (state.robotSearchTurns > 0) {
-    primary = `You hear footsteps searching ${distanceLabel}.`;
+    primary = `Footsteps search ${distanceLabel}.`;
   } else if (state.robotInvestigateTurns > 0) {
     primary = `Footsteps slow ${distanceLabel}.`;
   } else if (state.robotTask) {
     primary = `Relays tick ${distanceLabel}.`;
   } else if (distance === 1) {
-    primary = "You think you saw something move.";
+    primary = "Something moves nearby.";
   } else {
-    primary = `You hear footsteps ${distanceLabel}.`;
+    primary = `Footsteps ${distanceLabel}.`;
   }
 
   const roomHint = distance > 0 ? getRobotRoomHint(state.robotRoom) : "";
@@ -3284,11 +3304,23 @@ function updateMap() {
     robotEdges.add(`${a}-${b}`);
   }
   const showRobotIntel = canSeeRobotIntel();
+  const plannedPath = state.routePreviewRoom !== null
+    ? getShortestPath(state.playerRoom, state.routePreviewRoom)
+    : state.playerPath.length > 0
+      ? [state.playerRoom, ...state.playerPath]
+      : [];
+  const plannedEdges = new Set();
+  for (let i = 0; i < plannedPath.length - 1; i += 1) {
+    const a = Math.min(plannedPath[i], plannedPath[i + 1]);
+    const b = Math.max(plannedPath[i], plannedPath[i + 1]);
+    plannedEdges.add(`${a}-${b}`);
+  }
 
   dom.floorplanMap.querySelectorAll(".map-link").forEach((line) => {
     const edge = line.getAttribute("data-edge");
     line.classList.toggle("robot-plan", showRobotIntel && robotEdges.has(edge));
     line.classList.toggle("edge-jammed", state.jammedEdges.has(edge));
+    line.classList.toggle("active", plannedEdges.has(edge));
   });
   dom.floorplanMap.querySelectorAll(".map-jam").forEach((marker) => {
     const edge = marker.getAttribute("data-edge");

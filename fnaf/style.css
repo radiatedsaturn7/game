@@ -186,8 +186,7 @@ main {
 }
 
 .robot-status.marquee span {
-  padding-left: 100%;
-  animation: statusMarquee 10s linear infinite;
+  animation: statusMarquee 8s ease-in-out infinite;
 }
 
 .action-status {
@@ -208,11 +207,13 @@ main {
 }
 
 @keyframes statusMarquee {
-  0% {
+  0%,
+  15% {
     transform: translateX(0);
   }
+  85%,
   100% {
-    transform: translateX(-100%);
+    transform: translateX(calc(-1 * var(--marquee-shift, 0px)));
   }
 }
 
