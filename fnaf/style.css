@@ -105,6 +105,13 @@ main {
   min-height: 100vh;
 }
 
+.room-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .room-media {
   position: relative;
   border-radius: 24px;
@@ -150,13 +157,6 @@ main {
   pointer-events: none;
 }
 
-.status-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-width: min(420px, 80vw);
-}
-
 .robot-status {
   margin: 0;
   padding: 6px 12px;
@@ -166,6 +166,18 @@ main {
   color: #e0e8ff;
   font-size: 0.8rem;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: min(520px, 70vw);
+}
+
+.robot-status span {
+  display: inline-block;
+}
+
+.robot-status.marquee span {
+  padding-left: 100%;
+  animation: statusMarquee 10s linear infinite;
 }
 
 .action-status {
@@ -176,6 +188,19 @@ main {
   background: rgba(6, 10, 18, 0.65);
   color: #c6d3f3;
   font-size: 0.8rem;
+}
+
+#debugBtn {
+  align-self: flex-start;
+}
+
+@keyframes statusMarquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
 }
 
 .room-overlay {
