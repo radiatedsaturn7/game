@@ -694,6 +694,7 @@ const dom = {
   goBtn: document.getElementById("goBtn"),
   runBtn: document.getElementById("runBtn"),
   cancelBtn: document.getElementById("cancelBtn"),
+  scannerToggleBtn: document.getElementById("scannerToggleBtn"),
   movementControls: document.getElementById("movementControls"),
   escapeBtn: document.getElementById("escapeBtn"),
   deathScreen: document.getElementById("deathScreen"),
@@ -733,6 +734,7 @@ function attachEvents() {
   dom.goBtn.addEventListener("click", () => moveSelected(false));
   dom.runBtn.addEventListener("click", () => moveSelected(true));
   dom.cancelBtn.addEventListener("click", cancelMovement);
+  dom.scannerToggleBtn.addEventListener("click", () => handleAction("scan-toggle"));
   dom.menuBtn.addEventListener("click", openMenu);
   dom.mapBtn.addEventListener("click", openMap);
   dom.liveBtn.addEventListener("click", returnToRoom);
@@ -821,6 +823,7 @@ function updateUI() {
   updateSchematicsInventory();
   updateRequiredComponents();
   updateUseList();
+  updateScannerToggleButton();
   updateRoomActions();
   updatePanels();
   updateEscapeButton();
@@ -3786,17 +3789,6 @@ function updateUseList() {
   const controlBlocked = state.objectiveBlocked || isActionLocked();
   const options = [];
   const lockedEntries = [];
-  if (state.unlocks.allowScannerToggle) {
-    const label = state.scannerOn ? "Scanner: ON" : "Scanner: OFF";
-    options.push(
-      { label, action: () => handleAction("scan-toggle"), help: "Pulse Scanner" }
-    );
-  } else {
-    const unlockNight = getNextUnlockNightFromNow("allowScannerToggle");
-    lockedEntries.push(
-      unlockNight ? `Scanner locked (Night ${unlockNight})` : "Scanner locked."
-    );
-  }
   if (state.unlocks.allowNoiseLure) {
     options.push(
       { label: `Noise Lure (${state.noiseLures})`, action: () => handleAction("noise"), help: "Noise Lure" }
@@ -3852,6 +3844,21 @@ function updateUseList() {
     li.appendChild(help);
     dom.useList.appendChild(li);
   });
+}
+
+function updateScannerToggleButton() {
+  if (!dom.scannerToggleBtn) return;
+  const controlBlocked = state.objectiveBlocked || isActionLocked();
+  if (state.unlocks.allowScannerToggle) {
+    dom.scannerToggleBtn.textContent = state.scannerOn ? "Scanner: ON" : "Scanner: OFF";
+    dom.scannerToggleBtn.disabled = controlBlocked;
+    return;
+  }
+  const unlockNight = getNextUnlockNightFromNow("allowScannerToggle");
+  dom.scannerToggleBtn.textContent = unlockNight
+    ? `Scanner locked (Night ${unlockNight})`
+    : "Scanner locked";
+  dom.scannerToggleBtn.disabled = true;
 }
 
 function useCraftedItem(name) {
