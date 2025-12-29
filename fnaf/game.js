@@ -341,6 +341,44 @@ const ALARM_TICK_SIGNAL = 0.07;
 const ALARM_BLEED_SIGNAL = 0.03;
 const SCANNER_ROOM_ID = 0;
 
+const LURE_TYPES = {
+  siren: {
+    name: "Alarm Beacon",
+    strength: 0.6,
+    linger: 4,
+    steps: 1,
+  },
+  beacon: {
+    name: "High-Power Beacon",
+    strength: 0.78,
+    linger: 5,
+    steps: 2,
+  },
+};
+
+const WEATHER_TYPES = [
+  {
+    type: "Rain",
+    description: "Rain dampens the signal bleed. The halls sound softer.",
+    modifiers: { signalStrength: 0.92, signalDecay: 1.08, scannerFog: false, surgeBonus: 0, bleedMultiplier: 0.85 },
+  },
+  {
+    type: "Clear",
+    description: "Clear air carries every sound. Sunlight slices the rooms.",
+    modifiers: { signalStrength: 1.05, signalDecay: 0.98, scannerFog: false, surgeBonus: 0, bleedMultiplier: 1 },
+  },
+  {
+    type: "Fog",
+    description: "Fog smothers sightlines. Scanner readings smear and drift.",
+    modifiers: { signalStrength: 0.97, signalDecay: 1.02, scannerFog: true, surgeBonus: 0, bleedMultiplier: 1 },
+  },
+  {
+    type: "Storm",
+    description: "Storms hammer the grid. Surges roll more often.",
+    modifiers: { signalStrength: 1.08, signalDecay: 0.96, scannerFog: false, surgeBonus: 1, bleedMultiplier: 1 },
+  },
+];
+
 const MISSION_TYPES = {
   ESCAPE: "escape",
   STABILIZE: "stabilize",
@@ -586,6 +624,11 @@ const state = {
   robotSweepQueue: [],
   robotCheckedCooldown: new Map(),
   robotPresenceHeat: new Map(),
+  robotAlarmVisits: new Map(),
+  robotAlarmStreak: 0,
+  robotAlarmLoopEdge: null,
+  robotAlarmLoopTurns: 0,
+  robotMovedThisTick: false,
   robotMode: "idle",
   robotTargetConfidence: 0,
   robotSweepCooldown: 0,
@@ -642,16 +685,28 @@ const state = {
   disabledAlarmedRooms: new Set(),
   alarmDisableProgress: new Map(),
   alarmedRoomsRequired: 0,
+  activeLures: new Map(),
+  sunlitRooms: new Set(),
+  weather: null,
+  weatherAnnounced: false,
   surgeCountdown: null,
   surgeForeshadowed: false,
   surgeTargetRoom: null,
+  surgeCharges: 0,
   hiddenTurns: 0,
   lastMoveType: "sneak",
   ohShitTriggered: false,
+  sanity: 1,
+  minSanity: 1,
+  sanityGlitchCooldown: 0,
+  sanityScanCooldown: 0,
+  caitCooldown: 0,
+  caitTalkCount: 0,
   runMoments: [],
   runSummary: "",
-  mapAction: null,
-  mapActionSourceRoom: null,
+  mapTargetMode: null,
+  mapTargetSourceRoom: null,
+  mapTargetSelection: null,
   robotLastRoom: null,
 };
 
@@ -702,6 +757,7 @@ const dom = {
   goBtn: document.getElementById("goBtn"),
   runBtn: document.getElementById("runBtn"),
   cancelBtn: document.getElementById("cancelBtn"),
+  mapConfirmBtn: document.getElementById("mapConfirmBtn"),
   scannerToggleBtn: document.getElementById("scannerToggleBtn"),
   movementControls: document.getElementById("movementControls"),
   escapeBtn: document.getElementById("escapeBtn"),
@@ -726,6 +782,7 @@ function init() {
   renderMap();
   assignRoomFinds();
   setupMissionForNight();
+  announceWeather();
   configureRobotStart();
   updateSchematicList();
   updatePlayerTrail(state.playerRoom);
@@ -743,6 +800,7 @@ function attachEvents() {
   dom.goBtn.addEventListener("click", () => moveSelected(false));
   dom.runBtn.addEventListener("click", () => moveSelected(true));
   dom.cancelBtn.addEventListener("click", cancelMovement);
+  dom.mapConfirmBtn.addEventListener("click", confirmMapTarget);
   dom.scannerToggleBtn.addEventListener("click", () => handleAction("scan-toggle"));
   dom.menuBtn.addEventListener("click", openMenu);
   dom.mapBtn.addEventListener("click", openMap);
@@ -825,10 +883,14 @@ function updateUI() {
   if (dom.nightSelect) {
     dom.nightSelect.value = String(state.currentNight);
   }
-  if (state.mapAction) {
-    dom.selectedRoom.textContent = state.mapAction === "noise"
-      ? "Select noise target"
-      : "Select door to jam";
+  if (state.mapTargetMode) {
+    if (state.mapTargetSelection !== null) {
+      dom.selectedRoom.textContent = rooms[state.mapTargetSelection].name;
+    } else {
+      dom.selectedRoom.textContent = state.mapTargetMode === "noise"
+        ? "Select noise target"
+        : "Select door to jam";
+    }
   } else {
     dom.selectedRoom.textContent = state.selectedRoom === null
       ? "None"
@@ -846,6 +908,7 @@ function updateUI() {
   ensureTravelAnimation();
   updateBuildButton();
   updateMoveButtons();
+  updateMapActionControls();
   if (dom.toggleRobotBtn) {
     dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
   }
@@ -1013,20 +1076,20 @@ function updateMoveButtons() {
   const canMove = hasSelection &&
     getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
   const isMoving = isPlayerTraveling();
-  const mapActionActive = Boolean(state.mapAction);
   const blocked = !canMove ||
     !state.isAlive ||
     state.hasEscaped ||
     isMoving ||
     state.objectiveBlocked ||
-    state.actionLock;
-  dom.movementControls.classList.toggle("hidden", isMoving || mapActionActive);
-  dom.cancelBtn.classList.toggle("hidden", !isMoving && !mapActionActive);
+    state.actionLock ||
+    state.mapTargetMode;
+  dom.movementControls.classList.toggle("hidden", isMoving);
+  dom.cancelBtn.classList.toggle("hidden", !isMoving);
   setButtonLabel(dom.goBtn, "Sneak", "Quiet");
   setButtonLabel(dom.runBtn, "Run", "Trace");
   dom.goBtn.disabled = blocked;
   dom.runBtn.disabled = blocked;
-  dom.cancelBtn.disabled = !isMoving && !mapActionActive;
+  dom.cancelBtn.disabled = !isMoving;
 }
 
 function setButtonLabel(button, text, risk) {
@@ -1042,8 +1105,24 @@ function setButtonLabel(button, text, risk) {
   }
 }
 
+function updateMapActionControls() {
+  if (!dom.mapConfirmBtn) return;
+  const controlBlocked = state.objectiveBlocked || isActionLocked();
+  const active = Boolean(state.mapTargetMode);
+  const hasSelection = state.mapTargetSelection !== null;
+  dom.mapConfirmBtn.classList.toggle("hidden", !active || !hasSelection);
+  dom.mapConfirmBtn.disabled = !hasSelection || controlBlocked;
+  if (state.mapTargetMode === "noise") {
+    dom.mapConfirmBtn.textContent = "Deploy Noise Lure here";
+  } else if (state.mapTargetMode === "jam") {
+    dom.mapConfirmBtn.textContent = "Deploy Door Jam here";
+  } else {
+    dom.mapConfirmBtn.textContent = "Confirm";
+  }
+}
+
 function updatePanels() {
-  dom.movementControls.classList.toggle("hidden", isPlayerTraveling() || Boolean(state.mapAction));
+  dom.movementControls.classList.toggle("hidden", isPlayerTraveling());
 }
 
 function pushStatus(message, ticks = 3) {
@@ -1119,6 +1198,39 @@ function getPassiveEffects() {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function getWeatherModifiers() {
+  return state.weather?.modifiers ?? {
+    signalStrength: 1,
+    signalDecay: 1,
+    scannerFog: false,
+    surgeBonus: 0,
+    bleedMultiplier: 1,
+  };
+}
+
+function adjustSanity(amount, reason) {
+  if (state.currentNight < 4) return;
+  const prev = state.sanity;
+  state.sanity = clamp(state.sanity + amount, 0, 1);
+  state.minSanity = Math.min(state.minSanity, state.sanity);
+  if (amount < 0 && reason === "surge") {
+    state.runMoments.push("A power surge rattled your nerves.");
+  }
+  if (amount > 0 && reason === "cait") {
+    state.runMoments.push("Cait pulled you back from the edge.");
+  }
+  if (prev >= 0.4 && state.sanity < 0.4) {
+    state.runMoments.push("Panic blurred your read of the halls.");
+  }
+}
+
+function sanityBand() {
+  if (state.sanity >= 0.7) return "steady";
+  if (state.sanity >= 0.4) return "strained";
+  if (state.sanity >= 0.2) return "frayed";
+  return "critical";
 }
 
 function logDebug(event, payload) {
@@ -1264,7 +1376,38 @@ function setupMissionForNight() {
     state.dataFragmentsNeeded = Math.floor(Math.random() * 2) + 2;
   }
 
+  setupEnvironmentForNight();
+}
+
+function setupEnvironmentForNight() {
+  setupWeatherForNight();
   setupAlarmedRooms();
+  setupLureRooms();
+  setupSunlitRooms();
+  state.robotAlarmVisits.clear();
+  state.robotAlarmStreak = 0;
+  state.robotAlarmLoopEdge = null;
+  state.robotAlarmLoopTurns = 0;
+}
+
+function setupWeatherForNight() {
+  if (state.currentNight < 4) {
+    state.weather = {
+      type: "Still",
+      description: "The air is calm. The factory waits.",
+      modifiers: {
+        signalStrength: 1,
+        signalDecay: 1,
+        scannerFog: false,
+        surgeBonus: 0,
+        bleedMultiplier: 1,
+      },
+    };
+  } else {
+    state.weather = WEATHER_TYPES[Math.floor(Math.random() * WEATHER_TYPES.length)];
+  }
+  state.weatherAnnounced = false;
+  state.surgeCharges = state.weather.modifiers.surgeBonus || 0;
 }
 
 function setupAlarmedRooms() {
@@ -1282,7 +1425,71 @@ function setupAlarmedRooms() {
     ? state.alarmedRoomsRequired
     : Math.min(2, Math.floor(Math.random() * 2) + 1);
   const shuffled = [...available].sort(() => Math.random() - 0.5);
-  state.alarmedRooms = new Set(shuffled.slice(0, alarmCount).map((room) => room.id));
+  const selected = [];
+  const remaining = [];
+  shuffled.forEach((room) => {
+    const adjacentAlarm = selected.some((picked) => (roomConnections[picked] || []).includes(room.id));
+    if (!adjacentAlarm && selected.length < alarmCount) {
+      selected.push(room.id);
+    } else {
+      remaining.push(room.id);
+    }
+  });
+  while (selected.length < alarmCount && remaining.length > 0) {
+    selected.push(remaining.shift());
+  }
+  state.alarmedRooms = new Set(selected);
+}
+
+function setupLureRooms() {
+  state.activeLures = new Map();
+  if (!state.unlocks.allowSirens) return;
+  const eligible = rooms.filter((room) => !room.isExit).map((room) => room.id);
+  const shuffled = [...eligible].sort(() => Math.random() - 0.5);
+  const sirenCount = Math.min(5, Math.max(3, Math.floor(Math.random() * 3) + 3));
+  const beaconCount = Math.min(2, Math.max(1, Math.floor(Math.random() * 2) + 1));
+  const sirenRooms = shuffled.slice(0, sirenCount);
+  const remaining = shuffled.slice(sirenCount);
+  const beaconRooms = remaining.slice(0, beaconCount);
+  sirenRooms.forEach((roomId) => {
+    state.activeLures.set(roomId, { ...LURE_TYPES.siren });
+  });
+  beaconRooms.forEach((roomId) => {
+    state.activeLures.set(roomId, { ...LURE_TYPES.beacon });
+  });
+}
+
+function setupSunlitRooms() {
+  state.sunlitRooms = new Set();
+  if (state.currentNight < 4) return;
+  if (state.weather?.type !== "Clear") return;
+  const eligible = rooms.filter((room) => !room.isExit).map((room) => room.id);
+  const shuffled = [...eligible].sort(() => Math.random() - 0.5);
+  const count = Math.min(4, Math.max(2, Math.floor(Math.random() * 3) + 2));
+  const selected = [];
+  const remaining = [];
+  shuffled.forEach((roomId) => {
+    const adjacentSun = selected.some((picked) => (roomConnections[picked] || []).includes(roomId));
+    if (!adjacentSun && selected.length < count) {
+      selected.push(roomId);
+    } else {
+      remaining.push(roomId);
+    }
+  });
+  while (selected.length < count && remaining.length > 0) {
+    selected.push(remaining.shift());
+  }
+  state.sunlitRooms = new Set(selected);
+}
+
+function announceWeather() {
+  if (!state.weather || state.weatherAnnounced) return;
+  if (state.currentNight < 4) {
+    state.weatherAnnounced = true;
+    return;
+  }
+  pushBanner(`Weather: ${state.weather.type}. ${state.weather.description}`, 4);
+  state.weatherAnnounced = true;
 }
 
 function setCurrentNight(night) {
@@ -1301,6 +1508,7 @@ function setCurrentNight(night) {
     state.selectedSchematic = null;
     state.escapeConsoleInspected = false;
   }
+  announceWeather();
   updateNextNightButton();
   updateUI();
   pushStatus(`Night ${next} protocols loaded.`, 3);
@@ -1369,6 +1577,20 @@ function tickAlarmedRooms() {
   });
 }
 
+function tickSunlitRooms() {
+  if (state.sunlitRooms.size === 0) return;
+  const profile = getNightProfile();
+  const base = 0.04 * profile.signalStrength.device;
+  const bleed = 0.02 * profile.signalStrength.device;
+  state.sunlitRooms.forEach((roomId) => {
+    registerSignal(roomId, base, { type: "sunlight", lastKnownChance: 0.04 });
+    const neighbors = roomConnections[roomId] || [];
+    neighbors.forEach((neighbor) => {
+      registerSignal(neighbor, bleed, { type: "sunlight-bleed", lastKnownChance: 0.02 });
+    });
+  });
+}
+
 function applyRoomStress(roomId) {
   const effects = getPassiveEffects();
   const current = state.roomNoisePenalty.get(roomId) || 0;
@@ -1383,11 +1605,16 @@ function getRoomNoiseRisk(roomId) {
 }
 
 function schedulePowerSurge() {
-  if (state.ohShitTriggered || state.surgeCountdown !== null) return;
+  if (state.surgeCountdown !== null) return;
+  if (state.ohShitTriggered && state.surgeCharges <= 0) return;
   if (state.robotDisabled) return;
   const minTurns = state.currentNight <= 3 ? 6 : state.currentNight <= 6 ? 4 : 3;
   const maxTurns = state.currentNight <= 3 ? 9 : state.currentNight <= 6 ? 7 : 6;
-  const delay = Math.floor(Math.random() * (maxTurns - minTurns + 1)) + minTurns;
+  const weatherMods = getWeatherModifiers();
+  const surgeBoost = weatherMods.surgeBonus ?? 0;
+  const delayMin = Math.max(2, minTurns - surgeBoost);
+  const delayMax = Math.max(delayMin, maxTurns - surgeBoost);
+  const delay = Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;
   state.surgeCountdown = delay;
   state.surgeForeshadowed = false;
   state.surgeTargetRoom = pickSurgeRoom();
@@ -1410,7 +1637,8 @@ function pickSurgeRoom() {
 }
 
 function triggerPowerSurge(roomId) {
-  if (state.ohShitTriggered || roomId === null || roomId === undefined) return;
+  if (roomId === null || roomId === undefined) return;
+  const firstSurge = !state.ohShitTriggered;
   state.ohShitTriggered = true;
   state.robotFocus = roomId;
   state.surgeTargetRoom = null;
@@ -1419,6 +1647,13 @@ function triggerPowerSurge(roomId) {
   state.persistentSignals.set(roomId, 3 + effects.persistentBonus);
   showObjectiveModal("Power surge! The room erupts in noise.");
   state.runMoments.push("A sudden power surge forced you into the open.");
+  if (firstSurge) {
+    adjustSanity(-0.14, "surge");
+  }
+  if (state.surgeCharges > 0) {
+    state.surgeCharges -= 1;
+    schedulePowerSurge();
+  }
 }
 
 function tickPowerSurge() {
@@ -1470,6 +1705,12 @@ function buildRunSummary(outcome) {
   if (state.ohShitTriggered) {
     lines.push("A power surge blew your cover at the worst time.");
   }
+  if (state.minSanity < 0.4) {
+    lines.push("Panic blurred your read of the halls.");
+  }
+  if (state.caitTalkCount > 0) {
+    lines.push("Cait pulled you back from the edge.");
+  }
   state.runMoments.forEach((moment) => {
     if (!lines.includes(moment)) {
       lines.push(moment);
@@ -1500,6 +1741,14 @@ function tickRobotMemory() {
       state.robotCheckedCooldown.delete(roomId);
     } else {
       state.robotCheckedCooldown.set(roomId, next);
+    }
+  });
+  state.robotAlarmVisits.forEach((value, roomId) => {
+    const next = value - 1;
+    if (next <= 0) {
+      state.robotAlarmVisits.delete(roomId);
+    } else {
+      state.robotAlarmVisits.set(roomId, next);
     }
   });
   if (state.robotSweepCooldown > 0) {
@@ -1584,6 +1833,26 @@ function runLockedAction({ label, steps, onStep }) {
   runStep();
 }
 
+function pulseActionSignal(roomId, type) {
+  const profile = getNightProfile();
+  const effects = getPassiveEffects();
+  if (type === "trace") {
+    registerSignal(
+      roomId,
+      0.16 * profile.signalStrength.device * effects.signalSpike,
+      { type: "action-trace", lastKnownChance: 0.16 }
+    );
+    return;
+  }
+  if (type === "quiet") {
+    registerSignal(
+      roomId,
+      0.07 * profile.signalStrength.sneak,
+      { type: "action-quiet", lastKnownChance: 0.08 }
+    );
+  }
+}
+
 function openPanel(panel) {
   panel.classList.add("active");
   panel.setAttribute("aria-hidden", "false");
@@ -1622,13 +1891,13 @@ function openMap() {
 
 function closeMap() {
   closePanel(dom.mapPanel);
-  clearMapAction();
+  clearMapTarget();
   clearSelectedRoom();
 }
 
 function returnToRoom() {
   closePanels();
-  clearMapAction();
+  clearMapTarget();
   state.routePreviewRoom = null;
   clearSelectedRoom();
 }
@@ -1717,6 +1986,72 @@ function isRoomAlarmed(roomId) {
   return state.alarmedRooms.has(roomId) && !state.disabledAlarmedRooms.has(roomId);
 }
 
+function getActiveLure(roomId) {
+  return state.activeLures.get(roomId) || null;
+}
+
+function hasActiveLure(roomId) {
+  return Boolean(getActiveLure(roomId));
+}
+
+function recordRobotAlarmVisit(roomId) {
+  if (!isRoomAlarmed(roomId)) return;
+  const current = state.robotAlarmVisits.get(roomId) || 0;
+  state.robotAlarmVisits.set(roomId, current + 1);
+}
+
+function alarmVisitPenalty(roomId) {
+  if (!isRoomAlarmed(roomId)) return 0;
+  const visits = state.robotAlarmVisits.get(roomId) || 0;
+  return visits * 0.12;
+}
+
+function pickNonAlarmedNeighbor(roomId) {
+  const neighbors = roomConnections[roomId] || [];
+  const options = neighbors.filter((neighbor) => !isRoomAlarmed(neighbor));
+  if (options.length === 0) return null;
+  return options[Math.floor(Math.random() * options.length)];
+}
+
+function pickHighestPressureNonAlarmedRoom() {
+  let bestRoom = null;
+  let bestScore = 0;
+  rooms.forEach((room) => {
+    if (room.isExit) return;
+    if (isRoomAlarmed(room.id)) return;
+    const score = getRoomPressure(room.id);
+    if (score > bestScore) {
+      bestScore = score;
+      bestRoom = room.id;
+    }
+  });
+  return bestRoom;
+}
+
+function shouldForceAlarmBreak() {
+  return state.robotAlarmStreak >= 3 || state.robotAlarmLoopTurns >= 2;
+}
+
+function forceAlarmBreak() {
+  const neighbor = pickNonAlarmedNeighbor(state.robotRoom);
+  const target = neighbor ?? pickHighestPressureNonAlarmedRoom();
+  if (target === null || target === undefined) return false;
+  state.robotPlannedTarget = target;
+  state.robotPath = getShortestPath(state.robotRoom, target).slice(1);
+  if (state.robotPath.length > 0) {
+    startRobotTravelStep();
+  }
+  state.robotInvestigateTurns = 0;
+  state.robotSweepQueue = [];
+  state.robotLookTurns = 0;
+  state.robotScanTarget = null;
+  setRobotMode("hunt");
+  state.robotAlarmStreak = 0;
+  state.robotAlarmLoopTurns = 0;
+  state.robotAlarmLoopEdge = null;
+  return true;
+}
+
 function alarmDisableTurnsRequired() {
   const canRewire = state.unlocks.allowSlowRewire &&
     (hasPart("Resistors") || hasPart("Capacitors"));
@@ -1803,9 +2138,9 @@ function updateRoomActions() {
   if (state.escapeConsoleInspected && room.item && !state.inventory.has(room.item)) {
     actions.push({
       label: `Collect ${room.item}`,
-      onClick: () => collectItem(room.id),
+      onClick: () => startCollectItem(room.id),
       disabled: state.hidden || blocked,
-      risk: "Trace",
+      risk: "Quiet",
     });
   }
 
@@ -1877,6 +2212,31 @@ function updateRoomActions() {
     });
   }
 
+  if (state.sunlitRooms.has(room.id)) {
+    actions.push({
+      label: "Sunlight spills across the floor. It doesn’t care how quiet you are.",
+      disabled: true,
+      info: true,
+    });
+  }
+
+  if (state.currentNight >= 4 && !state.hidden && !isPlayerTraveling()) {
+    if (state.caitCooldown <= 0) {
+      actions.push({
+        label: "Talk to Cait",
+        onClick: () => talkToCait(),
+        disabled: blocked,
+        risk: "Trace",
+      });
+    } else {
+      actions.push({
+        label: `Cait channel cooling down (${state.caitCooldown})`,
+        disabled: true,
+        info: true,
+      });
+    }
+  }
+
   room.hideSpots.forEach((spot) => {
     const burned = state.burnedHidingSpots.has(`${room.id}:${spot}`);
     actions.push({
@@ -1896,9 +2256,10 @@ function updateRoomActions() {
     });
   }
 
-  if (room.siren && state.unlocks.allowSirens) {
+  const lure = getActiveLure(room.id);
+  if (lure && state.unlocks.allowSirens) {
     actions.push({
-      label: `Trigger ${room.siren}`,
+      label: `Trigger ${lure.name}`,
       onClick: () => triggerSiren(room.id),
       disabled: blocked,
       risk: "Distract",
@@ -2024,6 +2385,7 @@ function slowRewire() {
     label: "Rewiring panel…",
     steps: 1,
     onStep: () => {
+      pulseActionSignal(state.playerRoom, "quiet");
       const current = state.roomSignals.get(state.playerRoom) || 0;
       state.roomSignals.set(state.playerRoom, Math.max(0, current - 0.2));
       state.signalDecayBoost.set(
@@ -2037,6 +2399,59 @@ function slowRewire() {
       });
       pushStatus("You rewire the panel. The static softens.", 3);
       state.turn += 1;
+      updateUI();
+    },
+  });
+}
+
+function talkToCait() {
+  if (state.currentNight < 4) return;
+  if (state.caitCooldown > 0) return;
+  const band = sanityBand();
+  const lines = {
+    steady: [
+      "Cait: Keep it tight. The signal's thinning.",
+      "Cait: You're in control. Move on my mark.",
+      "Cait: Stay light. The metal listens.",
+    ],
+    strained: [
+      "Cait: Breathe. Count the beats, not the echoes.",
+      "Cait: I'm here. Focus on the next door.",
+      "Cait: You're not alone. Keep moving.",
+    ],
+    frayed: [
+      "Cait: Hey. Look at me. Name three sounds.",
+      "Cait: Stay with me. One breath at a time.",
+      "Cait: I need you here. Anchor on the hum.",
+    ],
+    critical: [
+      "Cait: Ground yourself. Five sounds. Then move.",
+      "Cait: You're slipping. Grab the rail, listen.",
+      "Cait: Stay present. I won't let you drown.",
+    ],
+  };
+  const linePool = lines[band] || lines.steady;
+  const line = linePool[Math.floor(Math.random() * linePool.length)];
+  const steps = band === "frayed" || band === "critical" ? 2 : 1;
+  runLockedAction({
+    label: "Talking to Cait…",
+    steps,
+    onStep: (step, total) => {
+      pulseActionSignal(state.playerRoom, "trace");
+      state.turn += 1;
+      if (step < total) {
+        updateUI();
+        return;
+      }
+      const profile = getNightProfile();
+      const noiseRisk = getRoomNoiseRisk(state.playerRoom);
+      const strength = (0.25 + noiseRisk * 0.15) * profile.signalStrength.device;
+      registerSignal(state.playerRoom, strength, { type: "cait", lastKnownChance: 0.2, bleed: true });
+      adjustSanity(0.3, "cait");
+      state.caitCooldown = Math.floor(Math.random() * 3) + 3;
+      state.caitTalkCount += 1;
+      pushBanner(line, 4);
+      pushStatus("Cait steadies your breathing.", 3);
       updateUI();
     },
   });
@@ -2174,51 +2589,58 @@ function alarmObjectiveText() {
 }
 
 function getObjectiveText() {
+  let objective = "";
   if (requiresScannerPickup()) {
-    return "Collect the Pulse Scanner in the Control Bay.";
-  }
-  if (!state.escapeConsoleInspected) {
-    return "Inspect the Escape Workshop console to receive your mission.";
-  }
-  const alarmText = alarmObjectiveText();
-  if (state.missionType === MISSION_TYPES.ESCAPE) {
-    if (state.escapeMode === "manual") {
-      if (!state.escapeReady) {
-        const base = `Align ${state.manualOverridesDone.size}/${state.manualOverrideNeeded} override nodes`;
+    objective = "Collect the Pulse Scanner in the Control Bay.";
+  } else if (!state.escapeConsoleInspected) {
+    objective = "Inspect the Escape Workshop console to receive your mission.";
+  } else {
+    const alarmText = alarmObjectiveText();
+    if (state.missionType === MISSION_TYPES.ESCAPE) {
+      if (state.escapeMode === "manual") {
+        if (!state.escapeReady) {
+          const base = `Align ${state.manualOverridesDone.size}/${state.manualOverrideNeeded} override nodes`;
+          const alarm = alarmText ? `, ${alarmText.toLowerCase()}` : "";
+          objective = `${base}${alarm}, then escape.`;
+        }
+      } else if (!state.escapeReady && state.requiredEscapeSchematic) {
         const alarm = alarmText ? `, ${alarmText.toLowerCase()}` : "";
-        return `${base}${alarm}, then escape.`;
+        objective = `Find and build the ${state.requiredEscapeSchematic} schematic${alarm}, then escape.`;
       }
-    } else if (!state.escapeReady && state.requiredEscapeSchematic) {
-      const alarm = alarmText ? `, ${alarmText.toLowerCase()}` : "";
-      return `Find and build the ${state.requiredEscapeSchematic} schematic${alarm}, then escape.`;
+    }
+    if (state.missionType === MISSION_TYPES.STABILIZE) {
+      const total = state.stabilizeTargets.length;
+      const done = state.stabilizedTargets.size;
+      if (!state.escapeReady) {
+        const targets = state.stabilizeTargets
+          .map((target) => {
+            const marker = state.stabilizedTargets.has(target.roomId) ? "✓" : "•";
+            return `${marker} ${target.room}`;
+          })
+          .join(" ");
+        const alarm = alarmText ? ` and ${alarmText.toLowerCase()}` : "";
+        objective = `Stabilize ${done}/${total} systems (${targets})${alarm}, then escape.`;
+      }
+    }
+    if (state.missionType === MISSION_TYPES.DATA) {
+      const done = state.dataFragmentsFound.size;
+      const total = state.dataFragmentsNeeded;
+      if (!state.escapeReady) {
+        const alarm = alarmText ? ` and ${alarmText.toLowerCase()}` : "";
+        objective = `Recover ${done}/${total} data fragments${alarm} to assemble the Lock Override.`;
+      }
+    }
+    if (state.escapeReady) {
+      objective = "Return to the Escape Workshop and press Escape.";
+    }
+    if (!objective) {
+      objective = "Explore the factory and collect components.";
     }
   }
-  if (state.missionType === MISSION_TYPES.STABILIZE) {
-    const total = state.stabilizeTargets.length;
-    const done = state.stabilizedTargets.size;
-    if (!state.escapeReady) {
-      const targets = state.stabilizeTargets
-        .map((target) => {
-          const marker = state.stabilizedTargets.has(target.roomId) ? "✓" : "•";
-          return `${marker} ${target.room}`;
-        })
-        .join(" ");
-      const alarm = alarmText ? ` and ${alarmText.toLowerCase()}` : "";
-      return `Stabilize ${done}/${total} systems (${targets})${alarm}, then escape.`;
-    }
+  if (state.currentNight >= 4 && state.weather) {
+    return `Weather: ${state.weather.type} — ${state.weather.description} ${objective}`;
   }
-  if (state.missionType === MISSION_TYPES.DATA) {
-    const done = state.dataFragmentsFound.size;
-    const total = state.dataFragmentsNeeded;
-    if (!state.escapeReady) {
-      const alarm = alarmText ? ` and ${alarmText.toLowerCase()}` : "";
-      return `Recover ${done}/${total} data fragments${alarm} to assemble the Lock Override.`;
-    }
-  }
-  if (state.escapeReady) {
-    return "Return to the Escape Workshop and press Escape.";
-  }
-  return "Explore the factory and collect components.";
+  return objective;
 }
 
 function isPlayerTraveling() {
@@ -2307,31 +2729,33 @@ function clearSelectedRoom() {
   updateUI();
 }
 
-function clearMapAction() {
-  state.mapAction = null;
-  state.mapActionSourceRoom = null;
+function clearMapTarget() {
+  state.mapTargetMode = null;
+  state.mapTargetSourceRoom = null;
+  state.mapTargetSelection = null;
   state.routePreviewRoom = null;
 }
 
-function beginMapAction(type) {
+function beginMapTarget(type) {
   if (!state.isAlive || state.hasEscaped) return;
   if (state.objectiveBlocked || isActionLocked()) return;
-  state.mapAction = type;
-  state.mapActionSourceRoom = state.playerRoom;
+  state.mapTargetMode = type;
+  state.mapTargetSourceRoom = state.playerRoom;
+  state.mapTargetSelection = null;
   state.selectedRoom = null;
   state.routePreviewRoom = null;
   openMap();
   updateUI();
 }
 
-function getMapActionTargets() {
-  if (!state.mapAction) return null;
-  const source = state.mapActionSourceRoom ?? state.playerRoom;
+function getMapTargetCandidates() {
+  if (!state.mapTargetMode) return null;
+  const source = state.mapTargetSourceRoom ?? state.playerRoom;
   const adjacent = roomConnections[source] || [];
-  if (state.mapAction === "noise") {
+  if (state.mapTargetMode === "noise") {
     return new Set([source, ...adjacent]);
   }
-  if (state.mapAction === "jam") {
+  if (state.mapTargetMode === "jam") {
     const valid = adjacent.filter((roomId) => {
       if (rooms[roomId].isExit || rooms[source].isExit) return false;
       return !isEdgeJammed(source, roomId);
@@ -2342,20 +2766,29 @@ function getMapActionTargets() {
 }
 
 function handleMapSelection(roomId) {
-  if (state.mapAction) {
-    const targets = getMapActionTargets();
+  if (state.mapTargetMode) {
+    const targets = getMapTargetCandidates();
     if (!targets || !targets.has(roomId)) return;
-    const action = state.mapAction;
-    clearMapAction();
-    if (action === "noise") {
-      deployNoiseLure(roomId);
-    } else if (action === "jam") {
-      deployDoorJam(roomId);
-    }
+    state.mapTargetSelection = roomId;
+    updateUI();
     return;
   }
   setRoutePreview(roomId);
   setSelectedRoom(roomId);
+}
+
+function confirmMapTarget() {
+  if (!state.mapTargetMode || state.mapTargetSelection === null) return;
+  if (state.objectiveBlocked || isActionLocked()) return;
+  const target = state.mapTargetSelection;
+  const mode = state.mapTargetMode;
+  clearMapTarget();
+  closeMap();
+  if (mode === "noise") {
+    deployNoiseLure(target);
+  } else if (mode === "jam") {
+    deployDoorJam(target);
+  }
 }
 
 function cancelMovement() {
@@ -2369,14 +2802,14 @@ function cancelMovement() {
     state.playerTravelStepStart = null;
     state.playerTravelStepDuration = 0;
   }
-  clearMapAction();
+  clearMapTarget();
   state.routePreviewRoom = null;
   state.selectedRoom = null;
   updateUI();
 }
 
-function collectItem(roomId) {
-  if (isActionLocked()) return;
+function collectItem(roomId, { force = false } = {}) {
+  if (isActionLocked() && !force) return;
   if (state.hidden) return;
   const room = rooms[roomId];
   if (room.item && !state.inventory.has(room.item)) {
@@ -2387,6 +2820,20 @@ function collectItem(roomId) {
     registerSignal(roomId, strength, { type: "loot", lastKnownChance: 0.16 });
   }
   updateUI();
+}
+
+function startCollectItem(roomId) {
+  const room = rooms[roomId];
+  if (!room?.item) return;
+  runLockedAction({
+    label: `Collecting ${room.item}…`,
+    steps: 1,
+    onStep: () => {
+      pulseActionSignal(roomId, "quiet");
+      state.turn += 1;
+      collectItem(roomId, { force: true });
+    },
+  });
 }
 
 function collectScanner(roomId, { force = false } = {}) {
@@ -2436,6 +2883,7 @@ function startScannerPickup(roomId) {
     label: "Collecting Pulse Scanner…",
     steps: 1,
     onStep: () => {
+      pulseActionSignal(roomId, "quiet");
       state.turn += 1;
       collectScanner(roomId, { force: true });
     },
@@ -2447,6 +2895,7 @@ function startSchematicScan(roomId) {
     label: "Scanning schematic…",
     steps: 1,
     onStep: () => {
+      pulseActionSignal(roomId, "quiet");
       state.turn += 1;
       collectSchematic(roomId, { force: true });
     },
@@ -2565,13 +3014,14 @@ function toggleScanner() {
   state.scannerHighlight = false;
   if (state.scannerOn) {
     const profile = getNightProfile();
+    const weatherMods = getWeatherModifiers();
     registerSignal(
       state.playerRoom,
       SCANNER_TOGGLE_SPIKE * profile.signalStrength.device,
       { type: "scanner", lastKnownChance: 0.18 }
     );
     state.scanFocusRoom = pickScannerFocusRoom();
-    state.scanPulseTicks = 2;
+    state.scanPulseTicks = weatherMods.scannerFog ? 1 : 2;
     pushStatus("Scanner hums. Static crawls outward.", 3);
   } else {
     state.scanPulseTicks = 0;
@@ -2606,7 +3056,7 @@ function handleAction(action) {
       updateUI();
       return;
     } else {
-      beginMapAction("noise");
+      beginMapTarget("noise");
       return;
     }
   }
@@ -2671,6 +3121,7 @@ function deployNoiseLure(targetRoom) {
     label: "Deploying noise lure…",
     steps: 1,
     onStep: () => {
+      pulseActionSignal(state.playerRoom, "trace");
       useDevice("noise", targetRoom);
       state.turn += 1;
       updateUI();
@@ -2703,8 +3154,23 @@ function advanceRobot() {
     return;
   }
 
+  if (!state.robotMovedThisTick) {
+    if (isRoomAlarmed(state.robotRoom)) {
+      recordRobotAlarmVisit(state.robotRoom);
+      state.robotAlarmStreak += 1;
+    } else {
+      state.robotAlarmStreak = 0;
+    }
+  }
+
   if (runRobotTask()) {
     return;
+  }
+
+  if (shouldForceAlarmBreak()) {
+    if (forceAlarmBreak()) {
+      return;
+    }
   }
 
   if (state.robotInvestigateTurns > 0) {
@@ -2765,7 +3231,18 @@ function advanceRobot() {
     }
   }
 
-  const target = pickRobotTarget();
+  let target = pickRobotTarget();
+  if (
+    target !== null &&
+    isRoomAlarmed(state.robotRoom) &&
+    isRoomAlarmed(target) &&
+    Math.random() < 0.6
+  ) {
+    const redirect = pickNonAlarmedNeighbor(state.robotRoom) ?? pickHighestPressureNonAlarmedRoom();
+    if (redirect !== null && redirect !== undefined) {
+      target = redirect;
+    }
+  }
   const confidence = target === null ? 0 : getRoomConfidence(target);
   const aggressive = state.threat >= 3;
   const chance = confidence >= 0.4 ? 0.5 : 0.85;
@@ -2797,10 +3274,16 @@ function advanceRobot() {
     const avoidAlarmLoop = isRoomAlarmed(state.robotRoom);
     const roamRooms = roomConnections[state.robotRoom].filter((id) => id !== state.robotRoom);
     const roamOptions = avoidAlarmLoop
-      ? roamRooms.filter((id) => !(id === state.robotLastRoom && isRoomAlarmed(id)))
+      ? roamRooms.filter((id) => !isRoomAlarmed(id))
       : roamRooms;
+    const fallbackOptions = roamOptions.length > 0
+      ? roamOptions
+      : roamRooms.filter((id) => !(id === state.robotLastRoom && isRoomAlarmed(id)));
     if (Math.random() < 0.4 && roamOptions.length > 0) {
-      const roamTarget = roamOptions[Math.floor(Math.random() * roamOptions.length)];
+      const roamTarget = (fallbackOptions.length > 0
+        ? fallbackOptions
+        : roamRooms
+      )[Math.floor(Math.random() * (fallbackOptions.length > 0 ? fallbackOptions.length : roamRooms.length))];
       state.robotPath = [roamTarget];
       startRobotTravelStep();
     }
@@ -2819,6 +3302,10 @@ function advanceRobot() {
 function checkThreat() {
   if (state.robotDisabled) return;
   if (state.robotRoom !== state.playerRoom) return;
+  if (state.hidden && state.robotLookTurns > 0 && state.sanityScanCooldown <= 0) {
+    adjustSanity(-0.08, "scan");
+    state.sanityScanCooldown = 4;
+  }
   if (state.robotSearchTurns > 0) {
     if (!state.hidden || (state.hiddenSpot === state.robotSearchSpot && state.sawPlayerHide)) {
       attemptKill();
@@ -2955,6 +3442,11 @@ function resetGame() {
   state.robotSweepQueue = [];
   state.robotCheckedCooldown.clear();
   state.robotPresenceHeat.clear();
+  state.robotAlarmVisits.clear();
+  state.robotAlarmStreak = 0;
+  state.robotAlarmLoopEdge = null;
+  state.robotAlarmLoopTurns = 0;
+  state.robotMovedThisTick = false;
   state.robotMode = "idle";
   state.robotTargetConfidence = 0;
   state.robotSweepCooldown = 0;
@@ -3014,22 +3506,35 @@ function resetGame() {
   state.disabledAlarmedRooms = new Set();
   state.alarmDisableProgress = new Map();
   state.alarmedRoomsRequired = 0;
+  state.activeLures.clear();
+  state.sunlitRooms.clear();
+  state.weather = null;
+  state.weatherAnnounced = false;
   state.surgeCountdown = null;
   state.surgeForeshadowed = false;
   state.surgeTargetRoom = null;
+  state.surgeCharges = 0;
   state.hiddenTurns = 0;
   state.lastMoveType = "sneak";
-  state.mapAction = null;
-  state.mapActionSourceRoom = null;
+  state.mapTargetMode = null;
+  state.mapTargetSourceRoom = null;
+  state.mapTargetSelection = null;
   state.unlocks = getUnlocks();
   if (!state.unlocks.robotActive) {
     state.robotDisabled = true;
   }
   state.ohShitTriggered = false;
+  state.sanity = 1;
+  state.minSanity = 1;
+  state.sanityGlitchCooldown = 0;
+  state.sanityScanCooldown = 0;
+  state.caitCooldown = 0;
+  state.caitTalkCount = 0;
   state.runMoments = [];
   state.runSummary = "";
   assignRoomFinds();
   setupMissionForNight();
+  announceWeather();
   configureRobotStart();
   dom.deathScreen.classList.remove("active");
   dom.deathScreen.setAttribute("aria-hidden", "true");
@@ -3068,6 +3573,7 @@ function formatDate(baseDate, dayCount) {
 function registerSignal(roomId, strength, options = {}) {
   const profile = getNightProfile();
   const effects = getPassiveEffects();
+  const weatherMods = getWeatherModifiers();
   const {
     type = "ambient",
     forceLastKnown = false,
@@ -3075,7 +3581,7 @@ function registerSignal(roomId, strength, options = {}) {
     bleed = false,
   } = options;
   const current = state.roomSignals.get(roomId) || 0;
-  const scaledStrength = strength * profile.confidenceGain;
+  const scaledStrength = strength * profile.confidenceGain * (weatherMods.signalStrength ?? 1);
   const next = Math.min(1, current + scaledStrength);
   state.roomSignals.set(roomId, next);
   if (type === "sneak") {
@@ -3107,11 +3613,12 @@ function registerSignal(roomId, strength, options = {}) {
   });
   if (bleed) {
     const bleedBoost = ["decoy", "noise", "siren"].includes(type) ? effects.bleedBoost : 1;
+    const bleedWeather = weatherMods.bleedMultiplier ?? 1;
     const neighbors = roomConnections[roomId] || [];
     neighbors.forEach((neighbor) => {
       scheduleSignal(
         neighbor,
-        scaledStrength * 0.35 * bleedBoost,
+        scaledStrength * 0.35 * bleedBoost * bleedWeather,
         1,
         { type: "bleed", lastKnownChance: 0.1 }
       );
@@ -3127,9 +3634,13 @@ function registerSignal(roomId, strength, options = {}) {
 
 function decaySignals() {
   const profile = getNightProfile();
+  const weatherMods = getWeatherModifiers();
   state.roomSignals.forEach((value, roomId) => {
     const boost = state.signalDecayBoost.get(roomId) || 0;
-    const next = Math.max(0, value - profile.signalDecay - boost * profile.confidenceDecay);
+    const next = Math.max(
+      0,
+      value - profile.signalDecay * (weatherMods.signalDecay ?? 1) - boost * profile.confidenceDecay
+    );
     if (boost > 0) {
       const nextBoost = Math.max(0, boost - 0.02);
       if (nextBoost <= 0) {
@@ -3161,6 +3672,7 @@ function maybeExpireLastKnown() {
   state.lastKnownPlayerRoom = null;
   state.lastKnownTick = -999;
   state.robotTargetConfidence = Math.max(0, state.robotTargetConfidence - 0.2);
+  adjustSanity(0.05, "breather");
   if (state.turn - state.lastTrailBreakTick > 4) {
     pushStatus("The pressure fades.", 3);
     state.lastTrailBreakTick = state.turn;
@@ -3288,7 +3800,10 @@ function buildSweepQueue(roomId) {
     count = Math.max(1, count - 1);
   }
   const shuffled = [...available].sort(() => Math.random() - 0.5);
-  state.robotSweepQueue = shuffled.slice(0, count);
+  const scored = shuffled
+    .map((roomId) => ({ roomId, penalty: alarmVisitPenalty(roomId), jitter: Math.random() }))
+    .sort((a, b) => (a.penalty - b.penalty) || (a.jitter - b.jitter));
+  state.robotSweepQueue = scored.slice(0, count).map((entry) => entry.roomId);
   state.robotSweepCooldown = profile.sweepCooldown;
 }
 
@@ -3310,16 +3825,24 @@ function predictNextRoom() {
 function pickRobotTarget() {
   if (state.robotFocus !== null) return state.robotFocus;
   const avoidAlarmLoop = isRoomAlarmed(state.robotRoom);
-  const signals = Array.from(state.roomSignals.entries()).sort((a, b) => b[1] - a[1]);
-  for (const [roomId, value] of signals) {
-    if (value <= 0.2) continue;
+  const signals = Array.from(state.roomSignals.entries())
+    .map(([roomId, value]) => ({
+      roomId,
+      value,
+      adjusted: value - alarmVisitPenalty(roomId),
+    }))
+    .sort((a, b) => b.adjusted - a.adjusted);
+  for (const entry of signals) {
+    const { roomId, value, adjusted } = entry;
+    if (adjusted <= 0.2) continue;
     if (avoidAlarmLoop && roomId === state.robotLastRoom && isRoomAlarmed(roomId)) continue;
     if (!state.robotCheckedCooldown.has(roomId)) return roomId;
-    if (value >= 0.7) return roomId;
+    if (value >= 0.7 && adjusted >= 0.4) return roomId;
   }
 
   if (state.trailTurns > 0 && state.lastKnownPlayerRoom !== null) {
-    const confidence = getRoomConfidence(state.lastKnownPlayerRoom);
+    const penalty = alarmVisitPenalty(state.lastKnownPlayerRoom);
+    const confidence = getRoomConfidence(state.lastKnownPlayerRoom) - penalty;
     if (
       avoidAlarmLoop &&
       state.lastKnownPlayerRoom === state.robotLastRoom &&
@@ -3340,7 +3863,8 @@ function pickRobotTarget() {
   ) {
     const profile = getNightProfile();
     if (!profile.prediction.enabled) return null;
-    const confidence = getRoomConfidence(state.lastKnownPlayerRoom);
+    const penalty = alarmVisitPenalty(state.lastKnownPlayerRoom);
+    const confidence = getRoomConfidence(state.lastKnownPlayerRoom) - penalty;
     const lastSignal = state.roomSignals.get(state.lastKnownPlayerRoom) || 0;
     const moodBoost = state.robotMood === "confident" ? 0.1 : 0;
     const moodPenalty = state.robotMood === "cautious" ? -0.1 : 0;
@@ -3376,17 +3900,30 @@ function pickSearchSpot() {
 
 function triggerSiren(roomId) {
   if (!state.isAlive || state.hasEscaped) return;
+  const lure = getActiveLure(roomId);
+  if (!lure) return;
   const profile = getNightProfile();
   const effects = getPassiveEffects();
-  state.robotFocus = roomId;
-  registerSignal(roomId, 0.6 * profile.signalStrength.device * effects.signalSpike, {
-    type: "siren",
-    forceLastKnown: true,
-    bleed: true,
+  runLockedAction({
+    label: `Triggering ${lure.name}…`,
+    steps: lure.steps,
+    onStep: (step, total) => {
+      pulseActionSignal(roomId, "trace");
+      state.turn += 1;
+      if (step < total) {
+        updateUI();
+        return;
+      }
+      state.robotFocus = roomId;
+      registerSignal(roomId, lure.strength * profile.signalStrength.device * effects.signalSpike, {
+        type: "siren",
+        forceLastKnown: true,
+        bleed: true,
+      });
+      state.persistentSignals.set(roomId, lure.linger + effects.persistentBonus);
+      updateUI();
+    },
   });
-  state.persistentSignals.set(roomId, 4 + effects.persistentBonus);
-  state.turn += 1;
-  updateUI();
 }
 
 function interruptRobotTask(roomId) {
@@ -3465,7 +4002,24 @@ function robotStatusLabel() {
   }
 
   const roomHint = distance > 0 ? getRobotRoomHint(state.robotRoom) : "";
-  return roomHint ? `${primary} ${roomHint}` : primary;
+  const base = roomHint ? `${primary} ${roomHint}` : primary;
+  if (state.currentNight >= 4 && state.sanity < 0.4) {
+    const distorted = state.sanity < 0.2
+      ? [
+        "…metal in every corridor…",
+        "Static floods the halls.",
+        "The signal splinters. Footsteps everywhere.",
+      ]
+      : [
+        "The signal smears. Something moves.",
+        "Footsteps blur into the walls.",
+        "You can't tell if it's near or far.",
+      ];
+    if (Math.random() < 0.6) {
+      return distorted[Math.floor(Math.random() * distorted.length)];
+    }
+  }
+  return base;
 }
 
 function renderMap() {
@@ -3534,6 +4088,13 @@ function renderMap() {
       x: mapPositions[room.id].x,
       y: mapPositions[room.id].y - 4,
     });
+    const hazard = createSvgElement("text", {
+      x: mapPositions[room.id].x,
+      y: mapPositions[room.id].y - 20,
+      class: "map-hazard",
+      "text-anchor": "middle",
+      "dominant-baseline": "middle",
+    });
     const poi = createSvgElement("text", {
       x: mapPositions[room.id].x,
       y: mapPositions[room.id].y + 16,
@@ -3546,6 +4107,7 @@ function renderMap() {
     group.appendChild(pressure);
     group.appendChild(circle);
     group.appendChild(text);
+    group.appendChild(hazard);
     group.appendChild(poi);
     group.addEventListener("click", () => {
       handleMapSelection(room.id);
@@ -3557,7 +4119,13 @@ function renderMap() {
 function canSeeRobotIntel() {
   if (!state.unlocks.showRobotIntelOnMap) return false;
   if (state.robotDisabled) return false;
-  if (state.scannerOn) return true;
+  const weatherMods = getWeatherModifiers();
+  if (state.scannerOn) {
+    if (weatherMods.scannerFog) {
+      return state.scanPulseTicks > 0 || state.robotRoom === state.playerRoom;
+    }
+    return true;
+  }
   if (state.robotRoom === state.playerRoom) return true;
   const adj = new Set(roomConnections[state.playerRoom] || []);
   if (adj.has(state.robotRoom)) return true;
@@ -3588,13 +4156,30 @@ function updateMap() {
     const b = Math.max(plannedPath[i], plannedPath[i + 1]);
     plannedEdges.add(`${a}-${b}`);
   }
-  const actionTargets = getMapActionTargets();
+  const actionTargets = getMapTargetCandidates();
+  const actionEdges = new Set();
+  if (state.mapTargetMode === "jam") {
+    const source = state.mapTargetSourceRoom ?? state.playerRoom;
+    (roomConnections[source] || []).forEach((neighbor) => {
+      const key = edgeKey(source, neighbor);
+      if (actionTargets?.has(neighbor)) {
+        actionEdges.add(key);
+      }
+    });
+  }
 
   dom.floorplanMap.querySelectorAll(".map-link").forEach((line) => {
     const edge = line.getAttribute("data-edge");
     line.classList.toggle("robot-plan", showRobotIntel && robotEdges.has(edge));
     line.classList.toggle("edge-jammed", state.jammedEdges.has(edge));
     line.classList.toggle("active", plannedEdges.has(edge));
+    line.classList.toggle("action-edge", actionEdges.has(edge));
+    line.classList.toggle(
+      "action-edge-selected",
+      state.mapTargetSelection !== null &&
+        state.mapTargetMode === "jam" &&
+        edge === edgeKey(state.mapTargetSourceRoom ?? state.playerRoom, state.mapTargetSelection)
+    );
   });
   dom.floorplanMap.querySelectorAll(".map-jam").forEach((marker) => {
     const edge = marker.getAttribute("data-edge");
@@ -3609,7 +4194,8 @@ function updateMap() {
   const robotAdjacents = showRobotVision ? new Set(roomConnections[state.robotRoom]) : new Set();
   dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
     const roomId = Number(node.getAttribute("data-room-id"));
-    const pressure = showRobotIntel ? getRoomPressure(roomId) : getSignalPressure(roomId);
+    const basePressure = showRobotIntel ? getRoomPressure(roomId) : getSignalPressure(roomId);
+    const pressure = getPerceivedPressure(basePressure);
     const ring = node.querySelector(".map-pressure");
     if (ring) {
       let opacity = pressure > 0.05 ? 0.15 + pressure * 0.55 : 0;
@@ -3636,6 +4222,7 @@ function updateMap() {
     node.classList.toggle("preview", roomId === state.routePreviewRoom);
     node.classList.toggle("adjacent", playerAdjacents.has(roomId));
     node.classList.toggle("action-target", Boolean(actionTargets?.has(roomId)));
+    node.classList.toggle("action-selected", roomId === state.mapTargetSelection);
     node.classList.toggle(
       "robot-adjacent",
       showRobotIntel && showRobotVision && roomId === state.robotScanTarget
@@ -3644,6 +4231,7 @@ function updateMap() {
     node.classList.toggle("robot-sweep", showRobotIntel && state.robotSweepQueue.includes(roomId));
     node.classList.toggle("scan-focus", state.scanPulseTicks > 0 && roomId === state.scanFocusRoom);
     const poi = node.querySelector(".map-poi");
+    const hazard = node.querySelector(".map-hazard");
     if (poi) {
       const room = rooms[roomId];
       const discoveriesEnabled = state.escapeConsoleInspected;
@@ -3672,6 +4260,13 @@ function updateMap() {
       poi.classList.toggle("poi-blink", shouldBlink);
       poi.classList.toggle("poi-exit-ready", isExit && state.escapeReady);
     }
+    if (hazard) {
+      const alarmed = isRoomAlarmed(roomId);
+      const sunlit = state.sunlitRooms.has(roomId);
+      hazard.textContent = sunlit && alarmed ? "☀⚠" : sunlit ? "☀" : alarmed ? "⚠" : "";
+      hazard.classList.toggle("hazard-sun", sunlit);
+      hazard.classList.toggle("hazard-alarm", alarmed);
+    }
   });
 
   updateRouteInfo();
@@ -3691,6 +4286,21 @@ function getRoomPressure(roomId) {
 function getSignalPressure(roomId) {
   const signal = state.roomSignals.get(roomId) || 0;
   return clamp(signal, 0, 1);
+}
+
+function getPerceivedPressure(pressure) {
+  if (state.currentNight < 4) return pressure;
+  let multiplier = 1;
+  if (state.sanity < 0.7) {
+    multiplier = 1.1;
+  }
+  if (state.sanity < 0.4) {
+    multiplier = 1.25;
+  }
+  if (state.sanity < 0.2) {
+    multiplier = 1.45;
+  }
+  return clamp(pressure * multiplier, 0, 1);
 }
 
 function applyTravelProgress(line, edgeKey) {
@@ -4010,6 +4620,7 @@ function startGameLoop() {
   gameLoopId = setInterval(() => {
     if (!state.isAlive || state.hasEscaped) return;
     if (state.objectiveBlocked) return;
+    state.robotMovedThisTick = false;
     if (state.trailTurns > 0) {
       state.trailTurns -= 1;
     }
@@ -4017,10 +4628,40 @@ function startGameLoop() {
       state.alertTicks -= 1;
     }
     tickStatus();
+    if (state.sanityGlitchCooldown > 0) {
+      state.sanityGlitchCooldown -= 1;
+    }
+    if (state.sanityScanCooldown > 0) {
+      state.sanityScanCooldown -= 1;
+    }
+    if (state.caitCooldown > 0) {
+      state.caitCooldown -= 1;
+    }
     if (state.hidden) {
       state.hiddenTurns += 1;
     } else {
       state.hiddenTurns = 0;
+    }
+    if (state.currentNight >= 4 && state.sanity < 0.4 && state.sanityGlitchCooldown <= 0) {
+      const chance = state.sanity < 0.2 ? 0.18 : 0.1;
+      if (Math.random() < chance) {
+        pushBanner("…footsteps everywhere…", 3);
+        state.sanityGlitchCooldown = 6;
+      }
+    }
+    if (
+      state.currentNight >= 4 &&
+      state.hidden &&
+      getRobotDistance() !== null &&
+      getRobotDistance() <= 1 &&
+      state.hiddenTurns >= 3
+    ) {
+      if (state.turn % 2 === 0) {
+        adjustSanity(-0.02, "hiding");
+      }
+    }
+    if (state.currentNight >= 4 && state.scannerOn && state.sunlitRooms.has(state.playerRoom)) {
+      adjustSanity(-0.01, "sunlight");
     }
     if (state.scannerOn) {
       const profile = getNightProfile();
@@ -4043,6 +4684,7 @@ function startGameLoop() {
     tickRobotTravel();
     processPendingSignals();
     tickAlarmedRooms();
+    tickSunlitRooms();
     tickPowerSurge();
     tickPersistentSignals();
     decaySignals();
@@ -4064,9 +4706,9 @@ function updateUseList() {
     options.push(
       {
         label: `Noise Lure (${state.noiseLures})`,
-        action: () => beginMapAction("noise"),
+        action: () => beginMapTarget("noise"),
         help: "Noise Lure",
-        disabled: state.noiseLures <= 0 || isPlayerTraveling(),
+        disabled: state.noiseLures <= 0 || isPlayerTraveling() || state.mapTargetMode,
       }
     );
   } else {
@@ -4084,9 +4726,9 @@ function updateUseList() {
     });
     options.push({
       label: `Door Jam (${state.doorJams})`,
-      action: () => beginMapAction("jam"),
+      action: () => beginMapTarget("jam"),
       help: "Door Jam",
-      disabled: validTargets.length === 0 || isPlayerTraveling(),
+      disabled: validTargets.length === 0 || isPlayerTraveling() || state.mapTargetMode,
     });
   }
   state.craftedItems.forEach((item) => {
@@ -4134,18 +4776,31 @@ function updateScannerToggleButton() {
 
 function useCraftedItem(name) {
   if (!state.craftedItems.has(name)) return;
-  if (name === "Signal Scrambler") {
-    state.roomSignals.clear();
-    state.threat = Math.max(1, state.threat - 0.6);
-  }
-  if (name === "Motion Dampener") {
-    state.robotLinger = Math.max(state.robotLinger, 2);
-  }
-  if (name === "Override Key") {
-    state.threat = Math.max(1, state.threat - 1);
-  }
-  closeUse();
-  updateUI();
+  const steps = name === "Signal Scrambler" ? 2 : 1;
+  runLockedAction({
+    label: `Using ${name}…`,
+    steps,
+    onStep: (step, total) => {
+      pulseActionSignal(state.playerRoom, "trace");
+      state.turn += 1;
+      if (step < total) {
+        updateUI();
+        return;
+      }
+      if (name === "Signal Scrambler") {
+        state.roomSignals.clear();
+        state.threat = Math.max(1, state.threat - 0.6);
+      }
+      if (name === "Motion Dampener") {
+        state.robotLinger = Math.max(state.robotLinger, 2);
+      }
+      if (name === "Override Key") {
+        state.threat = Math.max(1, state.threat - 1);
+      }
+      closeUse();
+      updateUI();
+    },
+  });
 }
 
 function pickScannerFocusRoom() {
@@ -4175,6 +4830,7 @@ function deployDoorJam(roomId) {
     label: "Setting door jam…",
     steps: 1,
     onStep: () => {
+      pulseActionSignal(state.playerRoom, "trace");
       jamDoorTo(roomId);
       state.turn += 1;
       updateUI();
@@ -4220,6 +4876,7 @@ function tickPlayerTravel() {
   const elapsed = Date.now() - state.playerTravelStepStart;
   if (elapsed < state.playerTravelStepDuration) return;
   const nextRoom = state.playerPath.shift();
+  const previousRoom = state.playerRoom;
   state.playerRoom = nextRoom;
   state.hidden = false;
   state.hiddenSpot = null;
@@ -4271,6 +4928,14 @@ function tickPlayerTravel() {
   }
   if (isRoomAlarmed(nextRoom)) {
     pushStatus("An alarm drones here. Sneaking won’t help.", 3);
+  }
+  if (state.sunlitRooms.has(nextRoom)) {
+    pushStatus("Sunlight spills across the floor. It doesn’t care how quiet you are.", 3);
+  }
+  const prevPressure = getSignalPressure(previousRoom);
+  const nextPressure = getSignalPressure(nextRoom);
+  if (prevPressure >= 0.6 && nextPressure <= 0.3) {
+    adjustSanity(0.04, "breather");
   }
   state.turn += 1;
   logDebug("player-move", {
@@ -4329,7 +4994,29 @@ function tickRobotTravel() {
   const previousRoom = state.robotRoom;
   state.robotRoom = nextRoom;
   state.robotLastRoom = previousRoom;
+  state.robotMovedThisTick = true;
   markRoomChecked(state.robotRoom);
+  recordRobotAlarmVisit(state.robotRoom);
+  if (isRoomAlarmed(state.robotRoom)) {
+    state.robotAlarmStreak += 1;
+  } else {
+    state.robotAlarmStreak = 0;
+  }
+  if (isRoomAlarmed(state.robotRoom) && isRoomAlarmed(previousRoom)) {
+    const loopEdge = edgeKey(state.robotRoom, previousRoom);
+    if (state.robotAlarmLoopEdge === loopEdge) {
+      state.robotAlarmLoopTurns += 1;
+    } else {
+      state.robotAlarmLoopEdge = loopEdge;
+      state.robotAlarmLoopTurns = 1;
+    }
+  } else {
+    state.robotAlarmLoopEdge = null;
+    state.robotAlarmLoopTurns = 0;
+  }
+  if (state.robotRoom === state.playerRoom && !state.hidden) {
+    adjustSanity(-0.18, "robot");
+  }
   if (!state.robotDisabled) {
     const adjacents = roomConnections[state.playerRoom] || [];
     if (adjacents.includes(state.robotRoom) && state.robotRoom !== state.playerRoom) {

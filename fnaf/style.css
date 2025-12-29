@@ -527,6 +527,16 @@ main {
   stroke-dasharray: 3 4;
 }
 
+.map-link.action-edge {
+  stroke: rgba(107, 255, 159, 0.65);
+  stroke-width: 3;
+}
+
+.map-link.action-edge-selected {
+  stroke: rgba(255, 232, 140, 0.9);
+  stroke-width: 3.4;
+}
+
 .map-travel {
   stroke-width: 3;
   stroke-linecap: round;
@@ -564,6 +574,20 @@ main {
   font-size: 12px;
   text-anchor: middle;
   pointer-events: none;
+}
+
+.map-node .map-hazard {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  opacity: 0.9;
+}
+
+.map-node .map-hazard.hazard-sun {
+  fill: rgba(255, 214, 112, 0.95);
+}
+
+.map-node .map-hazard.hazard-alarm {
+  fill: rgba(255, 140, 140, 0.95);
 }
 
 .map-jam {
@@ -649,6 +673,11 @@ main {
 .map-node.action-target circle {
   stroke: rgba(107, 255, 159, 0.85);
   stroke-width: 2.6;
+}
+
+.map-node.action-selected circle {
+  stroke: rgba(255, 232, 140, 0.9);
+  stroke-width: 3;
 }
 
 .map-node.adjacent circle {
