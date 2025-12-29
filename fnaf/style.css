@@ -102,7 +102,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  min-height: 100vh;
+  min-height: 0;
   padding-top: 64px;
 }
 
@@ -123,7 +123,7 @@ main {
 .room-media {
   position: relative;
   border-radius: 24px;
-  height: calc(100vh - 160px);
+  height: clamp(360px, 68vh, 620px);
   overflow: hidden;
   background: rgba(8, 12, 20, 0.4);
   border: 1px solid rgba(140, 169, 255, 0.25);
