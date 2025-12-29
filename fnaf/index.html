@@ -17,6 +17,7 @@
         <div class="room-media" id="roomMedia">
           <div class="room-topline">
             <p id="actionStatus" class="action-status hidden"></p>
+            <button id="escapeBtn" class="escape-button hidden">Escape</button>
           </div>
           <div class="room-overlay">
             <p class="room-description hidden"></p>
@@ -31,7 +32,6 @@
             <button id="liveBtn" class="primary">Live</button>
             <button id="tasksBtn">Tasks</button>
             <button id="useBtn">Use</button>
-            <button id="escapeBtn" class="primary hidden">Escape</button>
           </div>
           <div id="actionLock" class="action-lock hidden" aria-live="polite">
             <p id="actionLockLabel"></p>
@@ -102,12 +102,12 @@
       <div class="map-shell">
         <svg id="floorplanMap" viewBox="0 0 520 420" width="520" height="420" role="img" aria-label="Factory floorplan"></svg>
       </div>
+      <div class="map-selected">
+        <span>Selected</span>
+        <strong id="selectedRoom">None</strong>
+      </div>
       <div class="movement-controls hidden" id="movementControls">
         <div class="quick-actions compact">
-          <div class="quick-target">
-            <span>Selected</span>
-            <strong id="selectedRoom">None</strong>
-          </div>
           <div class="quick-buttons">
             <button id="goBtn">Sneak</button>
             <button id="runBtn">Run</button>
