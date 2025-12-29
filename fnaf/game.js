@@ -826,6 +826,7 @@ function attachEvents() {
   dom.nightSelect.addEventListener("change", (event) => {
     const next = Number(event.target.value);
     setCurrentNight(next);
+    resetGame();
   });
   dom.menuPanel.addEventListener("click", (event) => {
     if (event.target === dom.menuPanel) {
