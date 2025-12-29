@@ -488,6 +488,12 @@ main {
   font-size: 0.85rem;
 }
 
+.map-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .map-selected strong {
   color: #f4f4f4;
   font-size: 1rem;
