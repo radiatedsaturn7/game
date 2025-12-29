@@ -4460,7 +4460,10 @@ function updateMap() {
     robotEdges.add(`${a}-${b}`);
   }
   const showRobotIntel = canSeeRobotIntel();
-  const plannedPath = state.routePreviewRoom !== null && !isPlayerTraveling()
+  const showPlannedPath = state.routePreviewRoom !== null &&
+    !isPlayerTraveling() &&
+    !roomConnections[state.playerRoom]?.includes(state.routePreviewRoom);
+  const plannedPath = showPlannedPath
     ? getShortestPath(state.playerRoom, state.routePreviewRoom)
     : [];
   const plannedEdges = new Set();
