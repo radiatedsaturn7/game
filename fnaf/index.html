@@ -10,12 +10,13 @@
   <div class="app">
     <main>
       <section class="room-view">
+        <div class="room-hud">
+          <p class="robot-status"><span></span></p>
+          <button id="debugBtn">Debug</button>
+        </div>
         <div class="room-media" id="roomMedia">
           <div class="room-topline">
-            <div class="status-stack">
-              <p class="robot-status"></p>
-              <p id="actionStatus" class="action-status hidden"></p>
-            </div>
+            <p id="actionStatus" class="action-status hidden"></p>
           </div>
           <div class="room-overlay">
             <p class="room-description hidden"></p>
@@ -29,7 +30,6 @@
             <button id="mapBtn">Map</button>
             <button id="tasksBtn">Tasks</button>
             <button id="useBtn">Use</button>
-            <button id="debugBtn">Debug</button>
             <button id="escapeBtn" class="primary hidden">Escape</button>
           </div>
           <div id="actionLock" class="action-lock hidden" aria-live="polite">

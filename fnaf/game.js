@@ -788,8 +788,15 @@ function updateUI() {
   dom.roomMedia.classList.toggle("glitch", state.statusTicks > 0);
   dom.roomMedia.style.background = "transparent";
   document.body.style.setProperty("--room-theme", room.theme);
+  const robotLabel = robotStatusLabel();
   dom.robotStatuses.forEach((node) => {
-    node.textContent = robotStatusLabel();
+    const label = node.querySelector("span");
+    if (label) {
+      label.textContent = robotLabel;
+    } else {
+      node.textContent = robotLabel;
+    }
+    node.classList.toggle("marquee", node.scrollWidth > node.clientWidth);
   });
   dom.actionStatus.textContent = state.statusMessage;
   dom.actionStatus.classList.toggle("hidden", state.statusTicks <= 0);
