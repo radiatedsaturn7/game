@@ -867,7 +867,7 @@ function updateUI() {
     node.textContent = room.name;
   });
   dom.roomMedia.classList.toggle("threat-nearby", dangerRoom);
-  dom.roomMedia.classList.toggle("glitch", state.statusTicks > 0);
+  dom.roomMedia.classList.toggle("glitch", false);
   dom.roomMedia.style.background = "transparent";
   document.body.style.setProperty("--room-theme", room.theme);
   const robotLabel = robotStatusLabel();
@@ -885,8 +885,8 @@ function updateUI() {
     node.classList.toggle("marquee", shouldMarquee);
     node.style.setProperty("--marquee-shift", `${Math.max(0, overflow)}px`);
   });
-  dom.actionStatus.textContent = state.statusMessage;
-  dom.actionStatus.classList.toggle("hidden", state.statusTicks <= 0);
+  dom.actionStatus.textContent = "";
+  dom.actionStatus.classList.add("hidden");
   updateActionLockUI();
   updateTravelStatus();
   updateMapWeatherLabel();
@@ -1148,8 +1148,9 @@ function stripCaitPrefix(message) {
 }
 
 function pushStatus(message, ticks = 3) {
-  state.statusMessage = stripCaitPrefix(message);
-  state.statusTicks = ticks;
+  pushBanner(message, ticks);
+  state.statusMessage = "";
+  state.statusTicks = 0;
 }
 
 function pushBanner(message, ticks = 3) {
@@ -1598,6 +1599,10 @@ function setupSpecialPickupsForNight() {
       type: "night7-lockdown",
       roomId,
     });
+  }
+
+  if (state.unlocks.robotActive && !state.nightIntroLine) {
+    state.nightIntroLine = "Cait: Be careful out there... I think something is moving.";
   }
 }
 
@@ -2391,7 +2396,7 @@ function updateRoomActions() {
     if (requiredBlocked) {
       const pickupName = state.requiredPickup?.itemName ?? "tool";
       actions.push({
-        label: `Cait: Get the ${pickupName} first. The console can wait.`,
+        label: `Get the ${pickupName} first. The console can wait.`,
         disabled: true,
         info: true,
       });
@@ -2688,7 +2693,7 @@ function talkToCait() {
       adjustSanity(0.3, "cait");
       state.caitCooldown = Math.floor(Math.random() * 3) + 3;
       state.caitTalkCount += 1;
-      pushBanner(line, 4);
+      showObjectiveModal(line);
       pushStatus("Cait steadies your breathing.", 3);
       updateUI();
     },
@@ -5064,7 +5069,7 @@ function updateUseList() {
       action: () => {
         const targets = getMapTargetCandidatesForBlowtorch();
         if (targets.size === 0) {
-          pushBanner("Cait: Not here. Wrong door.", 3);
+          showObjectiveModal("Cait: Not here. Wrong door.");
           closeUse();
           return;
         }
@@ -5205,7 +5210,7 @@ function useBlowtorch(roomId) {
   if (!(roomConnections[source] || []).includes(roomId)) return;
   const key = edgeKey(source, roomId);
   if (!state.permaJammedEdges.has(key)) {
-    pushBanner("Cait: Not here. Wrong door.", 3);
+    showObjectiveModal("Cait: Not here. Wrong door.");
     return;
   }
   runLockedAction({
@@ -5303,18 +5308,18 @@ function tickPlayerTravel() {
   }
   if (isRoomAlarmed(nextRoom) && !isAlarmTriggered(nextRoom)) {
     state.triggeredAlarms.add(nextRoom);
-    pushBanner("Cait: …that room just lit up. Move.", 4);
+    showObjectiveModal("Cait: …that room just lit up. Move.");
   }
   if (state.currentNight === 2 && rooms[nextRoom]?.isExit && !state.containmentLineShown) {
     state.containmentLineShown = true;
-    pushBanner("Cait: Hey—hurry. They’re trying to contain you.", 4);
+    showObjectiveModal("Cait: Hey—hurry. They’re trying to contain you.");
   }
   if (state.requiredPickup &&
     state.requiredPickup.caitWarnLine &&
     state.requiredPickup.roomId === nextRoom &&
     !state.requiredPickup.warned) {
     state.requiredPickup.warned = true;
-    pushBanner(state.requiredPickup.caitWarnLine, 4);
+    showObjectiveModal(state.requiredPickup.caitWarnLine);
   }
   if (state.sunlitRooms.has(nextRoom)) {
     pushStatus("Sunlight spills across the floor. It doesn’t care how quiet you are.", 3);
