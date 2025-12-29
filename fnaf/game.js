@@ -4443,6 +4443,13 @@ function canShowRobotTravelLine() {
   return canSeeRobotIntel();
 }
 
+function getRoutePlanningOrigin() {
+  if (state.playerTravelStepStart !== null && state.playerPath.length > 0) {
+    return state.playerPath[0];
+  }
+  return state.playerRoom;
+}
+
 function updateMap() {
   const robotPath = state.robotPlannedTarget === null
     ? []
@@ -4454,10 +4461,11 @@ function updateMap() {
     robotEdges.add(`${a}-${b}`);
   }
   const showRobotIntel = canSeeRobotIntel();
+  const planningOrigin = getRoutePlanningOrigin();
   const plannedPath = state.routePreviewRoom !== null
-    ? getShortestPath(state.playerRoom, state.routePreviewRoom)
+    ? getShortestPath(planningOrigin, state.routePreviewRoom)
     : [];
-  const showPlannedPath = !isPlayerTraveling() && plannedPath.length > 1;
+  const showPlannedPath = plannedPath.length > 1;
   const plannedEdges = new Set();
   for (let i = 0; i < plannedPath.length - 1; i += 1) {
     const a = Math.min(plannedPath[i], plannedPath[i + 1]);
@@ -4749,7 +4757,8 @@ function getShortestPath(start, target) {
   while (queue.length) {
     const current = queue.shift();
     if (current === target) break;
-    roomConnections[current].forEach((neighbor) => {
+    const neighbors = roomConnections[current] || [];
+    neighbors.forEach((neighbor) => {
       if (isEdgeJammed(current, neighbor)) return;
       if (!visited.has(neighbor)) {
         visited.add(neighbor);
@@ -4778,7 +4787,8 @@ function nextStepToward(start, target) {
   while (queue.length) {
     const current = queue.shift();
     if (current === target) break;
-    for (const neighbor of roomConnections[current]) {
+    const neighbors = roomConnections[current] || [];
+    for (const neighbor of neighbors) {
       if (isEdgeJammed(current, neighbor)) continue;
       if (!visited.has(neighbor)) {
         visited.add(neighbor);
