@@ -991,7 +991,8 @@ function updateBuildButton() {
 }
 
 function updateMoveButtons() {
-  const canMove = state.selectedRoom !== null &&
+  const hasSelection = state.selectedRoom !== null;
+  const canMove = hasSelection &&
     getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
   const blocked = !canMove ||
     !state.isAlive ||
@@ -1003,6 +1004,7 @@ function updateMoveButtons() {
   setButtonLabel(dom.runBtn, "Run", "Trace");
   dom.goBtn.disabled = blocked;
   dom.runBtn.disabled = blocked;
+  dom.cancelBtn.disabled = !hasSelection;
 }
 
 function setButtonLabel(button, text, risk) {
@@ -1019,8 +1021,7 @@ function setButtonLabel(button, text, risk) {
 }
 
 function updatePanels() {
-  const showMovement = state.selectedRoom !== null;
-  dom.movementControls.classList.toggle("hidden", !showMovement);
+  dom.movementControls.classList.remove("hidden");
 }
 
 function pushStatus(message, ticks = 3) {
