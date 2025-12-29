@@ -693,6 +693,8 @@ const state = {
   minSanity: 1,
   sanityGlitchCooldown: 0,
   sanityScanCooldown: 0,
+  phantomCueShown: false,
+  lastSanityRecoveryTick: -999,
   caitCooldown: 0,
   caitTalkCount: 0,
   runMoments: [],
@@ -1083,8 +1085,9 @@ function updateMoveButtons() {
     state.mapTargetMode;
   dom.movementControls.classList.toggle("hidden", isMoving);
   dom.cancelBtn.classList.toggle("hidden", !isMoving);
-  setButtonLabel(dom.goBtn, "Sneak", "Quiet");
-  setButtonLabel(dom.runBtn, "Run", "Trace");
+  const actionBand = state.currentNight >= 4 && state.sanity < 0.4;
+  setButtonLabel(dom.goBtn, actionBand ? "Try" : "Sneak", "Quiet");
+  setButtonLabel(dom.runBtn, actionBand ? "Panic" : "Run", "Trace");
   dom.goBtn.disabled = blocked;
   dom.runBtn.disabled = blocked;
   dom.cancelBtn.disabled = !isMoving;
@@ -1128,6 +1131,30 @@ function updatePanels() {
 function stripCaitPrefix(message) {
   if (typeof message !== "string") return message;
   return message.replace(/^Cait:\s*/i, "");
+}
+
+function getCaitSanityTag() {
+  if (state.currentNight < 4) return "";
+  const band = sanityBand();
+  if (band === "strained") {
+    return "Slow down. I’m here.";
+  }
+  if (band === "frayed") {
+    return "Stay with me. Name the sounds.";
+  }
+  if (band === "critical") {
+    return "You’re still here. Don’t disappear.";
+  }
+  return "";
+}
+
+function formatCaitModalText(text) {
+  const isCait = /^Cait:\s*/i.test(text);
+  const base = stripCaitPrefix(text);
+  if (!isCait) return base;
+  const tag = getCaitSanityTag();
+  if (!tag) return base;
+  return `${base}\n${tag}`;
 }
 
 function pushStatus(message, ticks = 3) {
@@ -1221,6 +1248,19 @@ function adjustSanity(amount, reason) {
   const prev = state.sanity;
   state.sanity = clamp(state.sanity + amount, 0, 1);
   state.minSanity = Math.min(state.minSanity, state.sanity);
+  if (amount > 0 && state.sanity > prev) {
+    const delta = state.sanity - prev;
+    const shouldCue = delta >= 0.04 && state.turn !== state.lastSanityRecoveryTick;
+    if (shouldCue) {
+      const lines = [
+        "Your thoughts settle.",
+        "The noise thins.",
+        "Your breathing steadies.",
+      ];
+      pushBanner(lines[Math.floor(Math.random() * lines.length)], 3);
+      state.lastSanityRecoveryTick = state.turn;
+    }
+  }
   if (amount < 0 && reason === "surge") {
     state.runMoments.push("A power surge rattled your nerves.");
   }
@@ -1237,6 +1277,21 @@ function sanityBand() {
   if (state.sanity >= 0.4) return "strained";
   if (state.sanity >= 0.2) return "frayed";
   return "critical";
+}
+
+function sanityPressurePhrase() {
+  if (state.currentNight < 4) return "";
+  const band = sanityBand();
+  if (band === "strained") {
+    return "Too close.";
+  }
+  if (band === "frayed") {
+    return "You waited.";
+  }
+  if (band === "critical") {
+    return "You should have moved.";
+  }
+  return "";
 }
 
 function logDebug(event, payload) {
@@ -2145,7 +2200,7 @@ function closeTasks() {
 }
 
 function showObjectiveModal(text) {
-  dom.objectiveModalText.textContent = stripCaitPrefix(text);
+  dom.objectiveModalText.textContent = formatCaitModalText(text);
   dom.objectiveModal.classList.add("active");
   dom.objectiveModal.setAttribute("aria-hidden", "false");
   state.objectiveBlocked = true;
@@ -2467,8 +2522,9 @@ function updateRoomActions() {
   });
 
   if (state.hidden && state.hiddenTurns >= 2) {
+    const strainedAction = state.currentNight >= 4 && state.sanity < 0.4;
     actions.push({
-      label: "Hold Breath",
+      label: strainedAction ? "Don’t move." : "Hold Breath",
       onClick: () => holdBreath(),
       disabled: blocked,
       risk: "Time",
@@ -2637,16 +2693,22 @@ function talkToCait() {
       "Cait: Breathe. Count the beats, not the echoes.",
       "Cait: I'm here. Focus on the next door.",
       "Cait: You're not alone. Keep moving.",
+      "Cait: Slow down. I’ve got you.",
+      "Cait: Stay with me. One step, one breath.",
     ],
     frayed: [
       "Cait: Hey. Look at me. Name three sounds.",
       "Cait: Stay with me. One breath at a time.",
       "Cait: I need you here. Anchor on the hum.",
+      "Cait: Ground on the noise. Keep your name.",
+      "Cait: You’re fading. Stay with my voice.",
     ],
     critical: [
       "Cait: Ground yourself. Five sounds. Then move.",
       "Cait: You're slipping. Grab the rail, listen.",
       "Cait: Stay present. I won't let you drown.",
+      "Cait: You’re still here. Hold on to me.",
+      "Cait: Don’t disappear. I’m right here.",
     ],
   };
   const linePool = lines[band] || lines.steady;
@@ -3828,6 +3890,8 @@ function resetGame() {
   state.minSanity = 1;
   state.sanityGlitchCooldown = 0;
   state.sanityScanCooldown = 0;
+  state.phantomCueShown = false;
+  state.lastSanityRecoveryTick = -999;
   state.caitCooldown = 0;
   state.caitTalkCount = 0;
   state.runMoments = [];
@@ -4303,6 +4367,8 @@ function robotStatusLabel() {
 
   const roomHint = distance > 0 ? getRobotRoomHint(state.robotRoom) : "";
   const base = roomHint ? `${primary} ${roomHint}` : primary;
+  const pressureTag = sanityPressurePhrase();
+  const weightedBase = pressureTag ? `${base} ${pressureTag}` : base;
   if (state.currentNight >= 4 && state.sanity < 0.4) {
     const nearRobot = distance !== null && distance <= 2;
     const inTriggeredAlarm = isAlarmTriggered(state.playerRoom);
@@ -4320,14 +4386,14 @@ function robotStatusLabel() {
           "Static drifts across your thoughts.",
           "The signal warps for a breath.",
           "Your pulse drowns the noise.",
-        ];
+      ];
       const chance = state.sanity < 0.2 ? 0.45 : 0.25;
       if (Math.random() < chance) {
-        return `${distorted[Math.floor(Math.random() * distorted.length)]} ${base}`;
+        return `${distorted[Math.floor(Math.random() * distorted.length)]} ${weightedBase}`;
       }
     }
   }
-  return base;
+  return weightedBase;
 }
 
 function renderMap() {
@@ -4981,11 +5047,29 @@ function startGameLoop() {
     } else {
       state.hiddenTurns = 0;
     }
-    if (state.currentNight >= 4 && state.sanity < 0.4 && state.sanityGlitchCooldown <= 0) {
-      const chance = state.sanity < 0.2 ? 0.18 : 0.1;
-      if (Math.random() < chance) {
-        pushBanner("…footsteps everywhere…", 3);
-        state.sanityGlitchCooldown = 6;
+    if (state.currentNight >= 4 &&
+      state.sanity < 0.4 &&
+      state.sanityGlitchCooldown <= 0 &&
+      !state.phantomCueShown) {
+      const exitRoom = rooms.find((room) => room.isExit)?.id ?? 13;
+      const nearExit = rooms[state.playerRoom].isExit ||
+        roomConnections[exitRoom]?.includes(state.playerRoom);
+      const nearDeath = getRobotDistance() !== null && getRobotDistance() <= 1;
+      const allowEscapeState = !state.escapeReady && !nearExit && !nearDeath;
+      if (allowEscapeState) {
+        const nearRobot = getRobotDistance() !== null && getRobotDistance() <= 2;
+        const inTriggeredAlarm = isAlarmTriggered(state.playerRoom);
+        const inSunlit = state.sunlitRooms.has(state.playerRoom);
+        const pressure = getSignalPressure(state.playerRoom);
+        const allowHallucination = nearRobot || inTriggeredAlarm || inSunlit || pressure >= 0.6;
+        if (allowHallucination) {
+          const chance = state.sanity < 0.2 ? 0.18 : 0.1;
+          if (Math.random() < chance) {
+            pushBanner("…footsteps everywhere…", 3);
+            state.sanityGlitchCooldown = 6;
+            state.phantomCueShown = true;
+          }
+        }
       }
     }
     if (
