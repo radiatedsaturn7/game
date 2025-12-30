@@ -781,6 +781,7 @@ const dom = {
   deathSummary: document.getElementById("deathSummary"),
   victorySummary: document.getElementById("victorySummary"),
   nightSelect: document.getElementById("nightSelect"),
+  debugLog: document.getElementById("debugLog"),
 };
 
 const fxState = {
@@ -798,6 +799,77 @@ let gameLoopId = null;
 let hasStartedGame = false;
 let titleAudioUnlocked = false;
 let titleSyncAnimationId = null;
+const debugLogBuffer = [];
+
+function formatConsoleArg(arg) {
+  if (arg instanceof Error) {
+    return `${arg.name}: ${arg.message}`;
+  }
+  if (typeof arg === "string") {
+    return arg;
+  }
+  try {
+    return JSON.stringify(arg);
+  } catch (err) {
+    return String(arg);
+  }
+}
+
+function appendDebugLog(level, args) {
+  const message = args.map(formatConsoleArg).join(" ");
+  const timestamp = new Date().toLocaleTimeString();
+  const lineText = `[${timestamp}] [${level}] ${message}`;
+  if (!dom.debugLog) {
+    debugLogBuffer.push({ level, text: lineText });
+    return;
+  }
+  const line = document.createElement("div");
+  line.className = `debug-log-line ${level}`;
+  line.textContent = lineText;
+  dom.debugLog.appendChild(line);
+  dom.debugLog.scrollTop = dom.debugLog.scrollHeight;
+}
+
+function flushDebugLogBuffer() {
+  if (!dom.debugLog || debugLogBuffer.length === 0) return;
+  debugLogBuffer.splice(0).forEach((entry) => {
+    const line = document.createElement("div");
+    line.className = `debug-log-line ${entry.level}`;
+    line.textContent = entry.text;
+    dom.debugLog.appendChild(line);
+  });
+  dom.debugLog.scrollTop = dom.debugLog.scrollHeight;
+}
+
+function mirrorConsole() {
+  const consoleProxy = {
+    log: console.log.bind(console),
+    warn: console.warn.bind(console),
+    error: console.error.bind(console),
+    info: console.info.bind(console),
+    debug: console.debug.bind(console),
+  };
+  console.log = (...args) => {
+    consoleProxy.log(...args);
+    appendDebugLog("log", args);
+  };
+  console.warn = (...args) => {
+    consoleProxy.warn(...args);
+    appendDebugLog("warn", args);
+  };
+  console.error = (...args) => {
+    consoleProxy.error(...args);
+    appendDebugLog("error", args);
+  };
+  console.info = (...args) => {
+    consoleProxy.info(...args);
+    appendDebugLog("info", args);
+  };
+  console.debug = (...args) => {
+    consoleProxy.debug(...args);
+    appendDebugLog("debug", args);
+  };
+}
 
 const AudioManager = {
   ctx: null,
@@ -907,6 +979,7 @@ function isTitleScreenActive() {
 }
 
 function init() {
+  flushDebugLogBuffer();
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
   renderMap();
@@ -929,6 +1002,7 @@ function initHorrorFX() {
 }
 
 function initTitleScreen() {
+  mirrorConsole();
   if (!dom.titleScreen || !dom.titleStartBtn) {
     initHorrorFX();
     init();
@@ -981,10 +1055,7 @@ async function handleAudioGateGesture() {
     videoEl.loop = true;
     videoEl.currentTime = 0;
   }
-  const audioReady = await AudioManager.init();
-  if (audioReady) {
-    await AudioManager.unlock();
-  }
+  const audioReady = AudioManager.init();
 
   if (!isTitleScreenActive()) return;
   if (audioEl) {
@@ -1001,6 +1072,11 @@ async function handleAudioGateGesture() {
     } catch (err) {
       console.warn("title video play() failed:", err);
     }
+  }
+  if (audioReady && typeof audioReady.then === "function") {
+    audioReady.then(() => AudioManager.unlock());
+  } else if (audioReady) {
+    AudioManager.unlock();
   }
   if (dom.titleScreen) {
     dom.titleScreen.classList.add("title-video-visible");
