@@ -782,6 +782,17 @@ const dom = {
   nightSelect: document.getElementById("nightSelect"),
 };
 
+const fxState = {
+  overlay: null,
+  warp: null,
+  ctx: null,
+  animationId: null,
+  jitterTimeoutId: null,
+  jitterEnabled: false,
+  nextJitterTime: 0,
+  level: 0,
+};
+
 let gameLoopId = null;
 let hasStartedGame = false;
 let titleAudioUnlockRequested = false;
@@ -789,6 +800,7 @@ let titleAudioUnlockRequested = false;
 function init() {
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
+  initHorrorFX();
   renderMap();
   assignRoomFinds();
   setupMissionForNight();
@@ -800,6 +812,11 @@ function init() {
   attachEvents();
   startGameLoop();
   showObjectiveModal(getInitialObjectiveModalText());
+}
+
+function initHorrorFX() {
+  ensureFxOverlay();
+  startFxLoop();
 }
 
 function initTitleScreen() {
@@ -816,6 +833,120 @@ function initTitleScreen() {
   }
   attemptTitleVideoPlay();
   attemptTitleAudioPlay();
+}
+
+function ensureFxOverlay() {
+  let overlay = document.getElementById("fxOverlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "fxOverlay";
+    overlay.setAttribute("aria-hidden", "true");
+    document.body.appendChild(overlay);
+  }
+  let warp = document.getElementById("fxWarp");
+  if (!warp) {
+    warp = document.createElement("canvas");
+    warp.id = "fxWarp";
+    warp.setAttribute("aria-hidden", "true");
+    document.body.appendChild(warp);
+  }
+  fxState.overlay = overlay;
+  fxState.warp = warp;
+  fxState.ctx = warp.getContext("2d");
+}
+
+function startFxLoop() {
+  if (fxState.animationId !== null) return;
+  const tick = (time) => {
+    resizeFxWarpCanvas();
+    drawFxWarp(time);
+    handleFxJitter(time);
+    fxState.animationId = requestAnimationFrame(tick);
+  };
+  fxState.animationId = requestAnimationFrame(tick);
+}
+
+function resizeFxWarpCanvas() {
+  const { warp } = fxState;
+  if (!warp) return;
+  const dpr = window.devicePixelRatio || 1;
+  const width = Math.floor(window.innerWidth * dpr);
+  const height = Math.floor(window.innerHeight * dpr);
+  if (warp.width === width && warp.height === height) return;
+  warp.width = width;
+  warp.height = height;
+  warp.style.width = `${window.innerWidth}px`;
+  warp.style.height = `${window.innerHeight}px`;
+}
+
+function drawFxWarp(time) {
+  const { warp, ctx } = fxState;
+  if (!warp || !ctx) return;
+  const fx = fxState.level;
+  const width = warp.width;
+  const height = warp.height;
+  ctx.clearRect(0, 0, width, height);
+  if (fx <= 0.01) return;
+  const dpr = window.devicePixelRatio || 1;
+  const bandCount = 2 + Math.floor(fx * 2);
+  const bandGap = height / (bandCount + 1);
+  const amplitude = (2 + fx * 6) * dpr;
+  const bandHeight = (8 + fx * 16) * dpr;
+  const alpha = 0.05 + fx * 0.1;
+  ctx.globalCompositeOperation = "lighter";
+  for (let i = 0; i < bandCount; i += 1) {
+    const phase = time * 0.0007 + i * 1.6;
+    const baseY = bandGap * (i + 1);
+    ctx.beginPath();
+    for (let x = 0; x <= width; x += 18 * dpr) {
+      const y = baseY + Math.sin(phase + x / (120 * dpr)) * amplitude;
+      if (x === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    }
+    for (let x = width; x >= 0; x -= 18 * dpr) {
+      const y = baseY + bandHeight + Math.sin(phase + x / (120 * dpr)) * amplitude;
+      ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    const gradient = ctx.createLinearGradient(0, baseY - bandHeight, 0, baseY + bandHeight * 2);
+    gradient.addColorStop(0, "rgba(130, 190, 255, 0)");
+    gradient.addColorStop(0.5, `rgba(130, 190, 255, ${alpha})`);
+    gradient.addColorStop(1, "rgba(130, 190, 255, 0)");
+    ctx.fillStyle = gradient;
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation = "source-over";
+}
+
+function handleFxJitter(time) {
+  const { overlay } = fxState;
+  if (!overlay) return;
+  if (!fxState.jitterEnabled) {
+    overlay.classList.remove("fx-jitter");
+    if (fxState.jitterTimeoutId) {
+      clearTimeout(fxState.jitterTimeoutId);
+      fxState.jitterTimeoutId = null;
+    }
+    fxState.nextJitterTime = 0;
+    return;
+  }
+  if (fxState.nextJitterTime === 0) {
+    fxState.nextJitterTime = time + 1200 + Math.random() * 1800;
+  }
+  if (time < fxState.nextJitterTime || fxState.jitterTimeoutId) return;
+  const jitterX = (Math.random() > 0.5 ? 1 : -1) * (1 + Math.random());
+  const jitterY = (Math.random() > 0.5 ? 1 : -1) * (1 + Math.random());
+  overlay.style.setProperty("--fx-jitter-x", `${jitterX.toFixed(2)}px`);
+  overlay.style.setProperty("--fx-jitter-y", `${jitterY.toFixed(2)}px`);
+  overlay.classList.add("fx-jitter");
+  fxState.jitterTimeoutId = window.setTimeout(() => {
+    overlay.classList.remove("fx-jitter");
+    fxState.jitterTimeoutId = null;
+  }, 120);
+  fxState.nextJitterTime = time + 900 + Math.random() * 1700;
 }
 
 function attemptTitleVideoPlay() {
@@ -1052,6 +1183,39 @@ function updateUI() {
     dom.debugBtn.disabled = controlBlocked;
   }
   updateDebugUI();
+  updateHorrorFX();
+}
+
+function getFxLevel() {
+  if (state.currentNight < 4) {
+    return 0;
+  }
+  return clamp(1 - state.sanity, 0, 1);
+}
+
+function updateHorrorFX() {
+  if (!fxState.overlay) {
+    ensureFxOverlay();
+  }
+  const fx = getFxLevel();
+  const earlyNight = state.currentNight < 4;
+  fxState.level = fx;
+  const root = document.documentElement;
+  const grain = earlyNight ? 0.08 : 0.08 + fx * 0.18;
+  const lines = earlyNight ? 0 : fx * 0.22;
+  const vignette = earlyNight ? 0 : 0.1 + fx * 0.35;
+  root.style.setProperty("--fx", fx.toFixed(3));
+  root.style.setProperty("--fx-grain", grain.toFixed(3));
+  root.style.setProperty("--fx-lines", lines.toFixed(3));
+  root.style.setProperty("--fx-vignette", vignette.toFixed(3));
+  const frayed = state.currentNight >= 4 && state.sanity < 0.4;
+  const critical = state.currentNight >= 4 && state.sanity < 0.2;
+  document.body.classList.toggle("fx-frayed", frayed);
+  document.body.classList.toggle("fx-critical", critical);
+  fxState.jitterEnabled = frayed;
+  if (fxState.warp) {
+    fxState.warp.style.opacity = earlyNight ? "0" : String(0.04 + fx * 0.2);
+  }
 }
 
 function ensureTravelAnimation() {
