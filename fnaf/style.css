@@ -1318,6 +1318,12 @@ main {
   box-shadow: 0 0 0 1px rgba(107, 255, 159, 0.4);
 }
 
+#liveBtn.objective-highlight {
+  background: linear-gradient(135deg, rgba(120, 255, 176, 0.95), rgba(52, 210, 122, 0.95));
+  color: #07140d;
+  box-shadow: 0 0 12px rgba(107, 255, 159, 0.75), 0 0 0 2px rgba(107, 255, 159, 0.4);
+}
+
 .component-details {
   margin: 0;
   color: #c6d3f3;

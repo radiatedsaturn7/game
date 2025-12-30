@@ -5559,7 +5559,11 @@ function updateMap() {
       poi.classList.toggle("poi-schematic", hasSchematic && !isExit);
       poi.classList.toggle("poi-exit", isExit);
       const allowBlink = !state.objectiveBlocked;
-      const shouldBlink = allowBlink && (hasItem || hasSchematic || (isExit && state.escapeReady));
+      const isIntroEscapeHighlight = state.introStep === "highlight-escape";
+      let shouldBlink = allowBlink && (hasItem || hasSchematic || (isExit && state.escapeReady));
+      if (isIntroEscapeHighlight) {
+        shouldBlink = isExit;
+      }
       poi.classList.toggle("poi-blink", shouldBlink);
       poi.classList.toggle("poi-exit-ready", isExit && state.escapeReady);
     }
