@@ -642,6 +642,7 @@ const state = {
   hasEscaped: false,
   robotAlertQueued: false,
   robotAlertText: "",
+  pendingObjectiveModal: null,
   statusMessage: "",
   statusTicks: 0,
   bannerMessage: "",
@@ -928,6 +929,10 @@ function updateUI() {
   }
   if (dom.tasksBtn) {
     dom.tasksBtn.disabled = controlBlocked;
+    dom.tasksBtn.classList.toggle(
+      "objective-highlight",
+      state.currentNight === 1 && state.escapeConsoleInspected
+    );
   }
   if (dom.liveBtn) {
     dom.liveBtn.disabled = controlBlocked;
@@ -1640,7 +1645,7 @@ the robots are doing something out here.
 
 I can’t tell what yet.
 
-Get to the escape workbench. Let’s get you out.`;
+Get to the escapenworkshop. Let’s get you out.`;
   }
 
   if (!state.nightIntroLine && state.unlocks.robotActive && isTwistNight(state.currentNight)) {
@@ -2090,6 +2095,7 @@ function clearActionLock() {
   }
   state.actionLock = null;
   updateActionLockUI();
+  flushPendingModals();
 }
 
 function setActionLock(label, durationMs) {
@@ -2242,6 +2248,10 @@ function closeTasks() {
 }
 
 function showObjectiveModal(text) {
+  if (isActionLocked()) {
+    state.pendingObjectiveModal = text;
+    return;
+  }
   dom.objectiveModalText.textContent = formatCaitModalText(text);
   dom.objectiveModal.classList.add("active");
   dom.objectiveModal.setAttribute("aria-hidden", "false");
@@ -2252,14 +2262,12 @@ function acknowledgeObjective() {
   dom.objectiveModal.classList.remove("active");
   dom.objectiveModal.setAttribute("aria-hidden", "true");
   state.objectiveBlocked = false;
-  if (state.robotAlertQueued) {
-    showRobotAlert();
-  }
+  flushPendingModals();
 }
 
 function queueRobotAlert(text) {
   state.robotAlertText = text;
-  if (state.objectiveBlocked || dom.robotAlertModal.classList.contains("active")) {
+  if (state.objectiveBlocked || dom.robotAlertModal.classList.contains("active") || isActionLocked()) {
     state.robotAlertQueued = true;
     return;
   }
@@ -2278,6 +2286,20 @@ function acknowledgeRobotAlert() {
   dom.robotAlertModal.classList.remove("active");
   dom.robotAlertModal.setAttribute("aria-hidden", "true");
   state.objectiveBlocked = false;
+  flushPendingModals();
+}
+
+function flushPendingModals() {
+  if (state.objectiveBlocked || isActionLocked()) return;
+  if (state.pendingObjectiveModal) {
+    const text = state.pendingObjectiveModal;
+    state.pendingObjectiveModal = null;
+    showObjectiveModal(text);
+    return;
+  }
+  if (state.robotAlertQueued && !dom.robotAlertModal.classList.contains("active")) {
+    showRobotAlert();
+  }
 }
 
 function isAlarmCapable(roomId) {
@@ -2916,7 +2938,7 @@ function revealEscapeSchematic() {
   if (state.unlocks.robotActive) {
     state.robotDisabled = false;
     if (state.currentNight >= 2) {
-      queueRobotAlert(getRobotActivationAlertText());
+      showRobotActivationDialog();
     }
   } else {
     state.robotDisabled = true;
@@ -3028,7 +3050,7 @@ I need to stay quiet now.
 They’re everywhere out here.
 
 Go.
-Get back to the workbench and get out.`,
+Get back to the escapenworkshop and get out.`,
     escapeSuccess: `Cait: I have to move.
 
 And… Rob—
@@ -3045,13 +3067,7 @@ I think this is intentional.
 I think they’re trying to keep you inside.
 
 You need to force it open. Now.`,
-    robotActivation: `Cait: Geist—
-
-Stay quiet.
-
-You don’t need to answer me.
-
-Something is in there with you.`,
+    robotActivation: "Cait: Geist— One more thing. Stay quiet. Something is in there with you.",
     objectiveComplete: `Cait: Geist…
 
 They normally don’t care about us.
@@ -3079,6 +3095,15 @@ function getEscapeSuccessLine(night) {
 
 function getRobotActivationAlertText() {
   return getNightDialogue(state.currentNight)?.robotActivation ?? "Warning: Robot online.";
+}
+
+function showRobotActivationDialog() {
+  const text = getRobotActivationAlertText();
+  if (state.currentNight === 2) {
+    showObjectiveModal(text);
+    return;
+  }
+  queueRobotAlert(text);
 }
 
 function isPlayerTraveling() {
@@ -5529,10 +5554,6 @@ function tickPlayerTravel() {
     state.triggeredAlarms.add(nextRoom);
     showObjectiveModal("Cait: …that room just lit up. Move.");
   }
-  if (state.currentNight === 2 && rooms[nextRoom]?.isExit && !state.containmentLineShown) {
-    state.containmentLineShown = true;
-    showObjectiveModal("Cait: Hey—hurry. They’re trying to contain you.");
-  }
   if (state.requiredPickup &&
     state.requiredPickup.caitWarnLine &&
     state.requiredPickup.roomId === nextRoom &&
@@ -5679,7 +5700,7 @@ function toggleRobot() {
     dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
   }
   if (!state.robotDisabled) {
-    queueRobotAlert(getRobotActivationAlertText());
+    showRobotActivationDialog();
     schedulePowerSurge();
   }
   if (state.robotDisabled) {
