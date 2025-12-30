@@ -598,6 +598,7 @@ const state = {
   objectiveBlocked: false,
   actionLock: null,
   escapeConsoleInspected: false,
+  tasksAcknowledgedNightOne: false,
   noiseLures: 3,
   playerPath: [],
   playerTravelMode: "sneak",
@@ -848,7 +849,9 @@ function attachEvents() {
 
 function updateUI() {
   const room = rooms[state.playerRoom];
-  const dangerRoom = !state.robotDisabled && state.robotRoom === state.playerRoom;
+  const playerAdjacents = new Set(roomConnections[state.playerRoom] || []);
+  const dangerRoom = !state.robotDisabled &&
+    (state.robotRoom === state.playerRoom || playerAdjacents.has(state.robotRoom));
   dom.currentRooms.forEach((node) => {
     node.textContent = room.name;
   });
@@ -931,7 +934,9 @@ function updateUI() {
     dom.tasksBtn.disabled = controlBlocked;
     dom.tasksBtn.classList.toggle(
       "objective-highlight",
-      state.currentNight === 1 && state.escapeConsoleInspected
+      state.currentNight === 1 &&
+        state.escapeConsoleInspected &&
+        !state.tasksAcknowledgedNightOne
     );
   }
   if (dom.liveBtn) {
@@ -1782,6 +1787,7 @@ function setCurrentNight(night) {
     state.requiredEscapeSchematic = null;
     state.selectedSchematic = null;
     state.escapeConsoleInspected = false;
+    state.tasksAcknowledgedNightOne = false;
   }
   announceWeather();
   updateNextNightButton();
@@ -2240,6 +2246,12 @@ function closeComponent() {
 }
 
 function openTasks() {
+  if (state.currentNight === 1) {
+    state.tasksAcknowledgedNightOne = true;
+    if (dom.tasksBtn) {
+      dom.tasksBtn.classList.remove("objective-highlight");
+    }
+  }
   togglePanel(dom.tasksPanel);
 }
 
@@ -3065,6 +3077,8 @@ No— this isn’t damage.
 I think this is intentional.
 
 I think they’re trying to keep you inside.
+
+The robots are trying to contain you.
 
 You need to force it open. Now.`,
     robotActivation: "Cait: Geist— One more thing. Stay quiet. Something is in there with you.",
@@ -3929,6 +3943,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.requiredEscapeSchematic = null;
   state.escapeReady = false;
   state.escapeConsoleInspected = false;
+  state.tasksAcknowledgedNightOne = false;
   state.manualOverrideNeeded = 0;
   state.manualOverrideTargets = new Set();
   state.manualOverridesDone = new Set();
@@ -4737,6 +4752,8 @@ function updateMap() {
   });
 
   const playerAdjacents = new Set(roomConnections[state.playerRoom]);
+  const robotNearby = !state.robotDisabled &&
+    (state.robotRoom === state.playerRoom || playerAdjacents.has(state.robotRoom));
   const showRobotVision = state.robotDormant === 0 && state.robotLookTurns > 0;
   const robotAdjacents = showRobotVision ? new Set(roomConnections[state.robotRoom]) : new Set();
   dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
@@ -4774,6 +4791,7 @@ function updateMap() {
       "robot-adjacent",
       showRobotIntel && showRobotVision && roomId === state.robotScanTarget
     );
+    node.classList.toggle("robot-nearby", robotNearby && roomId === state.robotRoom);
     node.classList.toggle("robot-target", showRobotIntel && roomId === state.robotPlannedTarget);
     node.classList.toggle("robot-sweep", showRobotIntel && state.robotSweepQueue.includes(roomId));
     node.classList.toggle("scan-focus", state.scanPulseTicks > 0 && roomId === state.scanFocusRoom);
