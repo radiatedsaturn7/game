@@ -147,7 +147,7 @@ body.fx-critical .map-node text {
   justify-content: center;
   overflow: hidden;
   opacity: 0;
-  transition: opacity 2.6s ease;
+  transition: opacity 5s ease;
 }
 
 .title-screen::after {
@@ -156,7 +156,7 @@ body.fx-critical .map-node text {
   inset: 0;
   background: radial-gradient(circle at 50% 35%, rgba(8, 8, 10, 0.2), rgba(0, 0, 0, 0.95) 70%);
   opacity: 1;
-  transition: opacity 3s ease;
+  transition: opacity 5s ease;
   pointer-events: none;
 }
 
@@ -260,7 +260,7 @@ body.fx-critical .map-node text {
   object-fit: cover;
   background: #000;
   opacity: 0;
-  transition: opacity 2.4s ease;
+  transition: opacity 5s ease;
 }
 
 .title-screen.title-video-visible .title-video {
