@@ -206,8 +206,9 @@ body.fx-critical .map-node text {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
-  text-shadow: 0 0 6px rgba(255, 255, 255, 0.35);
-  animation: audio-gate-glow 2.6s ease-in-out infinite;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.22), 0 0 24px rgba(255, 255, 255, 0.1);
+  animation: audio-gate-glow 3.2s ease-in-out infinite;
 }
 
 .audio-gate-button:focus-visible {
@@ -222,10 +223,14 @@ body.fx-critical .map-node text {
 @keyframes audio-gate-glow {
   0%,
   100% {
-    text-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+    transform: scale(1);
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.2), 0 0 18px rgba(255, 255, 255, 0.08);
   }
   50% {
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
+    transform: scale(1.03);
+    text-shadow: 0 0 14px rgba(255, 255, 255, 0.7);
+    box-shadow: 0 0 18px rgba(255, 255, 255, 0.45), 0 0 30px rgba(255, 255, 255, 0.25);
   }
 }
 
@@ -1250,8 +1255,19 @@ main {
   z-index: 60;
 }
 
+.menu-panel.modal-panel .menu-card {
+  opacity: 0;
+  transform: translateY(18px) scale(0.97);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
 .menu-panel.active {
   display: flex;
+}
+
+.menu-panel.modal-panel.active .menu-card {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .map-panel {
@@ -1314,10 +1330,10 @@ main {
 }
 
 .objective-highlight {
-  border: 1px solid rgba(107, 255, 159, 0.8);
-  background: linear-gradient(135deg, rgba(120, 255, 176, 0.7), rgba(52, 210, 122, 0.7));
-  color: #07140d;
-  box-shadow: 0 0 0 1px rgba(107, 255, 159, 0.4);
+  border: 1px solid rgba(107, 255, 159, 0.95);
+  background: linear-gradient(135deg, rgba(124, 255, 184, 0.85), rgba(40, 212, 120, 0.85));
+  color: #04110a;
+  box-shadow: 0 0 10px rgba(107, 255, 159, 0.35), 0 0 0 2px rgba(107, 255, 159, 0.35);
 }
 
 #liveBtn.objective-highlight {
