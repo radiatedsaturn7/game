@@ -796,6 +796,13 @@ const fxState = {
 let gameLoopId = null;
 let hasStartedGame = false;
 let titleAudioUnlockRequested = false;
+let titleAudioUnlockHandler = null;
+
+function isTitleScreenActive() {
+  return Boolean(dom.titleScreen) &&
+    dom.titleScreen.getAttribute("aria-hidden") !== "true" &&
+    !hasStartedGame;
+}
 
 function init() {
   state.nightProfile = getNightProfile();
@@ -827,9 +834,12 @@ function initTitleScreen() {
   dom.titleStartBtn.addEventListener("click", startGameFromTitle);
   if (dom.titleVideo) {
     dom.titleVideo.addEventListener("playing", handleTitleVideoPlaying);
+    dom.titleVideo.addEventListener("loadeddata", handleTitleVideoPlaying);
+    dom.titleVideo.addEventListener("canplay", attemptTitleVideoPlay);
   }
   if (dom.titleAudio) {
     dom.titleAudio.addEventListener("playing", handleTitleAudioPlaying);
+    dom.titleAudio.addEventListener("canplay", attemptTitleAudioPlay);
   }
   attemptTitleVideoPlay();
   attemptTitleAudioPlay();
@@ -950,7 +960,7 @@ function handleFxJitter(time) {
 }
 
 function attemptTitleVideoPlay() {
-  if (!dom.titleVideo) return;
+  if (!dom.titleVideo || !isTitleScreenActive()) return;
   const playPromise = dom.titleVideo.play();
   if (!playPromise) {
     handleTitleVideoPlaying();
@@ -960,7 +970,7 @@ function attemptTitleVideoPlay() {
 }
 
 function attemptTitleAudioPlay() {
-  if (!dom.titleAudio) return;
+  if (!dom.titleAudio || !isTitleScreenActive()) return;
   const playPromise = dom.titleAudio.play();
   if (!playPromise) {
     handleTitleAudioPlaying();
@@ -977,7 +987,7 @@ function attemptTitleAudioPlay() {
 }
 
 function handleTitleAudioPlaying() {
-  if (!dom.titleScreen) return;
+  if (!isTitleScreenActive()) return;
   revealTitleVideo();
   if (dom.titleVideo) {
     const playPromise = dom.titleVideo.play();
@@ -988,6 +998,7 @@ function handleTitleAudioPlaying() {
 }
 
 function handleTitleVideoPlaying() {
+  if (!isTitleScreenActive()) return;
   revealTitleVideo();
 }
 
@@ -999,19 +1010,29 @@ function revealTitleVideo() {
 function requestTitleAudioUnlock() {
   if (titleAudioUnlockRequested) return;
   titleAudioUnlockRequested = true;
-  const unlock = () => {
+  titleAudioUnlockHandler = () => {
     titleAudioUnlockRequested = false;
-    window.removeEventListener("pointerdown", unlock, true);
-    window.removeEventListener("keydown", unlock, true);
+    if (titleAudioUnlockHandler) {
+      window.removeEventListener("pointerdown", titleAudioUnlockHandler, true);
+      window.removeEventListener("keydown", titleAudioUnlockHandler, true);
+      titleAudioUnlockHandler = null;
+    }
+    if (!isTitleScreenActive()) return;
     attemptTitleAudioPlay();
   };
-  window.addEventListener("pointerdown", unlock, true);
-  window.addEventListener("keydown", unlock, true);
+  window.addEventListener("pointerdown", titleAudioUnlockHandler, true);
+  window.addEventListener("keydown", titleAudioUnlockHandler, true);
 }
 
 function startGameFromTitle() {
   if (hasStartedGame) return;
   hasStartedGame = true;
+  if (titleAudioUnlockHandler) {
+    window.removeEventListener("pointerdown", titleAudioUnlockHandler, true);
+    window.removeEventListener("keydown", titleAudioUnlockHandler, true);
+    titleAudioUnlockHandler = null;
+    titleAudioUnlockRequested = false;
+  }
   if (dom.titleAudio) {
     dom.titleAudio.pause();
     dom.titleAudio.currentTime = 0;
