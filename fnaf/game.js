@@ -760,6 +760,7 @@ const dom = {
   titleVideo: document.getElementById("titleVideo"),
   titleVideos: document.querySelectorAll(".title-video"),
   titleAudio: document.getElementById("titleAudio"),
+  rainAudio: document.getElementById("rainAudio"),
   titleStartBtn: document.getElementById("titleStartBtn"),
   app: document.querySelector(".app"),
   dateLabel: document.getElementById("dateLabel"),
@@ -2104,6 +2105,7 @@ function setupWeatherForNight() {
   }
   state.weatherAnnounced = false;
   state.surgeCharges = state.weather.modifiers.surgeBonus || 0;
+  updateWeatherAmbience();
 }
 
 function setupAlarmedRooms() {
@@ -2391,6 +2393,31 @@ function announceWeather() {
   }
   pushBanner(`Weather: ${state.weather.type}. ${state.weather.description}`, 4);
   state.weatherAnnounced = true;
+}
+
+function updateWeatherAmbience() {
+  const rainAudio = dom.rainAudio;
+  if (!rainAudio) return;
+  const shouldPlay = hasStartedGame && titleAudioUnlocked && state.weather?.type === "Rain";
+  if (!shouldPlay) {
+    if (!rainAudio.paused) {
+      rainAudio.pause();
+    }
+    rainAudio.currentTime = 0;
+    return;
+  }
+  rainAudio.loop = true;
+  rainAudio.muted = false;
+  rainAudio.volume = 0.6;
+  if (rainAudio.paused) {
+    const playAttempt = rainAudio.play();
+    if (playAttempt && typeof playAttempt.catch === "function") {
+      playAttempt.catch((err) => {
+        console.warn("rain audio play() failed:", err);
+        console.log("rainAudio currentSrc:", rainAudio.currentSrc, "readyState:", rainAudio.readyState);
+      });
+    }
+  }
 }
 
 function setCurrentNight(night) {
