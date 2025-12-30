@@ -186,6 +186,22 @@ body.fx-critical .map-node text {
   color: rgba(248, 248, 248, 0.85);
 }
 
+.audio-gate-prompt {
+  color: #ffffff;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.35);
+  animation: audio-gate-glow 2.6s ease-in-out infinite;
+}
+
+@keyframes audio-gate-glow {
+  0%,
+  100% {
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.3);
+  }
+  50% {
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
+  }
+}
+
 .title-screen[aria-hidden="true"] {
   opacity: 0;
   pointer-events: none;
