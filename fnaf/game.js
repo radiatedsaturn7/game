@@ -2110,7 +2110,7 @@ the robots are doing something out here.
 
 I can’t tell what yet.
 
-Get to the escapenworkshop. Let’s get you out.`;
+Get to the escape ⎋ workshop. Let’s get you out.`;
   }
 
   if (!state.nightIntroLine && state.unlocks.robotActive && isTwistNight(state.currentNight)) {
@@ -3560,7 +3560,7 @@ I need to stay quiet now.
 They’re everywhere out here.
 
 Go.
-Get back to the escapenworkshop and get out.`,
+Get back to the escape ⎋ workshop and get out.`,
     escapeSuccess: `Cait: I have to move.
 
 And… Rob—
