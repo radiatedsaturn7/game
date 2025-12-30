@@ -7,6 +7,21 @@
   <link rel="stylesheet" href="style.css?v=6" />
 </head>
 <body>
+  <div id="titleScreen" class="title-screen" aria-hidden="false">
+    <video id="titleVideo" class="title-video" preload="auto" playsinline muted loop>
+      <source src="../20251230_0055_New%20Video_storyboard_01kdpx6rpjf8qsrpf2gw7rekb1%20(1).mp4" type="video/mp4" />
+    </video>
+    <audio id="titleAudio" preload="auto">
+      <source src="../Title%20Screen.mp3" type="audio/mpeg" />
+    </audio>
+    <div class="title-content">
+      <div class="title-copy">
+        <p class="title-brand">Factory Protocol: Nightwatch</p>
+        <p class="title-prompt">Press Start to Begin</p>
+      </div>
+      <button id="titleStartBtn" class="primary title-start">Start</button>
+    </div>
+  </div>
   <div class="app">
     <main>
       <section class="room-view">

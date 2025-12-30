@@ -715,6 +715,10 @@ let pendingMoveTimeoutId = null;
 const ACTION_LOCK_MS = 1200;
 
 const dom = {
+  titleScreen: document.getElementById("titleScreen"),
+  titleVideo: document.getElementById("titleVideo"),
+  titleAudio: document.getElementById("titleAudio"),
+  titleStartBtn: document.getElementById("titleStartBtn"),
   dateLabel: document.getElementById("dateLabel"),
   roomMedia: document.getElementById("roomMedia"),
   currentRooms: document.querySelectorAll(".current-room"),
@@ -773,6 +777,7 @@ const dom = {
 };
 
 let gameLoopId = null;
+let hasStartedGame = false;
 
 function init() {
   state.nightProfile = getNightProfile();
@@ -788,6 +793,63 @@ function init() {
   attachEvents();
   startGameLoop();
   showObjectiveModal(getInitialObjectiveModalText());
+}
+
+function initTitleScreen() {
+  if (!dom.titleScreen || !dom.titleStartBtn) {
+    init();
+    return;
+  }
+  dom.titleStartBtn.addEventListener("click", startGameFromTitle);
+  if (dom.titleAudio) {
+    dom.titleAudio.addEventListener("playing", handleTitleAudioPlaying);
+  }
+  attemptTitleAudioPlay();
+}
+
+function attemptTitleAudioPlay() {
+  if (!dom.titleAudio) return;
+  const playPromise = dom.titleAudio.play();
+  if (!playPromise) {
+    handleTitleAudioPlaying();
+    return;
+  }
+  playPromise
+    .then(() => {
+      handleTitleAudioPlaying();
+    })
+    .catch(() => {
+      // Autoplay blocked; wait for user interaction.
+    });
+}
+
+function handleTitleAudioPlaying() {
+  if (!dom.titleScreen) return;
+  dom.titleScreen.classList.add("title-video-visible");
+  if (dom.titleVideo) {
+    const playPromise = dom.titleVideo.play();
+    if (playPromise) {
+      playPromise.catch(() => {});
+    }
+  }
+}
+
+function startGameFromTitle() {
+  if (hasStartedGame) return;
+  hasStartedGame = true;
+  if (dom.titleAudio) {
+    dom.titleAudio.pause();
+    dom.titleAudio.currentTime = 0;
+  }
+  if (dom.titleVideo) {
+    dom.titleVideo.pause();
+    dom.titleVideo.currentTime = 0;
+  }
+  if (dom.titleScreen) {
+    dom.titleScreen.setAttribute("aria-hidden", "true");
+  }
+  setCurrentNight(1);
+  init();
 }
 
 function attachEvents() {
@@ -5738,4 +5800,4 @@ function toggleRobot() {
   updateUI();
 }
 
-init();
+initTitleScreen();
