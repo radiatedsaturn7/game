@@ -21,7 +21,6 @@ const rooms = [
     name: "Power Junction",
     description: "Sparks arc. The robot feeds here.",
     theme: "linear-gradient(135deg, rgba(96, 151, 142, 0.55), rgba(10, 16, 18, 0.9))",
-    item: "Power Cell",
     hideSpots: ["Breaker Alcove", "Voltage Cabinet"],
     noiseRisk: 0.4,
   },
@@ -123,19 +122,40 @@ const rooms = [
   },
 ];
 
+const ITEM_CLASSES = {
+  Resistors: "MATERIAL",
+  Capacitors: "MATERIAL",
+  "Copper Wire": "MATERIAL",
+  Microcontroller: "MATERIAL",
+  "Servo Motor": "MATERIAL",
+  "9V Battery": "MATERIAL",
+  "Small Fuse (5A)": "MATERIAL",
+  "24V Power Pack": "POWER_ACCESS",
+  "Main Fuse (30A)": "POWER_ACCESS",
+};
+
+function isMaterial(item) {
+  return ITEM_CLASSES[item] === "MATERIAL";
+}
+
+function isPowerAccess(item) {
+  return ITEM_CLASSES[item] === "POWER_ACCESS";
+}
+
 const requiredParts = [
   "Resistors",
   "Capacitors",
   "Microcontroller",
   "Servo Motor",
   "Copper Wire",
-  "Power Cell",
+  "9V Battery",
+  "Small Fuse (5A)",
 ];
 
 const craftableItems = [
   { name: "Signal Scrambler", parts: ["Capacitors", "Copper Wire"] },
   { name: "Motion Dampener", parts: ["Resistors", "Servo Motor"] },
-  { name: "Override Key", parts: ["Power Cell", "Microcontroller"] },
+  { name: "Override Key", parts: ["Microcontroller", "Copper Wire"] },
   { name: "Door Jam", parts: ["Resistors", "Copper Wire"] },
   { name: "Pulse Scanner", parts: ["Copper Wire", "Capacitors", "Microcontroller"] },
 ];
@@ -146,7 +166,10 @@ const componentDescriptions = {
   Microcontroller: "Coordinates logic and safety overrides in the schematic.",
   "Servo Motor": "Drives precision movement for locking mechanisms.",
   "Copper Wire": "Routes power between subsystems and anchors the circuit.",
-  "Power Cell": "Main power source required to energize the escape build.",
+  "9V Battery": "Small battery used for handheld or improvised electronics.",
+  "Small Fuse (5A)": "Low-current fuse used to protect fragile circuits.",
+  "24V Power Pack": "Industrial power source for doors, machinery, and system startup.",
+  "Main Fuse (30A)": "Heavy fuse rated for core systems and facility infrastructure.",
   "Signal Scrambler": "Jams the robot's sensors and clears accumulated signals.",
   "Motion Dampener": "Buys time by slowing the robot's movement for a short while.",
   "Override Key": "Overrides local locks and reduces the robot's alertness.",
@@ -382,10 +405,10 @@ const MISSION_TYPES = {
 };
 
 const STABILIZE_SYSTEMS = [
-  { room: "Power Junction", part: "Power Cell", tool: "Signal Scrambler" },
-  { room: "Coolant Vault", part: "Capacitors", tool: "Signal Scrambler" },
-  { room: "Hydraulic Core", part: "Servo Motor", tool: "Motion Dampener" },
-  { room: "Server Nest", part: "Microcontroller", tool: "Override Key" },
+  { room: "Power Junction", part: "24V Power Pack", tool: "Signal Scrambler" },
+  { room: "Control Bay", part: "Main Fuse (30A)", tool: "Override Key" },
+  { room: "Coolant Vault", part: "Small Fuse (5A)", tool: "Signal Scrambler" },
+  { room: "Hydraulic Core", part: "9V Battery", tool: "Motion Dampener" },
 ];
 
 const NIGHT_PROFILES = {
@@ -996,8 +1019,8 @@ function init() {
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
   renderMap();
-  assignRoomFinds();
   setupMissionForNight();
+  assignRoomFinds();
   announceWeather();
   configureRobotStart();
   updateSchematicList();
@@ -1527,11 +1550,34 @@ function updateInventoryList() {
     dom.inventoryList.appendChild(empty);
     return;
   }
+  const materials = [];
+  const powerAccess = [];
+  const other = [];
   state.inventory.forEach((item) => {
-    const li = document.createElement("li");
-    li.textContent = item;
-    dom.inventoryList.appendChild(li);
+    if (isMaterial(item)) {
+      materials.push(item);
+    } else if (isPowerAccess(item)) {
+      powerAccess.push(item);
+    } else {
+      other.push(item);
+    }
   });
+  const addGroup = (label, items) => {
+    if (items.length === 0) return;
+    const header = document.createElement("li");
+    const strong = document.createElement("strong");
+    strong.textContent = label;
+    header.appendChild(strong);
+    dom.inventoryList.appendChild(header);
+    items.forEach((item) => {
+      const li = document.createElement("li");
+      li.textContent = item;
+      dom.inventoryList.appendChild(li);
+    });
+  };
+  addGroup("Materials", materials);
+  addGroup("Power & Access", powerAccess);
+  addGroup("Tools & Devices", other);
 }
 
 function updateSchematicsInventory() {
@@ -1797,7 +1843,7 @@ function getPassiveEffects() {
     fatigueReliefChance: hasPart("Microcontroller") ? 0.5 : 0,
     jamBonus: hasPart("Servo Motor") ? 1 : 0,
     bleedBoost: hasPart("Copper Wire") || hasScrambler ? 1.1 : 1,
-    persistentBonus: hasPart("Power Cell") ? 1 : 0,
+    persistentBonus: hasPart("24V Power Pack") ? 1 : 0,
   };
 }
 
@@ -1986,6 +2032,9 @@ function pickMissionForNight(night) {
 function setupMissionForNight() {
   state.missionType = pickMissionForNight(state.currentNight);
   state.escapeMode = state.currentNight <= 3 ? "manual" : "fabricate";
+  if (!state.unlocks.allowCrafting) {
+    state.escapeMode = "manual";
+  }
   state.stabilizeTargets = [];
   state.stabilizedTargets = new Set();
   state.dataFragmentsFound = new Set();
@@ -2005,6 +2054,17 @@ function setupMissionForNight() {
 
   if (state.missionType === MISSION_TYPES.DATA) {
     state.dataFragmentsNeeded = Math.floor(Math.random() * 2) + 2;
+  }
+
+  if (state.missionType === MISSION_TYPES.ESCAPE && state.escapeMode === "fabricate") {
+    const options = craftableItems
+      .map((item) => item.name)
+      .filter((name) => name !== "Door Jam" && name !== "Pulse Scanner");
+    state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
+    state.selectedSchematic = null;
+  } else {
+    state.requiredEscapeSchematic = null;
+    state.selectedSchematic = null;
   }
 
   setupEnvironmentForNight();
@@ -3533,10 +3593,12 @@ function revealEscapeSchematic() {
   state.escapeReady = false;
   if (state.missionType === MISSION_TYPES.ESCAPE) {
     if (state.escapeMode === "fabricate") {
-      const options = craftableItems
-        .map((item) => item.name)
-        .filter((name) => name !== "Door Jam" && name !== "Pulse Scanner");
-      state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
+      if (!state.requiredEscapeSchematic) {
+        const options = craftableItems
+          .map((item) => item.name)
+          .filter((name) => name !== "Door Jam" && name !== "Pulse Scanner");
+        state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
+      }
       state.selectedSchematic = state.requiredEscapeSchematic;
     } else {
       state.requiredEscapeSchematic = null;
@@ -3651,27 +3713,95 @@ function pickSchematicList(count) {
   return shuffled.slice(0, count);
 }
 
+function pickDataFragmentSchematics(count) {
+  if (count <= 0) return [];
+  const blocked = new Set(["Pulse Scanner"]);
+  if (!state.unlocks.allowDoorJams) blocked.add("Door Jam");
+  const options = craftableItems
+    .map((item) => item.name)
+    .filter((name) => !blocked.has(name));
+  if (options.length === 0) return [];
+  const shuffled = [...options].sort(() => Math.random() - 0.5);
+  const picks = [];
+  for (let i = 0; i < count; i += 1) {
+    picks.push(shuffled[i % shuffled.length]);
+  }
+  return picks;
+}
+
+function getGuaranteedItems() {
+  const guaranteed = [];
+  if (state.missionType === MISSION_TYPES.STABILIZE) {
+    guaranteed.push(...state.stabilizeTargets.map((target) => target.part));
+  }
+  if (state.missionType === MISSION_TYPES.ESCAPE && state.escapeMode === "fabricate") {
+    const schematic = craftableItems.find((item) => item.name === state.requiredEscapeSchematic);
+    if (schematic) {
+      guaranteed.push(...schematic.parts);
+    }
+  }
+  return guaranteed.filter(Boolean);
+}
+
 function assignRoomFinds() {
   rooms.forEach((room) => {
     room.item = undefined;
     room.schematic = undefined;
   });
-  const partBudget = getPartSpawnBudget(state.currentNight);
-  const schematicBudget = getSchematicSpawnBudget(state.currentNight);
   const baseExclusions = new Set([PICKUP_START_ROOM]);
-  const parts = pickPartList(partBudget);
-  const partRooms = pickSpawnRooms(parts.length, baseExclusions);
-  partRooms.forEach((roomId, index) => {
-    const part = parts[index];
+  const guaranteedItems = getGuaranteedItems();
+  const basePartBudget = getPartSpawnBudget(state.currentNight);
+  const partBudget = Math.max(basePartBudget, guaranteedItems.length);
+  const guaranteedPartRooms = pickSpawnRooms(guaranteedItems.length, baseExclusions);
+  guaranteedPartRooms.forEach((roomId, index) => {
+    const part = guaranteedItems[index];
     if (part) {
       rooms[roomId].item = part;
     }
   });
-  const schematics = pickSchematicList(schematicBudget);
-  const schematicRooms = pickSpawnRooms(
-    schematics.length,
+  const remainingPartBudget = partBudget - guaranteedItems.length;
+  const remainingParts = pickPartList(remainingPartBudget);
+  const remainingPartRooms = pickSpawnRooms(
+    remainingParts.length,
+    new Set([...baseExclusions, ...guaranteedPartRooms]),
+    guaranteedPartRooms
+  );
+  remainingPartRooms.forEach((roomId, index) => {
+    const part = remainingParts[index];
+    if (part) {
+      rooms[roomId].item = part;
+    }
+  });
+  const materialSpawns = [...guaranteedItems, ...remainingParts].filter((item) => isMaterial(item));
+  state.lastNightSpawnedParts = new Set(materialSpawns);
+
+  const baseSchematicBudget = getSchematicSpawnBudget(state.currentNight);
+  const guaranteedSchematics = [];
+  if (state.currentNight === 4) {
+    guaranteedSchematics.push("Pulse Scanner");
+  }
+  if (state.missionType === MISSION_TYPES.DATA) {
+    guaranteedSchematics.push(...pickDataFragmentSchematics(state.dataFragmentsNeeded));
+  }
+  const schematicBudget = Math.max(baseSchematicBudget, guaranteedSchematics.length);
+  const partRooms = [...guaranteedPartRooms, ...remainingPartRooms];
+  const guaranteedSchematicRooms = pickSpawnRooms(
+    guaranteedSchematics.length,
     new Set([...baseExclusions, ...partRooms]),
     partRooms
+  );
+  guaranteedSchematicRooms.forEach((roomId, index) => {
+    const schematic = guaranteedSchematics[index];
+    if (schematic) {
+      rooms[roomId].schematic = schematic;
+    }
+  });
+  const remainingSchematicBudget = schematicBudget - guaranteedSchematics.length;
+  const schematics = pickSchematicList(remainingSchematicBudget);
+  const schematicRooms = pickSpawnRooms(
+    schematics.length,
+    new Set([...baseExclusions, ...partRooms, ...guaranteedSchematicRooms]),
+    [...partRooms, ...guaranteedSchematicRooms]
   );
   schematicRooms.forEach((roomId, index) => {
     const schematic = schematics[index];
@@ -4787,8 +4917,8 @@ function resetGame({ preserveItems = false } = {}) {
     state.doorJams = savedDoorJams;
     state.noiseLures = savedNoiseLures;
   }
-  assignRoomFinds();
   setupMissionForNight();
+  assignRoomFinds();
   announceWeather();
   configureRobotStart();
   dom.deathScreen.classList.remove("active");
@@ -5929,6 +6059,11 @@ function craftItem() {
       unlockNight ? `Door jams unlock on Night ${unlockNight}.` : "Door jams locked.",
       3
     );
+    return;
+  }
+  if (!craftable.parts.every((part) => isMaterial(part))) {
+    console.error("Crafting blocked: power/access parts detected in schematic.", craftable);
+    pushStatus("Crafting failed: component class mismatch.", 3);
     return;
   }
   if (!craftable.parts.every((part) => state.inventory.has(part))) return;
