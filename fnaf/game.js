@@ -1631,11 +1631,32 @@ function setupSpecialPickupsForNight() {
     });
   }
 
+  if (!state.nightIntroLine && state.currentNight === 1) {
+    state.nightIntroLine = `Cait: Okay… you got what you went in for, right?
+Good. Then don’t linger.
+
+The husks breaking in were bad enough, but—
+the robots are doing something out here.
+
+I can’t tell what yet.
+
+Get to the escape workbench. Let’s get you out.`;
+  }
+
   if (!state.nightIntroLine && state.unlocks.robotActive && isTwistNight(state.currentNight)) {
     state.nightIntroLine = "Cait: The escape room isn’t empty.";
   }
-  if (state.unlocks.robotActive && !state.nightIntroLine && state.currentNight === 2) {
-    state.nightIntroLine = "Cait: Be careful out there... I think something is moving.";
+
+  if (!state.nightIntroLine && state.currentNight === 2) {
+    state.nightIntroLine = `Cait: Geist…
+
+They’re building.
+Fast. Faster than I’ve ever seen.
+
+I wanted to tell you sooner, but the husks were all around me.
+
+I can see more frames going up.
+You need to get out.`;
   }
 }
 
@@ -1959,7 +1980,12 @@ function buildRunSummary(outcome) {
     lines.push("Escape protocol initiated.");
   }
   if (outcome === "win") {
-    lines.push(`You escaped the factory on Night ${night}.`);
+    const escapeSuccessLine = getEscapeSuccessLine(night);
+    if (escapeSuccessLine) {
+      lines.push(escapeSuccessLine);
+    } else {
+      lines.push(`You escaped the factory on Night ${night}.`);
+    }
   } else {
     lines.push(`You were caught in ${rooms[state.playerRoom].name}.`);
   }
@@ -2648,6 +2674,7 @@ function hasCompletedAlarmedRooms() {
 }
 
 function updateEscapeReadiness() {
+  const wasReady = state.escapeReady;
   if (!state.escapeConsoleInspected) {
     state.escapeReady = false;
     return;
@@ -2668,6 +2695,12 @@ function updateEscapeReadiness() {
     ready = false;
   }
   state.escapeReady = ready;
+  if (!wasReady && ready) {
+    const line = getObjectiveCompleteLine();
+    if (line) {
+      showObjectiveModal(line);
+    }
+  }
 }
 
 function slowRewire() {
@@ -2866,7 +2899,10 @@ function revealEscapeSchematic() {
     }
   }
   state.escapeConsoleInspected = true;
-  if (state.missionType === MISSION_TYPES.ESCAPE) {
+  const escapeInspectLine = getEscapeConsoleInspectLine();
+  if (escapeInspectLine) {
+    showObjectiveModal(escapeInspectLine);
+  } else if (state.missionType === MISSION_TYPES.ESCAPE) {
     if (state.escapeMode === "manual") {
       showObjectiveModal("Cait: Override nodes are live. Line them up.");
     } else {
@@ -2880,7 +2916,7 @@ function revealEscapeSchematic() {
   if (state.unlocks.robotActive) {
     state.robotDisabled = false;
     if (state.currentNight >= 2) {
-      queueRobotAlert("Warning: Robot online.");
+      queueRobotAlert(getRobotActivationAlertText());
     }
   } else {
     state.robotDisabled = true;
@@ -2974,6 +3010,75 @@ function getObjectiveText() {
 function getInitialObjectiveModalText() {
   const text = state.nightIntroLine ?? getObjectiveText();
   return stripCaitPrefix(text);
+}
+
+const NIGHT_DIALOGUE = {
+  1: {
+    escapeConsoleInspect: `Cait: What the hell…?
+
+That door shouldn’t be—
+
+Damn it. I can’t talk long.
+The robots are pushing the husks toward me.
+
+Do this fast. Get the door unstuck.`,
+    objectiveComplete: `Cait: Okay— listen.
+
+I need to stay quiet now.
+They’re everywhere out here.
+
+Go.
+Get back to the workbench and get out.`,
+    escapeSuccess: `Cait: I have to move.
+
+And… Rob—
+
+You’re not going to like what you see out here.`,
+  },
+  2: {
+    escapeConsoleInspect: `Cait: Again?
+
+No— this isn’t damage.
+
+I think this is intentional.
+
+I think they’re trying to keep you inside.
+
+You need to force it open. Now.`,
+    robotActivation: `Cait: Geist—
+
+Stay quiet.
+
+You don’t need to answer me.
+
+Something is in there with you.`,
+    objectiveComplete: `Cait: Geist…
+
+They normally don’t care about us.
+We’re ants to them.
+
+Why now?`,
+  },
+};
+
+function getNightDialogue(night) {
+  return NIGHT_DIALOGUE[night] ?? null;
+}
+
+function getEscapeConsoleInspectLine() {
+  return getNightDialogue(state.currentNight)?.escapeConsoleInspect ?? null;
+}
+
+function getObjectiveCompleteLine() {
+  return getNightDialogue(state.currentNight)?.objectiveComplete ?? null;
+}
+
+function getEscapeSuccessLine(night) {
+  return getNightDialogue(night)?.escapeSuccess ?? null;
+}
+
+function getRobotActivationAlertText() {
+  return getNightDialogue(state.currentNight)?.robotActivation ?? "Warning: Robot online.";
 }
 
 function isPlayerTraveling() {
@@ -5574,7 +5679,7 @@ function toggleRobot() {
     dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
   }
   if (!state.robotDisabled) {
-    queueRobotAlert("Warning: Robot online.");
+    queueRobotAlert(getRobotActivationAlertText());
     schedulePowerSurge();
   }
   if (state.robotDisabled) {
