@@ -137,6 +137,7 @@ const craftableItems = [
   { name: "Motion Dampener", parts: ["Resistors", "Servo Motor"] },
   { name: "Override Key", parts: ["Power Cell", "Microcontroller"] },
   { name: "Door Jam", parts: ["Resistors", "Copper Wire"] },
+  { name: "Pulse Scanner", parts: ["Copper Wire", "Capacitors", "Microcontroller"] },
 ];
 
 const componentDescriptions = {
@@ -715,6 +716,7 @@ const state = {
   mapTargetSelection: null,
   robotLastRoom: null,
   permaJammedEdges: new Set(),
+  lastNightSpawnedParts: new Set(),
 };
 
 let travelAnimationId = null;
@@ -1524,7 +1526,8 @@ function updateInventoryList() {
 
 function updateSchematicsInventory() {
   dom.schematicInventory.innerHTML = "";
-  if (!state.unlocks.allowCrafting) {
+  const allowPulseScannerCrafting = state.currentNight === 4;
+  if (!state.unlocks.allowCrafting && !allowPulseScannerCrafting) {
     const locked = document.createElement("li");
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     locked.textContent = unlockNight
@@ -1533,13 +1536,16 @@ function updateSchematicsInventory() {
     dom.schematicInventory.appendChild(locked);
     return;
   }
-  if (state.foundSchematics.size === 0) {
+  const schematics = state.unlocks.allowCrafting
+    ? [...state.foundSchematics]
+    : [...state.foundSchematics].filter((item) => item === "Pulse Scanner");
+  if (schematics.length === 0) {
     const empty = document.createElement("li");
     empty.textContent = "No schematics found.";
     dom.schematicInventory.appendChild(empty);
     return;
   }
-  state.foundSchematics.forEach((item) => {
+  schematics.forEach((item) => {
     const li = document.createElement("li");
     const button = document.createElement("button");
     button.textContent = item;
@@ -1557,7 +1563,8 @@ function updateSchematicsInventory() {
 
 function updateSchematicList() {
   dom.schematicList.innerHTML = "";
-  if (!state.unlocks.allowCrafting) {
+  const allowPulseScannerCrafting = state.currentNight === 4;
+  if (!state.unlocks.allowCrafting && !allowPulseScannerCrafting) {
     const locked = document.createElement("li");
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     locked.textContent = unlockNight
@@ -1593,7 +1600,9 @@ function updateSchematicList() {
 }
 
 function updateBuildButton() {
-  if (!state.unlocks.allowCrafting) {
+  const selected = getSelectedSchematic();
+  const allowPulseScannerBuild = state.currentNight === 4 && selected?.name === "Pulse Scanner";
+  if (!state.unlocks.allowCrafting && !allowPulseScannerBuild) {
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = unlockNight
@@ -1601,7 +1610,6 @@ function updateBuildButton() {
       : "Crafting locked";
     return;
   }
-  const selected = getSelectedSchematic();
   if (!selected) {
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = "Select a Schematic";
@@ -2115,24 +2123,13 @@ function setupSpecialPickupsForNight() {
   state.storyQueue = [];
   state.objectiveHoldUntil = 0;
   state.toolCollected = new Set();
-  if (state.unlocks.allowScannerToggle && state.currentNight !== 4) {
+  if (state.inventory.has("Pulse Scanner")) {
     state.toolCollected.add("Pulse Scanner");
   }
-
   if (state.currentNight === 4) {
-    const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
-    state.requiredPickup = {
-      itemName: "Pulse Scanner",
-      roomId,
-      caitIntroLine: `Cait: I found a Pulse Scanner in ${rooms[roomId].name}. Go. Before it learns you.`,
-      caitWarnLine: "Cait: Look… stay out of the sun. I know you know what happens.",
-      blocksEscapeConsole: true,
-      warned: false,
-    };
-    state.specialPickups.set(roomId, "Pulse Scanner");
-    state.nightIntroLine = state.requiredPickup.caitIntroLine;
-    state.sunlitRooms.add(roomId);
     state.unlocks.allowScannerToggle = false;
+    state.scannerOn = false;
+    state.scannerHighlight = false;
   }
 
   if (state.currentNight === 5) {
@@ -3069,15 +3066,17 @@ function updateRoomActions() {
 
   if (state.escapeConsoleInspected && room.schematic && !state.foundSchematics.has(room.schematic)) {
     const isDataMission = state.missionType === MISSION_TYPES.DATA;
+    const allowPulseScannerScan = state.currentNight === 4 && room.schematic === "Pulse Scanner";
+    const canScanSchematic = state.unlocks.allowCrafting || allowPulseScannerScan;
     const scanLabel = isDataMission
       ? "Recover Data Fragment"
-      : state.unlocks.allowCrafting
+      : canScanSchematic
         ? `Scan Schematic: ${room.schematic}`
         : `Schematic Scan (Night ${getNextUnlockNightFromNow("allowCrafting") ?? "?"})`;
     actions.push({
       label: scanLabel,
       onClick: () => startSchematicScan(room.id),
-      disabled: state.hidden || blocked || (!isDataMission && !state.unlocks.allowCrafting),
+      disabled: state.hidden || blocked || (!isDataMission && !canScanSchematic),
       risk: "Quiet",
       highlight: isDataMission,
     });
@@ -3518,7 +3517,7 @@ function revealEscapeSchematic() {
     if (state.escapeMode === "fabricate") {
       const options = craftableItems
         .map((item) => item.name)
-        .filter((name) => name !== "Door Jam");
+        .filter((name) => name !== "Door Jam" && name !== "Pulse Scanner");
       state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
       state.selectedSchematic = state.requiredEscapeSchematic;
     } else {
@@ -3563,22 +3562,103 @@ But it can make you harder to pin down— for a moment.`);
   updateUI();
 }
 
+function getPartSpawnBudget(night) {
+  if (night <= 1) return 2;
+  if (night === 2) return Math.floor(Math.random() * 2) + 2;
+  if (night === 3) return 3;
+  if (night === 4) return Math.floor(Math.random() * 2) + 3;
+  return Math.floor(Math.random() * 2) + 4;
+}
+
+function getSchematicSpawnBudget(night) {
+  if (night <= 3) return 0;
+  if (night === 4) return 1;
+  return Math.floor(Math.random() * 2);
+}
+
+function getSpawnWeight(room) {
+  const noiseRisk = room.noiseRisk ?? 0.2;
+  return 1 + noiseRisk * 3;
+}
+
+function pickSpawnRooms(count, exclusions = new Set(), avoidAdjacentTo = []) {
+  const picks = [];
+  const excluded = new Set(exclusions);
+  const avoid = new Set(avoidAdjacentTo);
+  const isAdjacentTo = (roomId, targetId) =>
+    roomId === targetId || (roomConnections[roomId] || []).includes(targetId);
+  const getCandidates = () => rooms.filter((room) => !room.isExit && !excluded.has(room.id));
+  while (picks.length < count) {
+    let candidates = getCandidates();
+    if (candidates.length === 0 && excluded.has(PICKUP_START_ROOM)) {
+      excluded.delete(PICKUP_START_ROOM);
+      candidates = getCandidates();
+    }
+    if (candidates.length === 0) break;
+    const avoidRooms = [...picks, ...avoid];
+    const nonAdjacent = candidates.filter(
+      (room) => !avoidRooms.some((picked) => isAdjacentTo(picked, room.id))
+    );
+    const pool = nonAdjacent.length > 0 ? nonAdjacent : candidates;
+    const options = pool.map((room) => ({
+      value: room.id,
+      weight: getSpawnWeight(room),
+    }));
+    const selected = weightedPick(options);
+    picks.push(selected);
+    excluded.add(selected);
+  }
+  return picks;
+}
+
+function pickPartList(count) {
+  const shuffled = [...requiredParts].sort(() => Math.random() - 0.5);
+  const fresh = shuffled.filter((part) => !state.lastNightSpawnedParts.has(part));
+  const repeats = shuffled.filter((part) => state.lastNightSpawnedParts.has(part));
+  const picks = [...fresh, ...repeats].slice(0, count);
+  state.lastNightSpawnedParts = new Set(picks);
+  return picks;
+}
+
+function pickSchematicList(count) {
+  if (count <= 0) return [];
+  if (state.currentNight === 4) return ["Pulse Scanner"];
+  const blocked = new Set(["Pulse Scanner"]);
+  if (!state.unlocks.allowDoorJams) blocked.add("Door Jam");
+  const options = craftableItems
+    .map((item) => item.name)
+    .filter((name) => !blocked.has(name));
+  if (options.length === 0) return [];
+  const shuffled = [...options].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
 function assignRoomFinds() {
   rooms.forEach((room) => {
     room.item = undefined;
     room.schematic = undefined;
   });
-  const availableRooms = rooms.filter((room) => !room.isExit);
-  const shuffled = [...availableRooms].sort(() => Math.random() - 0.5);
-  requiredParts.forEach((part, index) => {
-    if (shuffled[index]) {
-      shuffled[index].item = part;
+  const partBudget = getPartSpawnBudget(state.currentNight);
+  const schematicBudget = getSchematicSpawnBudget(state.currentNight);
+  const baseExclusions = new Set([PICKUP_START_ROOM]);
+  const parts = pickPartList(partBudget);
+  const partRooms = pickSpawnRooms(parts.length, baseExclusions);
+  partRooms.forEach((roomId, index) => {
+    const part = parts[index];
+    if (part) {
+      rooms[roomId].item = part;
     }
   });
-  const schematicRooms = shuffled.slice(requiredParts.length);
-  craftableItems.forEach((item, index) => {
-    if (schematicRooms[index]) {
-      schematicRooms[index].schematic = item.name;
+  const schematics = pickSchematicList(schematicBudget);
+  const schematicRooms = pickSpawnRooms(
+    schematics.length,
+    new Set([...baseExclusions, ...partRooms]),
+    partRooms
+  );
+  schematicRooms.forEach((roomId, index) => {
+    const schematic = schematics[index];
+    if (schematic) {
+      rooms[roomId].schematic = schematic;
     }
   });
 }
@@ -3963,11 +4043,14 @@ function collectSpecialPickup(roomId, { force = false } = {}) {
 function collectSchematic(roomId, { force = false } = {}) {
   if (isActionLocked() && !force) return;
   if (state.hidden) return;
-  if (!state.unlocks.allowCrafting && state.missionType !== MISSION_TYPES.DATA) {
+  const room = rooms[roomId];
+  const allowPulseScannerScan = state.currentNight === 4 && room?.schematic === "Pulse Scanner";
+  if (!state.unlocks.allowCrafting &&
+    state.missionType !== MISSION_TYPES.DATA &&
+    !allowPulseScannerScan) {
     pushStatus("You note the diagram, but you can't assemble it yet.", 3);
     return;
   }
-  const room = rooms[roomId];
   if (room.schematic && !state.foundSchematics.has(room.schematic)) {
     state.foundSchematics.add(room.schematic);
     const profile = getNightProfile();
@@ -4654,6 +4737,9 @@ function resetGame({ preserveItems = false } = {}) {
   state.mapTargetSelection = null;
   state.unlocks = getUnlocks();
   state.permaJammedEdges = new Set();
+  if (!preserveItems) {
+    state.lastNightSpawnedParts = new Set();
+  }
   if (!state.unlocks.robotActive) {
     state.robotDisabled = true;
   }
@@ -5424,7 +5510,8 @@ function updateMap() {
       const discoveriesEnabled = state.escapeConsoleInspected;
       const hasItem = discoveriesEnabled && Boolean(room.item) && !state.inventory.has(room.item);
       const allowSchematicMarkers = state.unlocks.allowCrafting ||
-        state.missionType === MISSION_TYPES.DATA;
+        state.missionType === MISSION_TYPES.DATA ||
+        (state.currentNight === 4 && room.schematic === "Pulse Scanner");
       const hasSchematic = discoveriesEnabled &&
         allowSchematicMarkers &&
         Boolean(room.schematic) &&
@@ -5780,7 +5867,9 @@ function craftItem() {
   if (!state.isAlive || state.hasEscaped) return;
   const craftable = getSelectedSchematic();
   if (!craftable) return;
-  if (!state.unlocks.allowCrafting) {
+  const isPulseScanner = craftable.name === "Pulse Scanner";
+  const allowPulseScannerBuild = state.currentNight === 4 && isPulseScanner;
+  if (!state.unlocks.allowCrafting && !allowPulseScannerBuild) {
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     pushStatus(
       unlockNight ? `Crafting locked until Night ${unlockNight}.` : "Crafting locked.",
@@ -5789,6 +5878,7 @@ function craftItem() {
     return;
   }
   if (!state.foundSchematics.has(craftable.name)) return;
+  if (isPulseScanner && hasCollectedTool("Pulse Scanner")) return;
   if (craftable.name !== "Door Jam" && state.craftedItems.has(craftable.name)) return;
   if (craftable.name === "Door Jam" && !state.unlocks.allowDoorJams) {
     const unlockNight = getNextUnlockNightFromNow("allowDoorJams");
@@ -5802,6 +5892,13 @@ function craftItem() {
   craftable.parts.forEach((part) => state.inventory.delete(part));
   if (craftable.name === "Door Jam") {
     state.doorJams += 1;
+  } else if (isPulseScanner) {
+    state.toolCollected.add("Pulse Scanner");
+    state.inventory.add("Pulse Scanner");
+    state.unlocks.allowScannerToggle = true;
+    state.scannerOn = false;
+    state.scannerHighlight = true;
+    showObjectiveModal("Cait: Scanner’s live. Don’t lean on it. Every pulse leaves a trace.");
   } else {
     state.craftedItems.add(craftable.name);
   }
