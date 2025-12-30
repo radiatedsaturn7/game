@@ -778,6 +778,7 @@ const dom = {
 
 let gameLoopId = null;
 let hasStartedGame = false;
+let titleAudioUnlockRequested = false;
 
 function init() {
   state.nightProfile = getNightProfile();
@@ -801,10 +802,24 @@ function initTitleScreen() {
     return;
   }
   dom.titleStartBtn.addEventListener("click", startGameFromTitle);
+  if (dom.titleVideo) {
+    dom.titleVideo.addEventListener("playing", handleTitleVideoPlaying);
+  }
   if (dom.titleAudio) {
     dom.titleAudio.addEventListener("playing", handleTitleAudioPlaying);
   }
+  attemptTitleVideoPlay();
   attemptTitleAudioPlay();
+}
+
+function attemptTitleVideoPlay() {
+  if (!dom.titleVideo) return;
+  const playPromise = dom.titleVideo.play();
+  if (!playPromise) {
+    handleTitleVideoPlaying();
+    return;
+  }
+  playPromise.catch(() => {});
 }
 
 function attemptTitleAudioPlay() {
@@ -820,18 +835,41 @@ function attemptTitleAudioPlay() {
     })
     .catch(() => {
       // Autoplay blocked; wait for user interaction.
+      requestTitleAudioUnlock();
     });
 }
 
 function handleTitleAudioPlaying() {
   if (!dom.titleScreen) return;
-  dom.titleScreen.classList.add("title-video-visible");
+  revealTitleVideo();
   if (dom.titleVideo) {
     const playPromise = dom.titleVideo.play();
     if (playPromise) {
       playPromise.catch(() => {});
     }
   }
+}
+
+function handleTitleVideoPlaying() {
+  revealTitleVideo();
+}
+
+function revealTitleVideo() {
+  if (!dom.titleScreen) return;
+  dom.titleScreen.classList.add("title-video-visible");
+}
+
+function requestTitleAudioUnlock() {
+  if (titleAudioUnlockRequested) return;
+  titleAudioUnlockRequested = true;
+  const unlock = () => {
+    titleAudioUnlockRequested = false;
+    window.removeEventListener("pointerdown", unlock, true);
+    window.removeEventListener("keydown", unlock, true);
+    attemptTitleAudioPlay();
+  };
+  window.addEventListener("pointerdown", unlock, true);
+  window.addEventListener("keydown", unlock, true);
 }
 
 function startGameFromTitle() {
