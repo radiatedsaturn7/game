@@ -807,7 +807,6 @@ function isTitleScreenActive() {
 function init() {
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
-  initHorrorFX();
   renderMap();
   assignRoomFinds();
   setupMissionForNight();
@@ -824,10 +823,12 @@ function init() {
 function initHorrorFX() {
   ensureFxOverlay();
   startFxLoop();
+  updateHorrorFX();
 }
 
 function initTitleScreen() {
   if (!dom.titleScreen || !dom.titleStartBtn) {
+    initHorrorFX();
     init();
     return;
   }
@@ -1045,6 +1046,7 @@ function startGameFromTitle() {
     dom.titleScreen.setAttribute("aria-hidden", "true");
   }
   setCurrentNight(1);
+  initHorrorFX();
   init();
 }
 
@@ -1204,7 +1206,6 @@ function updateUI() {
     dom.debugBtn.disabled = controlBlocked;
   }
   updateDebugUI();
-  updateHorrorFX();
 }
 
 function getFxLevel() {
@@ -5570,6 +5571,7 @@ function startGameLoop() {
     if (state.caitCooldown > 0) {
       state.caitCooldown -= 1;
     }
+    updateHorrorFX();
     if (state.hidden) {
       state.hiddenTurns += 1;
     } else {

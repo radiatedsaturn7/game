@@ -3,10 +3,6 @@
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   background: #06070a;
   color: #f4f4f4;
-  --fx: 0;
-  --fx-grain: 0.08;
-  --fx-lines: 0;
-  --fx-vignette: 0;
 }
 
 @keyframes glitchPulse {
@@ -42,6 +38,13 @@ body {
   min-height: 100vh;
   background: var(--room-theme, radial-gradient(circle at top, rgba(27, 43, 76, 0.5), transparent 55%), #06070a);
   background-attachment: fixed;
+}
+
+:root {
+  --fx: 0;
+  --fx-grain: 0.08;
+  --fx-lines: 0;
+  --fx-vignette: 0;
 }
 
 #fxOverlay,
