@@ -956,7 +956,7 @@ function initTitleScreen() {
   }
 }
 
-function handleAudioGateGesture() {
+async function handleAudioGateGesture() {
   if (titleAudioUnlocked) return;
   titleAudioUnlocked = true;
   if (dom.audioGate) {
@@ -973,36 +973,34 @@ function handleAudioGateGesture() {
   if (audioEl) {
     audioEl.loop = true;
     audioEl.muted = false;
+    audioEl.volume = 1;
+    audioEl.currentTime = 0;
   }
   if (videoEl) {
     videoEl.muted = true;
     videoEl.loop = true;
-  }
-  AudioManager.init();
-  if (AudioManager.ctx) {
-    AudioManager.loadMusicFromElement(audioEl);
-    AudioManager.unlock();
-  }
-  startTitlePlayback();
-}
-
-function startTitlePlayback() {
-  if (!isTitleScreenActive()) return;
-  const audioEl = dom.titleAudio;
-  const videoEl = dom.titleVideo;
-  if (audioEl) {
-    audioEl.currentTime = 0;
-  }
-  if (videoEl) {
     videoEl.currentTime = 0;
   }
-  const audioPromise = audioEl ? audioEl.play() : null;
-  const videoPromise = videoEl ? videoEl.play() : null;
-  if (audioPromise) {
-    audioPromise.catch(() => {});
+  const audioReady = await AudioManager.init();
+  if (audioReady) {
+    await AudioManager.unlock();
   }
-  if (videoPromise) {
-    videoPromise.catch(() => {});
+
+  if (!isTitleScreenActive()) return;
+  if (audioEl) {
+    try {
+      await audioEl.play();
+    } catch (err) {
+      console.warn("title audio play() failed:", err);
+      console.log("titleAudio currentSrc:", audioEl.currentSrc, "readyState:", audioEl.readyState);
+    }
+  }
+  if (videoEl) {
+    try {
+      await videoEl.play();
+    } catch (err) {
+      console.warn("title video play() failed:", err);
+    }
   }
   if (dom.titleScreen) {
     dom.titleScreen.classList.add("title-video-visible");
