@@ -198,8 +198,8 @@ const TICK_MS = 1200;
 const DEBUG_AI = false;
 const DEBUG_UI = true;
 const DEBUG_ALWAYS_VISIBLE = false;
-const TITLE_FADE_IN_MS = 2600;
-const TITLE_FADE_OUT_MS = 2600;
+const TITLE_FADE_IN_MS = 5000;
+const TITLE_FADE_OUT_MS = 5000;
 const REWIRE_DAMPEN_TURNS = 3;
 const REWIRE_DAMPEN_DECAY = 0.05;
 const REWIRE_DAMPEN_CURRENT = 0.18;
@@ -774,7 +774,6 @@ const dom = {
   mapConfirmBtn: document.getElementById("mapConfirmBtn"),
   scannerToggleBtn: document.getElementById("scannerToggleBtn"),
   movementControls: document.getElementById("movementControls"),
-  escapeBtn: document.getElementById("escapeBtn"),
   deathScreen: document.getElementById("deathScreen"),
   victoryScreen: document.getElementById("victoryScreen"),
   retryBtn: document.getElementById("retryBtn"),
@@ -1297,7 +1296,6 @@ function attachEvents() {
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
   dom.ackObjectiveBtn.addEventListener("click", acknowledgeObjective);
   dom.ackRobotAlertBtn.addEventListener("click", acknowledgeRobotAlert);
-  dom.escapeBtn.addEventListener("click", handleEscape);
   dom.nightSelect.addEventListener("change", (event) => {
     const next = Number(event.target.value);
     setCurrentNight(next);
@@ -1396,7 +1394,6 @@ function updateUI() {
   updateScannerToggleButton();
   updateRoomActions();
   updatePanels();
-  updateEscapeButton();
   updateMap();
   ensureTravelAnimation();
   updateBuildButton();
@@ -2992,6 +2989,17 @@ function updateRoomActions() {
   const room = rooms[state.playerRoom];
   const actions = [];
   const blocked = state.objectiveBlocked || isActionLocked();
+  const canEscape = state.escapeReady && room.isExit && state.isAlive;
+
+  if (canEscape) {
+    actions.push({
+      label: "Escape",
+      onClick: () => handleEscape(),
+      disabled: blocked,
+      highlight: true,
+      className: "escape-button",
+    });
+  }
 
   if (state.hidden) {
     actions.push({
@@ -3182,6 +3190,9 @@ function updateRoomActions() {
     const label = document.createElement("span");
     label.textContent = action.label;
     button.appendChild(label);
+    if (action.className) {
+      button.classList.add(action.className);
+    }
     if (action.risk) {
       const risk = document.createElement("span");
       risk.textContent = action.risk;
@@ -3440,10 +3451,6 @@ function countInventory(item) {
   return count;
 }
 
-function updateEscapeButton() {
-  const canEscape = state.escapeReady && rooms[state.playerRoom].isExit && state.isAlive;
-  dom.escapeBtn.classList.toggle("hidden", !canEscape);
-}
 
 function updateTravelStatus() {
   const total = state.playerTravelTotal;
