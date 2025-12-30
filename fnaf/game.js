@@ -839,6 +839,8 @@ function initTitleScreen() {
     dom.titleVideo.addEventListener("canplay", attemptTitleVideoPlay);
   }
   if (dom.titleAudio) {
+    dom.titleAudio.loop = true;
+    dom.titleAudio.muted = true;
     dom.titleAudio.addEventListener("playing", handleTitleAudioPlaying);
     dom.titleAudio.addEventListener("canplay", attemptTitleAudioPlay);
   }
@@ -866,6 +868,9 @@ function handleTitleAudioPlaying() {
   if (!isTitleScreenActive()) return;
   syncTitleMediaPlayback();
   revealTitleVideo();
+  if (dom.titleAudio?.muted) {
+    requestTitleAudioUnlock();
+  }
   if (dom.titleVideo) {
     const playPromise = dom.titleVideo.play();
     if (playPromise) {
@@ -924,10 +929,97 @@ function requestTitleAudioUnlock() {
       titleAudioUnlockHandler = null;
     }
     if (!isTitleScreenActive()) return;
+    if (dom.titleAudio) {
+      dom.titleAudio.muted = false;
+    }
     attemptTitleAudioPlay();
   };
   window.addEventListener("pointerdown", titleAudioUnlockHandler, true);
   window.addEventListener("keydown", titleAudioUnlockHandler, true);
+}
+
+function ensureFxOverlay() {
+  if (!fxState.overlay) {
+    const overlay = document.createElement("div");
+    overlay.id = "fxOverlay";
+    document.body.appendChild(overlay);
+    fxState.overlay = overlay;
+  }
+  if (!fxState.warp) {
+    const warp = document.createElement("canvas");
+    warp.id = "fxWarp";
+    document.body.appendChild(warp);
+    fxState.warp = warp;
+    fxState.ctx = warp.getContext("2d");
+    resizeFxCanvas();
+    window.addEventListener("resize", resizeFxCanvas);
+  }
+}
+
+function resizeFxCanvas() {
+  if (!fxState.warp || !fxState.ctx) return;
+  const dpr = window.devicePixelRatio || 1;
+  fxState.warp.width = Math.floor(window.innerWidth * dpr);
+  fxState.warp.height = Math.floor(window.innerHeight * dpr);
+  fxState.warp.style.width = `${window.innerWidth}px`;
+  fxState.warp.style.height = `${window.innerHeight}px`;
+  fxState.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function startFxLoop() {
+  if (fxState.animationId) {
+    cancelAnimationFrame(fxState.animationId);
+  }
+  const loop = (now) => {
+    renderFxWarp(now);
+    fxState.animationId = requestAnimationFrame(loop);
+  };
+  fxState.animationId = requestAnimationFrame(loop);
+}
+
+function renderFxWarp(now) {
+  if (!fxState.ctx || !fxState.warp) return;
+  const level = fxState.level ?? 0;
+  const ctx = fxState.ctx;
+  ctx.clearRect(0, 0, fxState.warp.width, fxState.warp.height);
+  if (level <= 0.02) {
+    updateFxJitter(now);
+    return;
+  }
+  const width = fxState.warp.width;
+  const height = fxState.warp.height;
+  const lineCount = Math.floor(6 + level * 18);
+  ctx.globalAlpha = 0.08 + level * 0.2;
+  for (let i = 0; i < lineCount; i += 1) {
+    const y = Math.random() * height;
+    const lineWidth = 40 + Math.random() * 200;
+    const x = Math.random() * (width - lineWidth);
+    ctx.fillStyle = `rgba(120, 180, 255, ${0.06 + Math.random() * 0.12})`;
+    ctx.fillRect(x, y, lineWidth, 1 + Math.random() * 2);
+  }
+  updateFxJitter(now);
+}
+
+function updateFxJitter(now) {
+  if (!fxState.overlay) return;
+  if (!fxState.jitterEnabled) {
+    fxState.overlay.classList.remove("fx-jitter");
+    return;
+  }
+  if (now < fxState.nextJitterTime) return;
+  const intensity = 2 + fxState.level * 6;
+  const jitterX = (Math.random() - 0.5) * intensity;
+  const jitterY = (Math.random() - 0.5) * intensity;
+  fxState.overlay.style.setProperty("--fx-jitter-x", `${jitterX}px`);
+  fxState.overlay.style.setProperty("--fx-jitter-y", `${jitterY}px`);
+  fxState.overlay.classList.add("fx-jitter");
+  if (fxState.jitterTimeoutId) {
+    clearTimeout(fxState.jitterTimeoutId);
+  }
+  fxState.jitterTimeoutId = setTimeout(() => {
+    fxState.overlay?.classList.remove("fx-jitter");
+  }, 120);
+  fxState.nextJitterTime = now + 400 + Math.random() * 700;
 }
 
 function startGameFromTitle() {
