@@ -782,9 +782,27 @@ const dom = {
   nightSelect: document.getElementById("nightSelect"),
 };
 
+const fxState = {
+  overlay: null,
+  warp: null,
+  ctx: null,
+  animationId: null,
+  jitterTimeoutId: null,
+  jitterEnabled: false,
+  nextJitterTime: 0,
+  level: 0,
+};
+
 let gameLoopId = null;
 let hasStartedGame = false;
 let titleAudioUnlockRequested = false;
+let titleAudioUnlockHandler = null;
+
+function isTitleScreenActive() {
+  return Boolean(dom.titleScreen) &&
+    dom.titleScreen.getAttribute("aria-hidden") !== "true" &&
+    !hasStartedGame;
+}
 
 function init() {
   state.nightProfile = getNightProfile();
@@ -802,23 +820,33 @@ function init() {
   showObjectiveModal(getInitialObjectiveModalText());
 }
 
+function initHorrorFX() {
+  ensureFxOverlay();
+  startFxLoop();
+  updateHorrorFX();
+}
+
 function initTitleScreen() {
   if (!dom.titleScreen || !dom.titleStartBtn) {
+    initHorrorFX();
     init();
     return;
   }
   dom.titleStartBtn.addEventListener("click", startGameFromTitle);
   if (dom.titleVideo) {
     dom.titleVideo.addEventListener("playing", handleTitleVideoPlaying);
+    dom.titleVideo.addEventListener("loadeddata", handleTitleVideoPlaying);
+    dom.titleVideo.addEventListener("canplay", attemptTitleVideoPlay);
   }
   if (dom.titleAudio) {
     dom.titleAudio.addEventListener("playing", handleTitleAudioPlaying);
+    dom.titleAudio.addEventListener("canplay", attemptTitleAudioPlay);
   }
   attemptTitleAudioPlay();
 }
 
 function attemptTitleAudioPlay() {
-  if (!dom.titleAudio) return;
+  if (!dom.titleAudio || !isTitleScreenActive()) return;
   const playPromise = dom.titleAudio.play();
   if (!playPromise) {
     handleTitleAudioPlaying();
@@ -835,7 +863,7 @@ function attemptTitleAudioPlay() {
 }
 
 function handleTitleAudioPlaying() {
-  if (!dom.titleScreen) return;
+  if (!isTitleScreenActive()) return;
   revealTitleVideo();
   if (dom.titleVideo) {
     const playPromise = dom.titleVideo.play();
@@ -846,6 +874,7 @@ function handleTitleAudioPlaying() {
 }
 
 function handleTitleVideoPlaying() {
+  if (!isTitleScreenActive()) return;
   revealTitleVideo();
 }
 
@@ -857,19 +886,29 @@ function revealTitleVideo() {
 function requestTitleAudioUnlock() {
   if (titleAudioUnlockRequested) return;
   titleAudioUnlockRequested = true;
-  const unlock = () => {
+  titleAudioUnlockHandler = () => {
     titleAudioUnlockRequested = false;
-    window.removeEventListener("pointerdown", unlock, true);
-    window.removeEventListener("keydown", unlock, true);
+    if (titleAudioUnlockHandler) {
+      window.removeEventListener("pointerdown", titleAudioUnlockHandler, true);
+      window.removeEventListener("keydown", titleAudioUnlockHandler, true);
+      titleAudioUnlockHandler = null;
+    }
+    if (!isTitleScreenActive()) return;
     attemptTitleAudioPlay();
   };
-  window.addEventListener("pointerdown", unlock, true);
-  window.addEventListener("keydown", unlock, true);
+  window.addEventListener("pointerdown", titleAudioUnlockHandler, true);
+  window.addEventListener("keydown", titleAudioUnlockHandler, true);
 }
 
 function startGameFromTitle() {
   if (hasStartedGame) return;
   hasStartedGame = true;
+  if (titleAudioUnlockHandler) {
+    window.removeEventListener("pointerdown", titleAudioUnlockHandler, true);
+    window.removeEventListener("keydown", titleAudioUnlockHandler, true);
+    titleAudioUnlockHandler = null;
+    titleAudioUnlockRequested = false;
+  }
   if (dom.titleAudio) {
     dom.titleAudio.pause();
     dom.titleAudio.currentTime = 0;
@@ -882,6 +921,7 @@ function startGameFromTitle() {
     dom.titleScreen.setAttribute("aria-hidden", "true");
   }
   setCurrentNight(1);
+  initHorrorFX();
   init();
 }
 
@@ -1041,6 +1081,38 @@ function updateUI() {
     dom.debugBtn.disabled = controlBlocked;
   }
   updateDebugUI();
+}
+
+function getFxLevel() {
+  if (state.currentNight < 4) {
+    return 0;
+  }
+  return clamp(1 - state.sanity, 0, 1);
+}
+
+function updateHorrorFX() {
+  if (!fxState.overlay) {
+    ensureFxOverlay();
+  }
+  const fx = getFxLevel();
+  const earlyNight = state.currentNight < 4;
+  fxState.level = fx;
+  const root = document.documentElement;
+  const grain = earlyNight ? 0.08 : 0.08 + fx * 0.18;
+  const lines = earlyNight ? 0 : fx * 0.22;
+  const vignette = earlyNight ? 0 : 0.1 + fx * 0.35;
+  root.style.setProperty("--fx", fx.toFixed(3));
+  root.style.setProperty("--fx-grain", grain.toFixed(3));
+  root.style.setProperty("--fx-lines", lines.toFixed(3));
+  root.style.setProperty("--fx-vignette", vignette.toFixed(3));
+  const frayed = state.currentNight >= 4 && state.sanity < 0.4;
+  const critical = state.currentNight >= 4 && state.sanity < 0.2;
+  document.body.classList.toggle("fx-frayed", frayed);
+  document.body.classList.toggle("fx-critical", critical);
+  fxState.jitterEnabled = frayed;
+  if (fxState.warp) {
+    fxState.warp.style.opacity = earlyNight ? "0" : String(0.04 + fx * 0.2);
+  }
 }
 
 function ensureTravelAnimation() {
@@ -5374,6 +5446,7 @@ function startGameLoop() {
     if (state.caitCooldown > 0) {
       state.caitCooldown -= 1;
     }
+    updateHorrorFX();
     if (state.hidden) {
       state.hiddenTurns += 1;
     } else {
