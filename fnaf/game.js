@@ -197,6 +197,7 @@ let roomConnections = {
 const TICK_MS = 1200;
 const DEBUG_AI = false;
 const DEBUG_UI = true;
+const DEBUG_ALWAYS_VISIBLE = true;
 const REWIRE_DAMPEN_TURNS = 3;
 const REWIRE_DAMPEN_DECAY = 0.05;
 const REWIRE_DAMPEN_CURRENT = 0.18;
@@ -722,6 +723,7 @@ const ACTION_LOCK_MS = 1200;
 
 const dom = {
   audioGate: document.getElementById("audioGate"),
+  audioGateBtn: document.getElementById("audioGateBtn"),
   titleScreen: document.getElementById("titleScreen"),
   titleVideo: document.getElementById("titleVideo"),
   titleAudio: document.getElementById("titleAudio"),
@@ -991,6 +993,7 @@ function init() {
   updatePlayerTrail(state.playerRoom);
   updateUI();
   attachEvents();
+  setupDebugPanel();
   startGameLoop();
   showObjectiveModal(getInitialObjectiveModalText());
 }
@@ -1013,9 +1016,11 @@ function initTitleScreen() {
   }
   if (dom.audioGate) {
     dom.audioGate.setAttribute("aria-hidden", "false");
-    dom.audioGate.addEventListener("pointerdown", handleAudioGateGesture, true);
-    dom.audioGate.addEventListener("keydown", handleAudioGateGesture, true);
-    dom.audioGate.focus({ preventScroll: true });
+    dom.audioGate.addEventListener("click", handleAudioGateGesture, true);
+  }
+  if (dom.audioGateBtn) {
+    dom.audioGateBtn.addEventListener("click", handleAudioGateGesture, true);
+    dom.audioGateBtn.focus({ preventScroll: true });
   }
   dom.titleStartBtn.addEventListener("click", startGameFromTitle);
   dom.titleStartBtn.disabled = true;
@@ -1030,7 +1035,7 @@ function initTitleScreen() {
   }
 }
 
-async function handleAudioGateGesture(event) {
+function handleAudioGateGesture(event) {
   if (titleAudioUnlocked) return;
   if (!event || !event.isTrusted) return;
   if (event.type === "keydown") {
@@ -1040,9 +1045,11 @@ async function handleAudioGateGesture(event) {
   }
   titleAudioUnlocked = true;
   if (dom.audioGate) {
-    dom.audioGate.removeEventListener("pointerdown", handleAudioGateGesture, true);
-    dom.audioGate.removeEventListener("keydown", handleAudioGateGesture, true);
+    dom.audioGate.removeEventListener("click", handleAudioGateGesture, true);
     dom.audioGate.setAttribute("aria-hidden", "true");
+  }
+  if (dom.audioGateBtn) {
+    dom.audioGateBtn.removeEventListener("click", handleAudioGateGesture, true);
   }
   if (dom.titleStartBtn) {
     dom.titleStartBtn.disabled = false;
@@ -1065,18 +1072,20 @@ async function handleAudioGateGesture(event) {
 
   if (!isTitleScreenActive()) return;
   if (audioEl) {
-    try {
-      await audioEl.play();
-    } catch (err) {
-      console.warn("title audio play() failed:", err);
-      console.log("titleAudio currentSrc:", audioEl.currentSrc, "readyState:", audioEl.readyState);
+    const playAttempt = audioEl.play();
+    if (playAttempt && typeof playAttempt.catch === "function") {
+      playAttempt.catch((err) => {
+        console.warn("title audio play() failed:", err);
+        console.log("titleAudio currentSrc:", audioEl.currentSrc, "readyState:", audioEl.readyState);
+      });
     }
   }
   if (videoEl) {
-    try {
-      await videoEl.play();
-    } catch (err) {
-      console.warn("title video play() failed:", err);
+    const playAttempt = videoEl.play();
+    if (playAttempt && typeof playAttempt.catch === "function") {
+      playAttempt.catch((err) => {
+        console.warn("title video play() failed:", err);
+      });
     }
   }
   if (audioReady && typeof audioReady.then === "function") {
@@ -1103,6 +1112,17 @@ function startTitleSyncLoop() {
     titleSyncAnimationId = requestAnimationFrame(loop);
   };
   titleSyncAnimationId = requestAnimationFrame(loop);
+}
+
+function isDebugPanelPersistent() {
+  return DEBUG_ALWAYS_VISIBLE;
+}
+
+function setupDebugPanel() {
+  if (!dom.debugPanel) return;
+  if (!isDebugPanelPersistent()) return;
+  dom.debugPanel.classList.add("debug-docked");
+  openPanel(dom.debugPanel);
 }
 
 function stopTitleSyncLoop() {
@@ -1266,6 +1286,7 @@ function attachEvents() {
   });
   dom.debugPanel.addEventListener("click", (event) => {
     if (event.target === dom.debugPanel) {
+      if (isDebugPanelPersistent()) return;
       closeDebug();
     }
   });
@@ -2655,11 +2676,22 @@ function closePanel(panel) {
 
 function closePanels() {
   [dom.menuPanel, dom.mapPanel, dom.usePanel, dom.debugPanel, dom.componentPanel, dom.tasksPanel]
-    .forEach((panel) => closePanel(panel));
+    .forEach((panel) => {
+      if (!panel) return;
+      if (panel === dom.debugPanel && isDebugPanelPersistent()) {
+        openPanel(panel);
+        return;
+      }
+      closePanel(panel);
+    });
 }
 
 function togglePanel(panel) {
   if (state.objectiveBlocked || isActionLocked()) return;
+  if (panel === dom.debugPanel && isDebugPanelPersistent()) {
+    openPanel(panel);
+    return;
+  }
   const shouldOpen = !panel.classList.contains("active");
   closePanels();
   if (shouldOpen) {
@@ -2706,6 +2738,7 @@ function openDebug() {
 }
 
 function closeDebug() {
+  if (isDebugPanelPersistent()) return;
   closePanel(dom.debugPanel);
 }
 
