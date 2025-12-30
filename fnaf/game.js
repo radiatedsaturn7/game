@@ -717,6 +717,10 @@ const state = {
   robotLastRoom: null,
   permaJammedEdges: new Set(),
   lastNightSpawnedParts: new Set(),
+  introStep: null,
+  introSequenceActive: false,
+  startRevealPending: false,
+  introEscapeVisited: false,
 };
 
 let travelAnimationId = null;
@@ -1279,7 +1283,12 @@ function startGameFromTitle() {
   stopTitleSyncLoop();
   if (dom.titleScreen) {
     dom.titleScreen.classList.add("title-fade-out");
+    dom.titleScreen.setAttribute("aria-hidden", "true");
   }
+  state.startRevealPending = true;
+  state.introSequenceActive = true;
+  state.introStep = "intro-modal";
+  state.introEscapeVisited = false;
   setCurrentNight(1);
   initHorrorFX();
   init();
@@ -1297,7 +1306,7 @@ function startGameFromTitle() {
       dom.titleScreen.setAttribute("aria-hidden", "true");
     }
     document.body.classList.remove("title-active");
-    if (dom.app) {
+    if (dom.app && !state.startRevealPending) {
       dom.app.classList.remove("is-hidden");
     }
   };
@@ -1454,6 +1463,7 @@ function updateUI() {
   }
   if (dom.liveBtn) {
     dom.liveBtn.disabled = controlBlocked;
+    dom.liveBtn.classList.toggle("objective-highlight", state.introStep === "highlight-live");
   }
   if (dom.debugBtn) {
     dom.debugBtn.disabled = controlBlocked;
@@ -1652,6 +1662,7 @@ function updateMoveButtons() {
   dom.goBtn.disabled = blocked;
   dom.runBtn.disabled = blocked;
   dom.cancelBtn.disabled = !isMoving;
+  dom.runBtn.classList.toggle("objective-highlight", state.introStep === "highlight-run");
 }
 
 function setButtonLabel(button, text, risk) {
@@ -2775,6 +2786,10 @@ function returnToRoom() {
   closePanels();
   clearMapTarget();
   state.routePreviewRoom = null;
+  if (state.introStep === "highlight-live") {
+    state.introStep = "complete";
+    state.introSequenceActive = false;
+  }
   clearSelectedRoom();
 }
 
@@ -2845,6 +2860,9 @@ function acknowledgeObjective() {
   dom.objectiveModal.classList.remove("active");
   dom.objectiveModal.setAttribute("aria-hidden", "true");
   state.objectiveBlocked = false;
+  if (state.startRevealPending && state.introStep === "intro-modal") {
+    revealIntroMap();
+  }
   flushPendingModals();
 }
 
@@ -3940,6 +3958,9 @@ function getMapTargetCandidatesForBlowtorch() {
 }
 
 function handleMapSelection(roomId) {
+  if (state.introStep === "highlight-escape" && rooms[roomId].isExit) {
+    state.introStep = "highlight-run";
+  }
   if (state.mapTargetMode) {
     const targets = getMapTargetCandidates();
     if (!targets || !targets.has(roomId)) return;
@@ -4737,6 +4758,10 @@ function resetGame({ preserveItems = false } = {}) {
   state.mapTargetSelection = null;
   state.unlocks = getUnlocks();
   state.permaJammedEdges = new Set();
+  state.introStep = null;
+  state.introSequenceActive = false;
+  state.startRevealPending = false;
+  state.introEscapeVisited = false;
   if (!preserveItems) {
     state.lastNightSpawnedParts = new Set();
   }
@@ -5481,6 +5506,10 @@ function updateMap() {
     }
     node.classList.toggle("active", roomId === state.playerRoom);
     node.classList.toggle(
+      "intro-escape-target",
+      state.introStep === "highlight-escape" && rooms[roomId].isExit
+    );
+    node.classList.toggle(
       "alert",
       roomId === state.playerRoom &&
         roomId === state.robotRoom &&
@@ -5557,6 +5586,16 @@ function updateMap() {
   });
 
   updateRouteInfo();
+}
+
+function revealIntroMap() {
+  state.startRevealPending = false;
+  state.introStep = "highlight-escape";
+  if (dom.app) {
+    dom.app.classList.remove("is-hidden");
+  }
+  openMap();
+  updateUI();
 }
 
 function getRoomPressure(roomId) {
@@ -6244,6 +6283,10 @@ function tickPlayerTravel() {
   state.hidden = false;
   state.hiddenSpot = null;
   state.hiddenTurns = 0;
+  if (state.introStep === "highlight-run" && rooms[nextRoom].isExit && !state.introEscapeVisited) {
+    state.introEscapeVisited = true;
+    state.introStep = "highlight-live";
+  }
   updatePlayerTrail(nextRoom);
   const profile = getNightProfile();
   const effects = getPassiveEffects();
