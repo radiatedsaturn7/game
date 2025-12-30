@@ -5667,6 +5667,8 @@ function updateMap() {
     if (poi) {
       const room = rooms[roomId];
       const discoveriesEnabled = state.escapeConsoleInspected;
+      const isExit = Boolean(room.isExit);
+      const canShowDiscoveries = discoveriesEnabled || isExit;
       const hasItem = discoveriesEnabled && Boolean(room.item) && !state.inventory.has(room.item);
       const allowSchematicMarkers = state.unlocks.allowCrafting ||
         state.missionType === MISSION_TYPES.DATA ||
@@ -5675,22 +5677,24 @@ function updateMap() {
         allowSchematicMarkers &&
         Boolean(room.schematic) &&
         !state.foundSchematics.has(room.schematic);
-      const isExit = Boolean(room.isExit);
       let marker = "";
-      if (isExit) {
-        marker = "⎋";
-      } else if (hasSchematic) {
-        marker = "◇";
-      } else if (hasItem) {
-        marker = "●";
+      if (canShowDiscoveries) {
+        if (isExit) {
+          marker = "⎋";
+        } else if (hasSchematic) {
+          marker = "◇";
+        } else if (hasItem) {
+          marker = "●";
+        }
       }
       poi.textContent = marker;
       poi.classList.toggle("poi-item", hasItem && !isExit && !hasSchematic);
       poi.classList.toggle("poi-schematic", hasSchematic && !isExit);
       poi.classList.toggle("poi-exit", isExit);
-      const allowBlink = !state.objectiveBlocked;
+      const allowBlink = !state.objectiveBlocked && canShowDiscoveries;
       const isIntroEscapeHighlight = state.introStep === "highlight-escape";
-      let shouldBlink = allowBlink && (hasItem || hasSchematic || (isExit && state.escapeReady));
+      let shouldBlink = allowBlink &&
+        (isExit ? state.escapeReady : (hasItem || hasSchematic));
       if (isIntroEscapeHighlight) {
         shouldBlink = isExit;
       }
