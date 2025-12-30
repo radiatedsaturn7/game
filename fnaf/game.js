@@ -1030,8 +1030,14 @@ function initTitleScreen() {
   }
 }
 
-async function handleAudioGateGesture() {
+async function handleAudioGateGesture(event) {
   if (titleAudioUnlocked) return;
+  if (!event || !event.isTrusted) return;
+  if (event.type === "keydown") {
+    const allowedKeys = new Set(["Enter", " ", "Spacebar"]);
+    if (!allowedKeys.has(event.key)) return;
+    event.preventDefault();
+  }
   titleAudioUnlocked = true;
   if (dom.audioGate) {
     dom.audioGate.removeEventListener("pointerdown", handleAudioGateGesture, true);
