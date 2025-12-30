@@ -15,14 +15,38 @@
     </div>
   </div>
   <div id="titleScreen" class="title-screen" aria-hidden="false">
-    <video id="titleVideo" class="title-video" preload="auto" playsinline muted loop>
-      <source src="title-screen.mp4" type="video/mp4" />
-    </video>
+    <div class="title-video-stack" aria-hidden="true">
+      <video
+        id="titleVideoBackdrop"
+        class="title-video title-video-backdrop"
+        preload="auto"
+        playsinline
+        muted
+        autoplay
+        loop
+        poster="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1600' height='900'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0%25' stop-color='%230d1116'/><stop offset='60%25' stop-color='%23020306'/></linearGradient></defs><rect width='100%25' height='100%25' fill='%23020306'/><rect width='100%25' height='100%25' fill='url(%23g)'/></svg>"
+      >
+        <source src="title-screen.mp4" type="video/mp4" />
+      </video>
+      <video
+        id="titleVideo"
+        class="title-video title-video-foreground"
+        preload="auto"
+        playsinline
+        muted
+        autoplay
+        loop
+        poster="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1600' height='900'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0%25' stop-color='%230d1116'/><stop offset='60%25' stop-color='%23020306'/></linearGradient></defs><rect width='100%25' height='100%25' fill='%23020306'/><rect width='100%25' height='100%25' fill='url(%23g)'/></svg>"
+      >
+        <source src="title-screen.mp4" type="video/mp4" />
+      </video>
+      <div class="title-vignette"></div>
+    </div>
     <audio id="titleAudio" preload="auto">
       <source src="title-screen.mp3" type="audio/mpeg" />
     </audio>
     <div class="title-content">
-      <button id="titleStartBtn" class="primary title-start">Start</button>
+      <button id="titleStartBtn" class="title-start">Start</button>
     </div>
   </div>
   <div class="app">

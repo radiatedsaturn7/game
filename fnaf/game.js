@@ -727,9 +727,12 @@ const dom = {
   audioGate: document.getElementById("audioGate"),
   audioGateBtn: document.getElementById("audioGateBtn"),
   titleScreen: document.getElementById("titleScreen"),
+  titleVideoBackdrop: document.getElementById("titleVideoBackdrop"),
   titleVideo: document.getElementById("titleVideo"),
+  titleVideos: document.querySelectorAll(".title-video"),
   titleAudio: document.getElementById("titleAudio"),
   titleStartBtn: document.getElementById("titleStartBtn"),
+  app: document.querySelector(".app"),
   dateLabel: document.getElementById("dateLabel"),
   roomMedia: document.getElementById("roomMedia"),
   currentRooms: document.querySelectorAll(".current-room"),
@@ -802,6 +805,7 @@ let gameLoopId = null;
 let hasStartedGame = false;
 let titleAudioUnlocked = false;
 let titleSyncAnimationId = null;
+const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
 const debugLogBuffer = [];
 
 function formatConsoleArg(arg) {
@@ -1012,6 +1016,10 @@ function initTitleScreen() {
     init();
     return;
   }
+  document.body.classList.add("title-active");
+  if (dom.app) {
+    dom.app.classList.add("is-hidden");
+  }
   if (dom.titleScreen) {
     dom.titleScreen.classList.remove("title-video-visible");
     dom.titleScreen.classList.remove("title-fade-out");
@@ -1031,10 +1039,14 @@ function initTitleScreen() {
   dom.titleStartBtn.addEventListener("click", startGameFromTitle);
   dom.titleStartBtn.disabled = true;
   dom.titleStartBtn.classList.add("is-locked");
-  if (dom.titleVideo) {
-    dom.titleVideo.muted = true;
-    dom.titleVideo.loop = true;
-  }
+  dom.titleVideos.forEach((video) => {
+    video.muted = true;
+    video.loop = true;
+    video.autoplay = !prefersReducedMotion;
+    if (prefersReducedMotion) {
+      video.pause();
+    }
+  });
   if (dom.titleAudio) {
     dom.titleAudio.loop = true;
     dom.titleAudio.muted = true;
@@ -1063,17 +1075,18 @@ function handleAudioGateGesture(event) {
   }
   const audioEl = dom.titleAudio;
   const videoEl = dom.titleVideo;
+  const videoEls = dom.titleVideos;
   if (audioEl) {
     audioEl.loop = true;
     audioEl.muted = false;
     audioEl.volume = 1;
     audioEl.currentTime = 0;
   }
-  if (videoEl) {
-    videoEl.muted = true;
-    videoEl.loop = true;
-    videoEl.currentTime = 0;
-  }
+  videoEls.forEach((video) => {
+    video.muted = true;
+    video.loop = true;
+    video.currentTime = 0;
+  });
   const audioReady = AudioManager.init();
 
   if (!isTitleScreenActive()) return;
@@ -1086,13 +1099,19 @@ function handleAudioGateGesture(event) {
       });
     }
   }
-  if (videoEl) {
-    const playAttempt = videoEl.play();
-    if (playAttempt && typeof playAttempt.catch === "function") {
-      playAttempt.catch((err) => {
-        console.warn("title video play() failed:", err);
-      });
-    }
+  if (!prefersReducedMotion) {
+    videoEls.forEach((video) => {
+      const playAttempt = video.play();
+      if (playAttempt && typeof playAttempt.catch === "function") {
+        playAttempt.catch((err) => {
+          console.warn("title video play() failed:", err);
+        });
+      }
+    });
+  } else {
+    videoEls.forEach((video) => {
+      video.pause();
+    });
   }
   if (audioReady && typeof audioReady.then === "function") {
     audioReady.then(() => AudioManager.unlock());
@@ -1142,7 +1161,9 @@ function syncTitleMediaPlayback() {
   if (dom.titleAudio.paused || dom.titleVideo.paused) return;
   const drift = Math.abs(dom.titleVideo.currentTime - dom.titleAudio.currentTime);
   if (drift > 0.1) {
-    dom.titleVideo.currentTime = dom.titleAudio.currentTime;
+    dom.titleVideos.forEach((video) => {
+      video.currentTime = dom.titleAudio.currentTime;
+    });
   }
 }
 
@@ -1257,22 +1278,26 @@ function startGameFromTitle() {
   if (dom.titleScreen) {
     dom.titleScreen.classList.add("title-fade-out");
   }
+  setCurrentNight(1);
+  initHorrorFX();
+  init();
   const finishStart = () => {
     if (dom.titleAudio) {
       dom.titleAudio.pause();
       dom.titleAudio.currentTime = 0;
       dom.titleAudio.volume = 1;
     }
-    if (dom.titleVideo) {
-      dom.titleVideo.pause();
-      dom.titleVideo.currentTime = 0;
-    }
+    dom.titleVideos.forEach((video) => {
+      video.pause();
+      video.currentTime = 0;
+    });
     if (dom.titleScreen) {
       dom.titleScreen.setAttribute("aria-hidden", "true");
     }
-    setCurrentNight(1);
-    initHorrorFX();
-    init();
+    document.body.classList.remove("title-active");
+    if (dom.app) {
+      dom.app.classList.remove("is-hidden");
+    }
   };
   fadeOutTitleAudio(TITLE_FADE_OUT_MS).finally(finishStart);
 }

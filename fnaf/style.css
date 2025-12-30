@@ -40,6 +40,10 @@ body {
   background-attachment: fixed;
 }
 
+body.title-active {
+  overflow: hidden;
+}
+
 :root {
   --fx: 0;
   --fx-grain: 0.08;
@@ -150,22 +154,8 @@ body.fx-critical .map-node text {
   transition: opacity 5s ease;
 }
 
-.title-screen::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 35%, rgba(8, 8, 10, 0.2), rgba(0, 0, 0, 0.95) 70%);
-  opacity: 1;
-  transition: opacity 5s ease;
-  pointer-events: none;
-}
-
 .title-screen.title-visible {
   opacity: 1;
-}
-
-.title-screen.title-visible::after {
-  opacity: 0;
 }
 
 .audio-gate {
@@ -248,8 +238,12 @@ body.fx-critical .map-node text {
   opacity: 0;
 }
 
-.title-screen.title-fade-out::after {
-  opacity: 1;
+.title-video-stack {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 .title-video {
@@ -257,21 +251,40 @@ body.fx-critical .map-node text {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
   background: #000;
   opacity: 0;
   transition: opacity 5s ease;
+}
+
+.title-video-backdrop {
+  object-fit: cover;
+  filter: blur(12px) brightness(0.6);
+  transform: scale(1.1);
+}
+
+.title-video-foreground {
+  object-fit: contain;
+  object-position: center;
 }
 
 .title-screen.title-video-visible .title-video {
   opacity: 1;
 }
 
+.title-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0) 45%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0) 45%);
+  pointer-events: none;
+}
+
 .title-content {
   position: relative;
   z-index: 2;
   width: min(720px, 100%);
-  padding: 72px 24px 48px;
+  padding: 72px 24px calc(48px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -302,19 +315,41 @@ body.fx-critical .map-node text {
 }
 
 .title-start {
-  align-self: stretch;
+  align-self: center;
   max-width: 320px;
+  width: min(320px, 100%);
   margin-top: auto;
-  padding: 14px 18px;
+  padding: 14px 28px;
   font-size: 1rem;
+  font-weight: 600;
   border-radius: 999px;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
+  background: #f2c94c;
+  color: #1a1a1a;
+  box-shadow: 0 0 18px rgba(242, 201, 76, 0.35);
+  transition: transform 0.15s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .title-start.is-locked {
   opacity: 0;
   pointer-events: none;
+}
+
+.title-start:hover,
+.title-start:focus-visible {
+  background: #e6b93d;
+  box-shadow: 0 0 22px rgba(242, 201, 76, 0.45);
+}
+
+.title-start:active {
+  background: #d9a928;
+  transform: scale(0.97);
+}
+
+.title-start:focus-visible {
+  outline: 2px solid rgba(242, 201, 76, 0.9);
+  outline-offset: 4px;
 }
 
 .app {
@@ -324,6 +359,11 @@ body.fx-critical .map-node text {
   display: flex;
   flex-direction: column;
   gap: 32px;
+}
+
+.app.is-hidden {
+  opacity: 0;
+  visibility: hidden;
 }
 
 header {
@@ -1481,15 +1521,19 @@ button.primary {
 }
 
 @media (orientation: portrait) {
-  .title-video {
-    object-fit: contain;
-  }
-
   .title-content {
-    padding: 48px 20px 32px;
+    padding: 48px 20px calc(32px + env(safe-area-inset-bottom));
   }
 
   .title-start {
     max-width: 260px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-video {
+    animation: none;
   }
 }
