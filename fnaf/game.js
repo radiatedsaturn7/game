@@ -197,6 +197,11 @@ let roomConnections = {
 const TICK_MS = 1200;
 const DEBUG_AI = false;
 const DEBUG_UI = true;
+const REWIRE_DAMPEN_TURNS = 3;
+const REWIRE_DAMPEN_DECAY = 0.05;
+const REWIRE_DAMPEN_CURRENT = 0.18;
+const REWIRE_DAMPEN_ADJACENT = 0.1;
+const REWIRE_SIGNAL_STRENGTH = 0.06;
 
 const NIGHT_UNLOCKS = {
   1: {
@@ -650,6 +655,7 @@ const state = {
   bannerTicks: 0,
   playerTrail: [],
   signalDecayBoost: new Map(),
+  rewireDampen: new Map(),
   lastStrongSignalTick: -999,
   lastStrongSignalRoom: null,
   lastKnownTick: -999,
@@ -1730,6 +1736,16 @@ I wanted to tell you sooner, but the husks were all around me.
 I can see more frames going up.
 You need to get out.`;
   }
+
+  if (!state.nightIntroLine && state.currentNight === 3) {
+    state.nightIntroLine = `Cait: Geist… what did you do to piss them off?
+They’re everywhere.
+Building like it’s the only thing they’ve ever loved.`;
+    state.pendingObjectiveModal = `Cait: I can’t talk long. It’s still too dangerous out here.
+But listen— they’ve started installing alarms inside the rooms.
+If you find one, kill it. Shut it down.
+…Shit. I have to move.`;
+  }
 }
 
 function isGraphConnectedWithEdgeBlocked(blockedEdges) {
@@ -2332,6 +2348,15 @@ function showObjectiveModal(text) {
   state.objectiveBlocked = true;
 }
 
+function queueObjectiveModal(text) {
+  if (!text) return;
+  if (state.objectiveBlocked || isActionLocked()) {
+    state.pendingObjectiveModal = text;
+    return;
+  }
+  showObjectiveModal(text);
+}
+
 function acknowledgeObjective() {
   dom.objectiveModal.classList.remove("active");
   dom.objectiveModal.setAttribute("aria-hidden", "true");
@@ -2799,6 +2824,17 @@ function updateEscapeReadiness() {
   }
 }
 
+function applyRewireDampen(roomId, amount) {
+  const current = state.roomSignals.get(roomId) || 0;
+  const next = Math.max(0, current - amount);
+  if (next === 0) {
+    state.roomSignals.delete(roomId);
+  } else {
+    state.roomSignals.set(roomId, next);
+  }
+  state.rewireDampen.set(roomId, REWIRE_DAMPEN_TURNS);
+}
+
 function slowRewire() {
   if (!hasPart("Resistors") && !hasPart("Capacitors")) return;
   runLockedAction({
@@ -2806,14 +2842,15 @@ function slowRewire() {
     steps: 1,
     onStep: () => {
       pulseActionSignal(state.playerRoom, "quiet");
-      const current = state.roomSignals.get(state.playerRoom) || 0;
-      state.roomSignals.set(state.playerRoom, Math.max(0, current - 0.2));
-      state.signalDecayBoost.set(
-        state.playerRoom,
-        Math.max(state.signalDecayBoost.get(state.playerRoom) || 0, 0.08)
-      );
+      const roomId = state.playerRoom;
+      const neighbors = roomConnections[roomId] || [];
+      const dampenRooms = new Set([roomId, ...neighbors]);
+      dampenRooms.forEach((target) => {
+        const amount = target === roomId ? REWIRE_DAMPEN_CURRENT : REWIRE_DAMPEN_ADJACENT;
+        applyRewireDampen(target, amount);
+      });
       const profile = getNightProfile();
-      registerSignal(state.playerRoom, 0.08 * profile.signalStrength.sneak, {
+      registerSignal(roomId, REWIRE_SIGNAL_STRENGTH * profile.signalStrength.sneak, {
         type: "rewire",
         lastKnownChance: 0.1,
       });
@@ -3008,6 +3045,13 @@ function revealEscapeSchematic() {
     showObjectiveModal("Cait: Stabilize the core systems.");
   } else {
     showObjectiveModal("Cait: Recover the data fragments.");
+  }
+  if (state.currentNight === 3) {
+    queueObjectiveModal(`Cait: I’ve got a minute— that’s it.
+I’m going to teach you a trick.
+If you rewire a room slow and careful, you can flood their feeds with static.
+It won’t hide you.
+But it can make you harder to pin down— for a moment.`);
   }
   if (state.unlocks.robotActive) {
     state.robotDisabled = false;
@@ -3962,7 +4006,10 @@ function advanceNight() {
   state.unlocks = getUnlocks();
   const prevUnlocks = getUnlocksForNight(previousNight);
   const nextUnlocks = getUnlocksForNight(state.currentNight);
-  const messages = listNewUnlockMessages(prevUnlocks, nextUnlocks);
+  let messages = listNewUnlockMessages(prevUnlocks, nextUnlocks);
+  if (state.currentNight === 3) {
+    messages = [];
+  }
   state.skipNextObjectiveModal = messages.length > 0;
   resetGame({ preserveItems: true });
   if (messages.length > 0) {
@@ -4060,6 +4107,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.robotAlertText = "";
   state.playerTrail = [state.playerRoom];
   state.signalDecayBoost.clear();
+  state.rewireDampen.clear();
   state.lastStrongSignalTick = -999;
   state.lastStrongSignalRoom = null;
   state.lastKnownTick = -999;
@@ -4238,9 +4286,14 @@ function decaySignals() {
   const weatherMods = getWeatherModifiers();
   state.roomSignals.forEach((value, roomId) => {
     const boost = state.signalDecayBoost.get(roomId) || 0;
+    const dampen = state.rewireDampen.get(roomId) || 0;
+    const dampenDecay = dampen > 0 ? REWIRE_DAMPEN_DECAY : 0;
     const next = Math.max(
       0,
-      value - profile.signalDecay * (weatherMods.signalDecay ?? 1) - boost * profile.confidenceDecay
+      value -
+        profile.signalDecay * (weatherMods.signalDecay ?? 1) -
+        boost * profile.confidenceDecay -
+        dampenDecay
     );
     if (boost > 0) {
       const nextBoost = Math.max(0, boost - 0.02);
@@ -4259,6 +4312,18 @@ function decaySignals() {
       applyRobotPause("lost");
       setRobotMood("cautious", 4);
       maybeStartRobotTask("lost");
+    }
+  });
+}
+
+function tickRewireDampen() {
+  if (state.rewireDampen.size === 0) return;
+  state.rewireDampen.forEach((turns, roomId) => {
+    const next = turns - 1;
+    if (next <= 0) {
+      state.rewireDampen.delete(roomId);
+    } else {
+      state.rewireDampen.set(roomId, next);
     }
   });
 }
@@ -5351,6 +5416,7 @@ function startGameLoop() {
     tickPowerSurge();
     tickPersistentSignals();
     decaySignals();
+    tickRewireDampen();
     tickJammedEdges();
     maybeExpireLastKnown();
     advanceRobot();
