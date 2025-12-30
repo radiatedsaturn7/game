@@ -1010,6 +1010,12 @@ main {
   stroke-width: 3;
 }
 
+.map-node.intro-escape-target circle {
+  stroke: rgba(107, 255, 159, 0.95);
+  stroke-width: 3.4;
+  filter: drop-shadow(0 0 8px rgba(107, 255, 159, 0.55));
+}
+
 .map-node.adjacent circle {
   stroke: rgba(140, 169, 255, 0.9);
 }
