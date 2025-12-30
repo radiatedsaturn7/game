@@ -4,9 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Robtergeist</title>
-  <link rel="stylesheet" href="style.css?v=6" />
+  <link rel="stylesheet" href="style.css?v=7" />
 </head>
 <body>
+  <div id="audioGate" class="audio-gate" aria-hidden="false" tabindex="0">
+    <div class="audio-gate-card">
+      <h1>Robtergeist</h1>
+      <p>This game requires audio enabled.</p>
+      <p><strong>Press to enable audio.</strong></p>
+    </div>
+  </div>
   <div id="titleScreen" class="title-screen" aria-hidden="false">
     <video id="titleVideo" class="title-video" preload="auto" playsinline muted loop>
       <source src="title-screen.mp4" type="video/mp4" />
@@ -221,6 +228,6 @@
     </div>
   </div>
 
-  <script src="game.js?v=6"></script>
+  <script src="game.js?v=7"></script>
 </body>
 </html>
