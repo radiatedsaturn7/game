@@ -197,7 +197,9 @@ let roomConnections = {
 const TICK_MS = 1200;
 const DEBUG_AI = false;
 const DEBUG_UI = true;
-const DEBUG_ALWAYS_VISIBLE = true;
+const DEBUG_ALWAYS_VISIBLE = false;
+const TITLE_FADE_IN_MS = 2600;
+const TITLE_FADE_OUT_MS = 2600;
 const REWIRE_DAMPEN_TURNS = 3;
 const REWIRE_DAMPEN_DECAY = 0.05;
 const REWIRE_DAMPEN_CURRENT = 0.18;
@@ -1013,6 +1015,11 @@ function initTitleScreen() {
   }
   if (dom.titleScreen) {
     dom.titleScreen.classList.remove("title-video-visible");
+    dom.titleScreen.classList.remove("title-fade-out");
+    dom.titleScreen.classList.remove("title-visible");
+    requestAnimationFrame(() => {
+      dom.titleScreen?.classList.add("title-visible");
+    });
   }
   if (dom.audioGate) {
     dom.audioGate.setAttribute("aria-hidden", "false");
@@ -1140,6 +1147,26 @@ function syncTitleMediaPlayback() {
   }
 }
 
+function fadeOutTitleAudio(duration = TITLE_FADE_OUT_MS) {
+  if (!dom.titleAudio) return Promise.resolve();
+  const audio = dom.titleAudio;
+  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 1;
+  if (startVolume <= 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    const start = performance.now();
+    const tick = (now) => {
+      const progress = Math.min(1, (now - start) / duration);
+      audio.volume = Math.max(0, startVolume * (1 - progress));
+      if (progress < 1) {
+        requestAnimationFrame(tick);
+      } else {
+        resolve();
+      }
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
 function ensureFxOverlay() {
   if (!fxState.overlay) {
     const overlay = document.createElement("div");
@@ -1228,20 +1255,27 @@ function startGameFromTitle() {
   if (hasStartedGame) return;
   hasStartedGame = true;
   stopTitleSyncLoop();
-  if (dom.titleAudio) {
-    dom.titleAudio.pause();
-    dom.titleAudio.currentTime = 0;
-  }
-  if (dom.titleVideo) {
-    dom.titleVideo.pause();
-    dom.titleVideo.currentTime = 0;
-  }
   if (dom.titleScreen) {
-    dom.titleScreen.setAttribute("aria-hidden", "true");
+    dom.titleScreen.classList.add("title-fade-out");
   }
-  setCurrentNight(1);
-  initHorrorFX();
-  init();
+  const finishStart = () => {
+    if (dom.titleAudio) {
+      dom.titleAudio.pause();
+      dom.titleAudio.currentTime = 0;
+      dom.titleAudio.volume = 1;
+    }
+    if (dom.titleVideo) {
+      dom.titleVideo.pause();
+      dom.titleVideo.currentTime = 0;
+    }
+    if (dom.titleScreen) {
+      dom.titleScreen.setAttribute("aria-hidden", "true");
+    }
+    setCurrentNight(1);
+    initHorrorFX();
+    init();
+  };
+  fadeOutTitleAudio(TITLE_FADE_OUT_MS).finally(finishStart);
 }
 
 function attachEvents() {
@@ -4441,13 +4475,11 @@ function advanceNight() {
   if (state.currentNight === 3) {
     messages = [];
   }
-  state.skipNextObjectiveModal = messages.length > 0;
+  state.skipNextObjectiveModal = false;
   resetGame({ preserveItems: true });
-  if (messages.length > 0) {
-    showObjectiveModal(`Cait: ${messages.join(" ")}`);
-  } else {
-    showObjectiveModal(getInitialObjectiveModalText());
-  }
+  messages.forEach((message) => {
+    pushStatus(message, 4);
+  });
 }
 
 function resetGame({ preserveItems = false } = {}) {

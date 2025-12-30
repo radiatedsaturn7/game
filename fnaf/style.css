@@ -146,7 +146,26 @@ body.fx-critical .map-node text {
   align-items: stretch;
   justify-content: center;
   overflow: hidden;
-  transition: opacity 0.6s ease;
+  opacity: 0;
+  transition: opacity 2.6s ease;
+}
+
+.title-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 35%, rgba(8, 8, 10, 0.2), rgba(0, 0, 0, 0.95) 70%);
+  opacity: 1;
+  transition: opacity 3s ease;
+  pointer-events: none;
+}
+
+.title-screen.title-visible {
+  opacity: 1;
+}
+
+.title-screen.title-visible::after {
+  opacity: 0;
 }
 
 .audio-gate {
@@ -225,6 +244,14 @@ body.fx-critical .map-node text {
   pointer-events: none;
 }
 
+.title-screen.title-fade-out {
+  opacity: 0;
+}
+
+.title-screen.title-fade-out::after {
+  opacity: 1;
+}
+
 .title-video {
   position: absolute;
   inset: 0;
@@ -233,7 +260,7 @@ body.fx-critical .map-node text {
   object-fit: cover;
   background: #000;
   opacity: 0;
-  transition: opacity 0.8s ease;
+  transition: opacity 2.4s ease;
 }
 
 .title-screen.title-video-visible .title-video {
