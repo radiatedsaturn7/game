@@ -3701,7 +3701,7 @@ function getObjectiveText() {
     if (state.missionType === MISSION_TYPES.ESCAPE) {
       if (state.escapeMode === "manual") {
         if (!state.escapeReady) {
-          const base = `Align ${state.manualOverridesDone.size}/${state.manualOverrideNeeded} override nodes`;
+          const base = "* Find and align over ride nodes";
           const alarm = alarmText ? `, ${alarmText.toLowerCase()}` : "";
           objective = `${base}${alarm}, then escape.`;
         }
