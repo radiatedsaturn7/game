@@ -864,6 +864,7 @@ function attemptTitleAudioPlay() {
 
 function handleTitleAudioPlaying() {
   if (!isTitleScreenActive()) return;
+  syncTitleMediaPlayback();
   revealTitleVideo();
   if (dom.titleVideo) {
     const playPromise = dom.titleVideo.play();
@@ -873,14 +874,43 @@ function handleTitleAudioPlaying() {
   }
 }
 
+function attemptTitleVideoPlay() {
+  if (!dom.titleVideo || !isTitleScreenActive()) return;
+  const playPromise = dom.titleVideo.play();
+  if (!playPromise) {
+    handleTitleVideoPlaying();
+    return;
+  }
+  playPromise
+    .then(() => {
+      handleTitleVideoPlaying();
+    })
+    .catch(() => {
+      // Video playback can fail if the browser blocks autoplay.
+    });
+}
+
 function handleTitleVideoPlaying() {
   if (!isTitleScreenActive()) return;
+  syncTitleMediaPlayback();
   revealTitleVideo();
 }
 
 function revealTitleVideo() {
   if (!dom.titleScreen) return;
   dom.titleScreen.classList.add("title-video-visible");
+}
+
+function syncTitleMediaPlayback() {
+  if (!dom.titleAudio || !dom.titleVideo) return;
+  if (dom.titleAudio.paused && dom.titleVideo.paused) return;
+  if (!dom.titleAudio.paused && dom.titleVideo.paused) {
+    dom.titleVideo.currentTime = dom.titleAudio.currentTime;
+    return;
+  }
+  if (!dom.titleVideo.paused && dom.titleAudio.paused) {
+    dom.titleAudio.currentTime = dom.titleVideo.currentTime;
+  }
 }
 
 function requestTitleAudioUnlock() {
