@@ -956,8 +956,6 @@ function initTitleScreen() {
   }
 }
 
-}
-
 function handleAudioGateGesture() {
   if (titleAudioUnlocked) return;
   titleAudioUnlocked = true;
