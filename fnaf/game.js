@@ -814,18 +814,7 @@ function initTitleScreen() {
   if (dom.titleAudio) {
     dom.titleAudio.addEventListener("playing", handleTitleAudioPlaying);
   }
-  attemptTitleVideoPlay();
   attemptTitleAudioPlay();
-}
-
-function attemptTitleVideoPlay() {
-  if (!dom.titleVideo) return;
-  const playPromise = dom.titleVideo.play();
-  if (!playPromise) {
-    handleTitleVideoPlaying();
-    return;
-  }
-  playPromise.catch(() => {});
 }
 
 function attemptTitleAudioPlay() {
