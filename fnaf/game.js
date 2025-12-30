@@ -1666,7 +1666,12 @@ function removePermaJam(edge) {
   state.permaJammedEdges.delete(edge);
 }
 
-function pickPermaJamEdge() {
+function getExitEdges() {
+  const exitRoom = rooms.find((room) => room.isExit)?.id ?? 13;
+  return (roomConnections[exitRoom] || []).map((neighbor) => edgeKey(exitRoom, neighbor));
+}
+
+function pickPermaJamEdge({ excludedEdges = new Set(), ensureExitAccess = false } = {}) {
   const edges = [];
   rooms.forEach((room) => {
     (roomConnections[room.id] || []).forEach((neighbor) => {
@@ -1675,10 +1680,16 @@ function pickPermaJamEdge() {
     });
   });
   const shuffled = edges.sort(() => Math.random() - 0.5);
+  const exitEdges = ensureExitAccess ? getExitEdges() : [];
   for (const edge of shuffled) {
     if (state.permaJammedEdges.has(edge)) continue;
+    if (excludedEdges.has(edge)) continue;
     const blocked = new Set(state.permaJammedEdges);
     blocked.add(edge);
+    if (ensureExitAccess && exitEdges.length > 0) {
+      const exitBlocked = exitEdges.every((exitEdge) => blocked.has(exitEdge));
+      if (exitBlocked) continue;
+    }
     if (isGraphConnectedWithEdgeBlocked(blocked)) {
       return edge;
     }
@@ -1687,9 +1698,8 @@ function pickPermaJamEdge() {
 }
 
 function jamEscapeEdges() {
-  const exitRoom = rooms.find((room) => room.isExit)?.id ?? 13;
-  (roomConnections[exitRoom] || []).forEach((neighbor) => {
-    addPermaJam(edgeKey(exitRoom, neighbor));
+  getExitEdges().forEach((edge) => {
+    addPermaJam(edge);
   });
 }
 
@@ -1706,12 +1716,18 @@ function setupContainmentForNight() {
     if (edge) addPermaJam(edge);
     return;
   }
-  if (state.currentNight >= 7) {
-    const exitRoom = rooms.find((room) => room.isExit)?.id ?? 13;
-    const exitEdges = (roomConnections[exitRoom] || [])
-      .map((neighbor) => edgeKey(exitRoom, neighbor));
+  if (state.currentNight === 7) {
+    const exitEdges = getExitEdges();
     const shuffled = [...exitEdges].sort(() => Math.random() - 0.5);
     shuffled.slice(0, 2).forEach((edge) => addPermaJam(edge));
+    return;
+  }
+  if (state.currentNight >= 8) {
+    for (let i = 0; i < 2; i += 1) {
+      const edge = pickPermaJamEdge({ ensureExitAccess: true });
+      if (!edge) break;
+      addPermaJam(edge);
+    }
   }
 }
 
@@ -3742,7 +3758,7 @@ function advanceNight() {
   const nextUnlocks = getUnlocksForNight(state.currentNight);
   const messages = listNewUnlockMessages(prevUnlocks, nextUnlocks);
   state.skipNextObjectiveModal = messages.length > 0;
-  resetGame();
+  resetGame({ preserveItems: true });
   if (messages.length > 0) {
     showObjectiveModal(`Cait: ${messages.join(" ")}`);
   } else {
@@ -3750,7 +3766,13 @@ function advanceNight() {
   }
 }
 
-function resetGame() {
+function resetGame({ preserveItems = false } = {}) {
+  const savedInventory = preserveItems ? new Set(state.inventory) : null;
+  const savedCraftedItems = preserveItems ? new Set(state.craftedItems) : null;
+  const savedToolCollected = preserveItems ? new Set(state.toolCollected) : null;
+  const savedFoundSchematics = preserveItems ? new Set(state.foundSchematics) : null;
+  const savedDoorJams = preserveItems ? state.doorJams : null;
+  const savedNoiseLures = preserveItems ? state.noiseLures : null;
   clearActionLock();
   if (pendingMoveTimeoutId) {
     clearTimeout(pendingMoveTimeoutId);
@@ -3896,6 +3918,14 @@ function resetGame() {
   state.caitTalkCount = 0;
   state.runMoments = [];
   state.runSummary = "";
+  if (preserveItems) {
+    savedInventory.forEach((item) => state.inventory.add(item));
+    savedCraftedItems.forEach((item) => state.craftedItems.add(item));
+    savedToolCollected.forEach((item) => state.toolCollected.add(item));
+    savedFoundSchematics.forEach((item) => state.foundSchematics.add(item));
+    state.doorJams = savedDoorJams;
+    state.noiseLures = savedNoiseLures;
+  }
   assignRoomFinds();
   setupMissionForNight();
   announceWeather();
