@@ -236,7 +236,6 @@ const RUN_AUDIO_FADE_OUT_MS = 450;
 const SNEAK_AUDIO_VOLUME = 0.45;
 const SNEAK_AUDIO_FADE_IN_MS = 300;
 const SNEAK_AUDIO_FADE_OUT_MS = 450;
-const MOVEMENT_AUDIO_EPSILON = 0.01;
 const TYPING_AUDIO_VOLUME = 0.5;
 const TYPING_AUDIO_FADE_IN_MS = 250;
 const TYPING_AUDIO_FADE_OUT_MS = 300;
@@ -766,12 +765,6 @@ let actionLockTimeoutId = null;
 let actionLockStepTimeoutId = null;
 let pendingMoveTimeoutId = null;
 const ACTION_LOCK_MS = 1200;
-let ambientTransitionToken = 0;
-let currentAmbientTrack = null;
-let runTransitionToken = 0;
-let runAudioActive = false;
-let sneakTransitionToken = 0;
-let sneakAudioActive = false;
 let desiredMovementMode = "none";
 let lastMovementMode = "none";
 let typingTransitionToken = 0;
@@ -851,6 +844,34 @@ const dom = {
   nightSelect: document.getElementById("nightSelect"),
   debugLog: document.getElementById("debugLog"),
 };
+
+const audioBuses = {
+  master: 1,
+  music: 1,
+  ambience: 1,
+  movement: 1,
+  ui: 1,
+  sfx: 1,
+};
+const loopTracks = new Map();
+
+function registerLoopTrack(name, element, bus, baseVolume) {
+  if (!element) return;
+  loopTracks.set(name, {
+    name,
+    element,
+    bus,
+    baseVolume,
+    currentTargetVolume: 0,
+    fadeToken: 0,
+    isPrimed: false,
+  });
+}
+
+registerLoopTrack("rain", dom.rainAudio, "ambience", 0.6);
+registerLoopTrack("sunny", dom.sunnyAudio, "ambience", 0.5);
+registerLoopTrack("run", dom.runningAudio, "movement", RUN_AUDIO_VOLUME);
+registerLoopTrack("sneak", dom.sneakAudio, "movement", SNEAK_AUDIO_VOLUME);
 
 const fxState = {
   overlay: null,
@@ -960,33 +981,71 @@ function attemptPlayAudio(audio, label) {
   }
 }
 
-function isLoopActuallyPlaying(audio) {
-  return Boolean(audio) && !audio.paused && !Number.isNaN(audio.currentTime);
+function setBusVolume(busName, volume) {
+  if (!(busName in audioBuses)) return;
+  audioBuses[busName] = clamp(volume, 0, 1);
+  loopTracks.forEach((track) => {
+    if (busName !== "master" && track.bus !== busName) return;
+    if (!track.isPrimed) return;
+    const effectiveTarget = getEffectiveVolume(track, track.currentTargetVolume);
+    track.element.volume = effectiveTarget;
+    track.element.muted = effectiveTarget <= 0;
+  });
 }
 
-function isAudible(audio) {
-  return Boolean(audio) && !audio.muted && audio.volume > 0.001;
+function getEffectiveVolume(track, targetVolume) {
+  if (!track) return 0;
+  const base = Number.isFinite(targetVolume) ? targetVolume : track.baseVolume;
+  const busVolume = audioBuses[track.bus] ?? 1;
+  const masterVolume = audioBuses.master ?? 1;
+  return clamp(base * busVolume * masterVolume, 0, 1);
 }
 
-function primeLoopAudioInGesture() {
+function fadeTrackTo(name, targetVolume, durationMs) {
+  const track = loopTracks.get(name);
+  if (!track?.element) return;
+  if (!track.isPrimed) return;
+  const audio = track.element;
+  const nextTarget = Number.isFinite(targetVolume) ? targetVolume : track.baseVolume;
+  track.currentTargetVolume = nextTarget;
+  const effectiveTarget = getEffectiveVolume(track, nextTarget);
+  const token = ++track.fadeToken;
+  const duration = Math.max(0, durationMs ?? 0);
+  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  if (effectiveTarget > 0) {
+    audio.muted = false;
+  }
+  if (duration === 0) {
+    audio.volume = effectiveTarget;
+    audio.muted = effectiveTarget <= 0;
+    return;
+  }
+  const start = performance.now();
+  const tick = (now) => {
+    if (token !== track.fadeToken) return;
+    const progress = Math.min(1, (now - start) / duration);
+    audio.volume = startVolume + (effectiveTarget - startVolume) * progress;
+    if (progress < 1) {
+      requestAnimationFrame(tick);
+    } else {
+      audio.muted = effectiveTarget <= 0;
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
+function primeLoopTracksInGesture() {
   if (audioLoopsPrimed) return;
   audioLoopsPrimed = true;
-  const loopEntries = [
-    { element: dom.rainAudio, label: "rain" },
-    { element: dom.sunnyAudio, label: "sunny" },
-    { element: dom.runningAudio, label: "running" },
-    { element: dom.sneakAudio, label: "sneak" },
-  ];
-  loopEntries.forEach((entry) => {
-    if (!entry.element) return;
-    const audio = entry.element;
+  loopTracks.forEach((track) => {
+    const audio = track.element;
     audio.loop = true;
     audio.muted = true;
     audio.volume = 0;
-    audio.currentTime = 0;
     if (audio.paused) {
-      attemptPlayAudio(audio, entry.label);
+      attemptPlayAudio(audio, track.name);
     }
+    track.isPrimed = true;
   });
 }
 
@@ -1201,7 +1260,7 @@ function handleAudioGateGesture(event) {
     video.currentTime = 0;
   });
   const audioReady = AudioManager.init();
-  primeLoopAudioInGesture();
+  primeLoopTracksInGesture();
 
   if (!isTitleScreenActive()) return;
   if (audioEl) {
@@ -1405,7 +1464,7 @@ function startGameFromTitle() {
   if (hasStartedGame) return;
   hasStartedGame = true;
   canStartAmbience = true;
-  primeLoopAudioInGesture();
+  primeLoopTracksInGesture();
   stopTitleSyncLoop();
   if (dom.titleScreen) {
     dom.titleScreen.classList.add("title-fade-out");
@@ -2617,84 +2676,24 @@ const AMBIENT_FADE_OUT_MS = 1200;
 
 function getAmbientTrackForWeather(weatherType) {
   if (weatherType === "Rain") {
-    return { element: dom.rainAudio, volume: 0.6, label: "rain" };
+    return { name: "rain", volume: 0.6 };
   }
   if (weatherType === "Clear") {
-    return { element: dom.sunnyAudio, volume: 0.5, label: "sunny" };
+    return { name: "sunny", volume: 0.5 };
   }
   return null;
 }
 
-function fadeAudioVolume(audio, fromVolume, toVolume, duration, token, onComplete) {
-  if (!audio) {
-    if (onComplete) onComplete();
-    return;
-  }
-  if (duration <= 0) {
-    audio.volume = toVolume;
-    if (onComplete) onComplete();
-    return;
-  }
-  const start = performance.now();
-  const tick = (now) => {
-    if (token !== ambientTransitionToken) return;
-    const progress = Math.min(1, (now - start) / duration);
-    audio.volume = fromVolume + (toVolume - fromVolume) * progress;
-    if (progress < 1) {
-      requestAnimationFrame(tick);
-    } else if (onComplete) {
-      onComplete();
-    }
-  };
-  requestAnimationFrame(tick);
-}
+function updateWeatherAmbience({ forceRestart = false } = {}) {
+  const shouldPlay = hasStartedGame && titleAudioUnlocked && canStartAmbience;
+  const targetTrack = shouldPlay ? getAmbientTrackForWeather(state.weather?.type) : null;
+  const targetName = targetTrack?.name ?? null;
+  const targetVolume = targetTrack?.volume ?? 0;
+  const fadeIn = forceRestart ? AMBIENT_FADE_IN_MS : AMBIENT_FADE_IN_MS;
+  const fadeOut = AMBIENT_FADE_OUT_MS;
 
-function fadeRunAudioVolume(audio, fromVolume, toVolume, duration, token, onComplete) {
-  if (!audio) {
-    if (onComplete) onComplete();
-    return;
-  }
-  if (duration <= 0) {
-    audio.volume = toVolume;
-    if (onComplete) onComplete();
-    return;
-  }
-  const start = performance.now();
-  const tick = (now) => {
-    if (token !== runTransitionToken) return;
-    const progress = Math.min(1, (now - start) / duration);
-    audio.volume = fromVolume + (toVolume - fromVolume) * progress;
-    if (progress < 1) {
-      requestAnimationFrame(tick);
-    } else if (onComplete) {
-      onComplete();
-    }
-  };
-  requestAnimationFrame(tick);
-}
-
-function fadeSneakAudioVolume(audio, fromVolume, toVolume, duration, token, onComplete) {
-  if (!audio) {
-    if (onComplete) onComplete();
-    return;
-  }
-  if (duration <= 0) {
-    audio.volume = toVolume;
-    if (onComplete) onComplete();
-    return;
-  }
-  const start = performance.now();
-  const tick = (now) => {
-    if (token !== sneakTransitionToken) return;
-    const progress = Math.min(1, (now - start) / duration);
-    audio.volume = fromVolume + (toVolume - fromVolume) * progress;
-    if (progress < 1) {
-      requestAnimationFrame(tick);
-    } else if (onComplete) {
-      onComplete();
-    }
-  };
-  requestAnimationFrame(tick);
+  fadeTrackTo("rain", targetName === "rain" ? targetVolume : 0, targetName === "rain" ? fadeIn : fadeOut);
+  fadeTrackTo("sunny", targetName === "sunny" ? targetVolume : 0, targetName === "sunny" ? fadeIn : fadeOut);
 }
 
 function fadeTypingAudioVolume(audio, fromVolume, toVolume, duration, token, onComplete) {
@@ -2719,50 +2718,6 @@ function fadeTypingAudioVolume(audio, fromVolume, toVolume, duration, token, onC
     }
   };
   requestAnimationFrame(tick);
-}
-
-function startRunningAudio() {
-  if (!dom.runningAudio) return;
-  if (!titleAudioUnlocked || !hasStartedGame) return;
-  const audio = dom.runningAudio;
-  const isPlaying = isLoopActuallyPlaying(audio);
-  const currentVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
-  if (runAudioActive && isPlaying && !audio.muted && currentVolume >= RUN_AUDIO_VOLUME - MOVEMENT_AUDIO_EPSILON) {
-    return;
-  }
-  const token = ++runTransitionToken;
-  audio.loop = true;
-  audio.muted = false;
-  if (!isPlaying) {
-    audio.volume = 0;
-    audio.currentTime = 0;
-    attemptPlayAudio(audio, "running");
-  }
-  const startVolume = Number.isFinite(audio.volume) ? audio.volume : currentVolume;
-  fadeRunAudioVolume(audio, startVolume, RUN_AUDIO_VOLUME, RUN_AUDIO_FADE_IN_MS, token);
-  runAudioActive = true;
-}
-
-function startSneakAudio() {
-  if (!dom.sneakAudio) return;
-  if (!titleAudioUnlocked || !hasStartedGame) return;
-  const audio = dom.sneakAudio;
-  const isPlaying = isLoopActuallyPlaying(audio);
-  const currentVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
-  if (sneakAudioActive && isPlaying && !audio.muted && currentVolume >= SNEAK_AUDIO_VOLUME - MOVEMENT_AUDIO_EPSILON) {
-    return;
-  }
-  const token = ++sneakTransitionToken;
-  audio.loop = true;
-  audio.muted = false;
-  if (!isPlaying) {
-    audio.volume = 0;
-    audio.currentTime = 0;
-    attemptPlayAudio(audio, "sneak");
-  }
-  const startVolume = Number.isFinite(audio.volume) ? audio.volume : currentVolume;
-  fadeSneakAudioVolume(audio, startVolume, SNEAK_AUDIO_VOLUME, SNEAK_AUDIO_FADE_IN_MS, token);
-  sneakAudioActive = true;
 }
 
 function startTypingAudio(durationMs) {
@@ -2792,58 +2747,6 @@ function startTypingAudio(durationMs) {
   }
 }
 
-function stopRunningAudio() {
-  if (!dom.runningAudio) return;
-  const audio = dom.runningAudio;
-  const currentVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
-  if (!runAudioActive && currentVolume <= MOVEMENT_AUDIO_EPSILON) {
-    if (!audio.paused) {
-      audio.volume = 0;
-      audio.pause();
-    }
-    return;
-  }
-  if (audio.paused || currentVolume <= MOVEMENT_AUDIO_EPSILON) {
-    audio.volume = 0;
-    audio.pause();
-    runAudioActive = false;
-    return;
-  }
-  const token = ++runTransitionToken;
-  const startVolume = Number.isFinite(audio.volume) ? audio.volume : currentVolume;
-  runAudioActive = false;
-  fadeRunAudioVolume(audio, startVolume, 0, RUN_AUDIO_FADE_OUT_MS, token, () => {
-    if (token !== runTransitionToken) return;
-    audio.pause();
-  });
-}
-
-function stopSneakAudio() {
-  if (!dom.sneakAudio) return;
-  const audio = dom.sneakAudio;
-  const currentVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
-  if (!sneakAudioActive && currentVolume <= MOVEMENT_AUDIO_EPSILON) {
-    if (!audio.paused) {
-      audio.volume = 0;
-      audio.pause();
-    }
-    return;
-  }
-  if (audio.paused || currentVolume <= MOVEMENT_AUDIO_EPSILON) {
-    audio.volume = 0;
-    audio.pause();
-    sneakAudioActive = false;
-    return;
-  }
-  const token = ++sneakTransitionToken;
-  const startVolume = Number.isFinite(audio.volume) ? audio.volume : currentVolume;
-  sneakAudioActive = false;
-  fadeSneakAudioVolume(audio, startVolume, 0, SNEAK_AUDIO_FADE_OUT_MS, token, () => {
-    if (token !== sneakTransitionToken) return;
-    audio.pause();
-  });
-}
-
 function stopTypingAudio() {
   if (typingAudioTimeoutId) {
     clearTimeout(typingAudioTimeoutId);
@@ -2868,26 +2771,6 @@ function stopTypingAudio() {
   });
 }
 
-function updateRunningAudioState(shouldPlay) {
-  if (shouldPlay) {
-    if (!runAudioActive || !isAudible(dom.runningAudio)) {
-      startRunningAudio();
-    }
-    return;
-  }
-  stopRunningAudio();
-}
-
-function updateSneakAudioState(shouldPlay) {
-  if (shouldPlay) {
-    if (!sneakAudioActive || !isAudible(dom.sneakAudio)) {
-      startSneakAudio();
-    }
-    return;
-  }
-  stopSneakAudio();
-}
-
 function updateMovementAudioState() {
   if (titleAudioUnlocked && hasStartedGame && isPlayerTraveling()) {
     if (state.playerTravelMode === "run") {
@@ -2903,132 +2786,17 @@ function updateMovementAudioState() {
 
   if (desiredMovementMode !== lastMovementMode) {
     if (desiredMovementMode === "run") {
-      updateSneakAudioState(false);
-      updateRunningAudioState(true);
+      fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
+      fadeTrackTo("run", RUN_AUDIO_VOLUME, RUN_AUDIO_FADE_IN_MS);
     } else if (desiredMovementMode === "sneak") {
-      updateRunningAudioState(false);
-      updateSneakAudioState(true);
+      fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
+      fadeTrackTo("sneak", SNEAK_AUDIO_VOLUME, SNEAK_AUDIO_FADE_IN_MS);
     } else {
-      updateRunningAudioState(false);
-      updateSneakAudioState(false);
+      fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
+      fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
     }
     lastMovementMode = desiredMovementMode;
-    return;
   }
-
-  if (desiredMovementMode === "run") {
-    updateRunningAudioState(true);
-    if (sneakAudioActive || isAudible(dom.sneakAudio)) {
-      updateSneakAudioState(false);
-    }
-  } else if (desiredMovementMode === "sneak") {
-    updateSneakAudioState(true);
-    if (runAudioActive || isAudible(dom.runningAudio)) {
-      updateRunningAudioState(false);
-    }
-  } else {
-    updateRunningAudioState(false);
-    updateSneakAudioState(false);
-  }
-}
-
-function stopAmbientTrack(track) {
-  if (!track?.element) return;
-  track.element.pause();
-  track.element.currentTime = 0;
-  track.element.volume = 0;
-  track.element.muted = true;
-}
-
-function stopAllAmbientTracks(exceptElement = null) {
-  const ambientElements = [dom.rainAudio, dom.sunnyAudio];
-  ambientElements.forEach((element) => {
-    if (!element || element === exceptElement) return;
-    element.pause();
-    element.currentTime = 0;
-    element.volume = 0;
-    element.muted = true;
-  });
-}
-
-function restartAmbientTrack(track) {
-  if (!track?.element) return;
-  if (currentAmbientTrack) {
-    stopAmbientTrack(currentAmbientTrack);
-    currentAmbientTrack = null;
-  }
-  startAmbientTrack(track);
-}
-
-function fadeOutAmbientTrack(duration = AMBIENT_FADE_OUT_MS) {
-  if (!currentAmbientTrack?.element) return;
-  stopAllAmbientTracks(currentAmbientTrack.element);
-  const token = ++ambientTransitionToken;
-  const audio = currentAmbientTrack.element;
-  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
-  fadeAudioVolume(audio, startVolume, 0, duration, token, () => {
-    if (token !== ambientTransitionToken) return;
-    stopAmbientTrack(currentAmbientTrack);
-    currentAmbientTrack = null;
-  });
-}
-
-function startAmbientTrack(track, duration = AMBIENT_FADE_IN_MS) {
-  if (!track?.element) return;
-  const token = ++ambientTransitionToken;
-  const audio = track.element;
-  stopAllAmbientTracks(audio);
-  audio.loop = true;
-  audio.muted = false;
-  audio.volume = 0;
-  audio.currentTime = 0;
-  currentAmbientTrack = track;
-  if (audio.paused) {
-    attemptPlayAudio(audio, track.label);
-  }
-  fadeAudioVolume(audio, 0, track.volume, duration, token);
-}
-
-function transitionAmbientTrack(targetTrack) {
-  if (!targetTrack?.element) {
-    fadeOutAmbientTrack();
-    return;
-  }
-  if (currentAmbientTrack?.element === targetTrack.element) {
-    const audio = currentAmbientTrack.element;
-    if (audio.paused || audio.volume <= 0.01) {
-      startAmbientTrack(targetTrack);
-      return;
-    }
-    const token = ++ambientTransitionToken;
-    const startVolume = Number.isFinite(audio.volume) ? audio.volume : targetTrack.volume;
-    fadeAudioVolume(audio, startVolume, targetTrack.volume, AMBIENT_FADE_IN_MS, token);
-    currentAmbientTrack = targetTrack;
-    return;
-  }
-  if (currentAmbientTrack) {
-    const token = ++ambientTransitionToken;
-    const audio = currentAmbientTrack.element;
-    const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
-    fadeAudioVolume(audio, startVolume, 0, AMBIENT_FADE_OUT_MS, token, () => {
-      if (token !== ambientTransitionToken) return;
-      stopAmbientTrack(currentAmbientTrack);
-      currentAmbientTrack = null;
-      startAmbientTrack(targetTrack);
-    });
-    return;
-  }
-  startAmbientTrack(targetTrack);
-}
-
-function updateWeatherAmbience({ forceRestart = false } = {}) {
-  const shouldPlay = hasStartedGame && titleAudioUnlocked && canStartAmbience;
-  const targetTrack = shouldPlay ? getAmbientTrackForWeather(state.weather?.type) : null;
-  if (forceRestart && targetTrack) {
-    restartAmbientTrack(targetTrack);
-    return;
-  }
-  transitionAmbientTrack(targetTrack);
 }
 
 function setCurrentNight(night) {
@@ -5395,8 +5163,8 @@ function triggerDeath() {
   state.isAlive = false;
   clearActionLock();
   closeMap();
-  stopRunningAudio();
-  stopSneakAudio();
+  fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
+  fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
   state.runSummary = buildRunSummary("loss");
   dom.deathSummary.textContent = state.runSummary;
   dom.deathScreen.classList.add("active");
@@ -5406,9 +5174,10 @@ function triggerDeath() {
 function buildEscape() {
   if (!state.isAlive || state.hasEscaped) return;
   if (!rooms[state.playerRoom].isExit || !state.escapeReady) return;
-  fadeOutAmbientTrack();
-  stopRunningAudio();
-  stopSneakAudio();
+  fadeTrackTo("rain", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("sunny", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
+  fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
   state.hasEscaped = true;
   state.completedNight = state.currentNight;
   state.dayCount += 1;
@@ -5459,8 +5228,12 @@ function resetGame({ preserveItems = false } = {}) {
     clearTimeout(pendingMoveTimeoutId);
     pendingMoveTimeoutId = null;
   }
-  stopRunningAudio();
-  stopSneakAudio();
+  fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
+  fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
+  fadeTrackTo("rain", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("sunny", 0, AMBIENT_FADE_OUT_MS);
+  desiredMovementMode = "none";
+  lastMovementMode = "none";
   state.playerRoom = 0;
   state.robotRoom = 0;
   state.hidden = false;
