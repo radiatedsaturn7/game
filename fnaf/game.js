@@ -231,10 +231,10 @@ const REWIRE_DAMPEN_CURRENT = 0.18;
 const REWIRE_DAMPEN_ADJACENT = 0.1;
 const REWIRE_SIGNAL_STRENGTH = 0.06;
 const RUN_AUDIO_VOLUME = 0.55;
-const RUN_AUDIO_FADE_IN_MS = 300;
+const RUN_AUDIO_FADE_IN_MS = 90;
 const RUN_AUDIO_FADE_OUT_MS = 450;
 const SNEAK_AUDIO_VOLUME = 0.45;
-const SNEAK_AUDIO_FADE_IN_MS = 300;
+const SNEAK_AUDIO_FADE_IN_MS = 140;
 const SNEAK_AUDIO_FADE_OUT_MS = 450;
 const TYPING_AUDIO_VOLUME = 0.5;
 const TYPING_AUDIO_FADE_IN_MS = 250;
@@ -872,6 +872,29 @@ function registerLoopTrack(name, element, bus, baseVolume) {
   });
 }
 
+function primeLoopTrack(track) {
+  if (!track?.element) return;
+  const audio = track.element;
+  audio.loop = true;
+  if (track.isPrimed) return;
+  audio.muted = true;
+  audio.volume = 0;
+  track.isPrimed = true;
+}
+
+function ensureLoopTrackPlaying(name, { restart = false } = {}) {
+  const track = loopTracks.get(name);
+  if (!track?.element) return;
+  primeLoopTrack(track);
+  const audio = track.element;
+  if (restart || audio.ended) {
+    audio.currentTime = 0;
+  }
+  if (audio.paused) {
+    attemptPlayAudio(audio, track.name);
+  }
+}
+
 registerLoopTrack("rain", dom.rainAudio, "ambience", 0.6);
 registerLoopTrack("sunny", dom.sunnyAudio, "ambience", 0.5);
 registerLoopTrack("run", dom.runningAudio, "movement", RUN_AUDIO_VOLUME);
@@ -1043,13 +1066,10 @@ function primeLoopTracksInGesture() {
   audioLoopsPrimed = true;
   loopTracks.forEach((track) => {
     const audio = track.element;
-    audio.loop = true;
-    audio.muted = true;
-    audio.volume = 0;
+    primeLoopTrack(track);
     if (audio.paused) {
       attemptPlayAudio(audio, track.name);
     }
-    track.isPrimed = true;
   });
 }
 
@@ -1216,6 +1236,19 @@ function initTitleScreen() {
   dom.titleStartBtn.disabled = true;
   dom.titleStartBtn.classList.add("is-locked");
   dom.titleVideos.forEach((video) => {
+    if (!video.dataset.loopBound) {
+      video.dataset.loopBound = "true";
+      video.addEventListener("ended", () => {
+        if (!isTitleScreenActive() || prefersReducedMotion) return;
+        video.currentTime = 0;
+        const playAttempt = video.play();
+        if (playAttempt && typeof playAttempt.catch === "function") {
+          playAttempt.catch((err) => {
+            console.warn("title video replay failed:", err);
+          });
+        }
+      });
+    }
     video.muted = true;
     video.loop = true;
     video.autoplay = !prefersReducedMotion;
@@ -1335,9 +1368,13 @@ function syncTitleMediaPlayback() {
   if (!dom.titleAudio || !dom.titleVideo) return;
   if (dom.titleAudio.paused) return;
   if (prefersReducedMotion) return;
-  if (dom.titleVideo.paused) {
+  const videoDuration = Number.isFinite(dom.titleVideo.duration) ? dom.titleVideo.duration : 0;
+  const targetTime = videoDuration > 0
+    ? dom.titleAudio.currentTime % videoDuration
+    : dom.titleAudio.currentTime;
+  if (dom.titleVideo.paused || dom.titleVideo.ended) {
     dom.titleVideos.forEach((video) => {
-      video.currentTime = dom.titleAudio.currentTime;
+      video.currentTime = targetTime;
       const playAttempt = video.play();
       if (playAttempt && typeof playAttempt.catch === "function") {
         playAttempt.catch((err) => {
@@ -1347,10 +1384,10 @@ function syncTitleMediaPlayback() {
     });
     return;
   }
-  const drift = Math.abs(dom.titleVideo.currentTime - dom.titleAudio.currentTime);
+  const drift = Math.abs(dom.titleVideo.currentTime - targetTime);
   if (drift > 0.1) {
     dom.titleVideos.forEach((video) => {
-      video.currentTime = dom.titleAudio.currentTime;
+      video.currentTime = targetTime;
     });
   }
 }
@@ -2696,6 +2733,9 @@ function updateWeatherAmbience({ forceRestart = false } = {}) {
   const fadeIn = forceRestart ? AMBIENT_FADE_IN_MS : AMBIENT_FADE_IN_MS;
   const fadeOut = AMBIENT_FADE_OUT_MS;
 
+  if (targetName) {
+    ensureLoopTrackPlaying(targetName);
+  }
   fadeTrackTo("rain", targetName === "rain" ? targetVolume : 0, targetName === "rain" ? fadeIn : fadeOut);
   fadeTrackTo("sunny", targetName === "sunny" ? targetVolume : 0, targetName === "sunny" ? fadeIn : fadeOut);
 }
@@ -2784,13 +2824,8 @@ function startRunningAudio() {
     clearTimeout(runAudioStopTimeoutId);
     runAudioStopTimeoutId = null;
   }
-  if (audio.paused) {
-    audio.loop = true;
-    audio.muted = false;
-    audio.volume = 0;
-    audio.currentTime = 0;
-    attemptPlayAudio(audio, "run");
-  }
+  ensureLoopTrackPlaying("run", { restart: true });
+  audio.muted = false;
   if (token !== runAudioTransitionToken) return;
   fadeTrackTo("run", RUN_AUDIO_VOLUME, RUN_AUDIO_FADE_IN_MS);
   runAudioActive = true;
@@ -2849,13 +2884,8 @@ function startSneakAudio() {
     clearTimeout(sneakAudioStopTimeoutId);
     sneakAudioStopTimeoutId = null;
   }
-  if (audio.paused) {
-    audio.loop = true;
-    audio.muted = false;
-    audio.volume = 0;
-    audio.currentTime = 0;
-    attemptPlayAudio(audio, "sneak");
-  }
+  ensureLoopTrackPlaying("sneak", { restart: true });
+  audio.muted = false;
   if (token !== sneakAudioTransitionToken) return;
   fadeTrackTo("sneak", SNEAK_AUDIO_VOLUME, SNEAK_AUDIO_FADE_IN_MS);
   sneakAudioActive = true;
