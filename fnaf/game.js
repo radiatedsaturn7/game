@@ -2239,7 +2239,7 @@ function setupWeatherForNight() {
   }
   state.weatherAnnounced = false;
   state.surgeCharges = state.weather.modifiers.surgeBonus || 0;
-  updateWeatherAmbience();
+  updateWeatherAmbience({ forceRestart: true });
 }
 
 function setupAlarmedRooms() {
@@ -2572,6 +2572,15 @@ function stopAmbientTrack(track) {
   track.element.currentTime = 0;
 }
 
+function restartAmbientTrack(track) {
+  if (!track?.element) return;
+  if (currentAmbientTrack) {
+    stopAmbientTrack(currentAmbientTrack);
+    currentAmbientTrack = null;
+  }
+  startAmbientTrack(track);
+}
+
 function fadeOutAmbientTrack(duration = AMBIENT_FADE_OUT_MS) {
   if (!currentAmbientTrack?.element) return;
   const token = ++ambientTransitionToken;
@@ -2635,9 +2644,13 @@ function transitionAmbientTrack(targetTrack) {
   startAmbientTrack(targetTrack);
 }
 
-function updateWeatherAmbience() {
+function updateWeatherAmbience({ forceRestart = false } = {}) {
   const shouldPlay = hasStartedGame && titleAudioUnlocked && canStartAmbience;
   const targetTrack = shouldPlay ? getAmbientTrackForWeather(state.weather?.type) : null;
+  if (forceRestart && targetTrack) {
+    restartAmbientTrack(targetTrack);
+    return;
+  }
   transitionAmbientTrack(targetTrack);
 }
 
