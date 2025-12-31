@@ -803,6 +803,8 @@ const dom = {
   mapWeatherLabel: document.getElementById("mapWeatherLabel"),
   randomizeBtn: document.getElementById("randomizeBtn"),
   forceEscapeBtn: document.getElementById("forceEscapeBtn"),
+  testRunAudioBtn: document.getElementById("testRunAudioBtn"),
+  silenceAudioBtn: document.getElementById("silenceAudioBtn"),
   selectedRoom: document.getElementById("selectedRoom"),
   menuBtn: document.getElementById("menuBtn"),
   mapBtn: document.getElementById("mapBtn"),
@@ -1018,6 +1020,52 @@ function setBusVolume(busName, volume) {
     track.element.volume = effectiveTarget;
     track.element.muted = effectiveTarget <= 0;
   });
+}
+
+function silenceAllSound() {
+  setBusVolume("master", 0);
+  setBusVolume("music", 0);
+  setBusVolume("ambience", 0);
+  setBusVolume("movement", 0);
+  setBusVolume("ui", 0);
+  setBusVolume("sfx", 0);
+  AudioManager.setMasterVolume(0);
+  AudioManager.setMusicVolume(0);
+  AudioManager.setAmbienceVolume(0);
+  AudioManager.setSfxVolume(0);
+  AudioManager.setUiVolume(0);
+  if (dom.titleAudio) {
+    dom.titleAudio.pause();
+    dom.titleAudio.currentTime = 0;
+  }
+  if (dom.typingAudio) {
+    dom.typingAudio.pause();
+    dom.typingAudio.currentTime = 0;
+  }
+  loopTracks.forEach((track) => {
+    if (!track.element) return;
+    track.element.volume = 0;
+    track.element.muted = true;
+  });
+}
+
+function playRunTestSound() {
+  setBusVolume("master", 1);
+  setBusVolume("music", 0);
+  setBusVolume("ambience", 0);
+  setBusVolume("movement", 1);
+  setBusVolume("ui", 0);
+  setBusVolume("sfx", 0);
+  AudioManager.setMasterVolume(1);
+  AudioManager.setMusicVolume(0);
+  AudioManager.setAmbienceVolume(0);
+  AudioManager.setSfxVolume(0);
+  AudioManager.setUiVolume(0);
+  ensureLoopTrackPlaying("run", { restart: true });
+  if (dom.runningAudio) {
+    dom.runningAudio.muted = false;
+  }
+  fadeTrackTo("run", RUN_AUDIO_VOLUME, 80);
 }
 
 function getEffectiveVolume(track, targetVolume) {
@@ -1546,6 +1594,8 @@ function attachEvents() {
   dom.nextNightBtn.addEventListener("click", advanceNight);
   dom.randomizeBtn.addEventListener("click", randomizeLayout);
   dom.forceEscapeBtn.addEventListener("click", forceEscape);
+  dom.testRunAudioBtn.addEventListener("click", playRunTestSound);
+  dom.silenceAudioBtn.addEventListener("click", silenceAllSound);
   dom.goBtn.addEventListener("click", () => moveSelected(false));
   dom.runBtn.addEventListener("click", () => moveSelected(true));
   dom.cancelBtn.addEventListener("click", cancelMovement);
