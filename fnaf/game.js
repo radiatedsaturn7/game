@@ -5722,6 +5722,7 @@ function getRoutePlanningOrigin() {
 
 function updateMap() {
   const isIntroEscapeHighlight = state.introStep === "highlight-escape";
+  const escapeRoomId = rooms.find((room) => room.isExit)?.id ?? null;
   const robotPath = state.robotPlannedTarget === null
     ? []
     : getShortestPath(state.robotRoom, state.robotPlannedTarget);
@@ -5788,6 +5789,7 @@ function updateMap() {
   const robotAdjacents = showRobotVision ? new Set(roomConnections[state.robotRoom]) : new Set();
   dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
     const roomId = Number(node.getAttribute("data-room-id"));
+    const isEscapeRoom = roomId === escapeRoomId;
     const basePressure = showRobotIntel ? getRoomPressure(roomId) : getSignalPressure(roomId);
     const pressure = getPerceivedPressure(basePressure);
     const ring = node.querySelector(".map-pressure");
@@ -5804,7 +5806,7 @@ function updateMap() {
     node.classList.toggle("active", roomId === state.playerRoom);
     node.classList.toggle(
       "intro-escape-target",
-      state.introStep === "highlight-escape" && rooms[roomId].isExit
+      isIntroEscapeHighlight && isEscapeRoom
     );
     node.classList.toggle(
       "alert",
@@ -5834,7 +5836,7 @@ function updateMap() {
     if (poi) {
       const room = rooms[roomId];
       const discoveriesEnabled = state.escapeConsoleInspected;
-      const isExit = Boolean(room.isExit);
+      const isExit = isEscapeRoom;
       const canShowDiscoveries = isIntroEscapeHighlight ? isExit : discoveriesEnabled || isExit;
       const hasItem = discoveriesEnabled && Boolean(room.item) && !state.inventory.has(room.item);
       const allowSchematicMarkers = state.unlocks.allowCrafting ||
@@ -5894,6 +5896,9 @@ function updateMap() {
 function revealIntroMap() {
   state.startRevealPending = false;
   state.introStep = "highlight-escape";
+  clearMapTarget();
+  state.selectedRoom = null;
+  state.routePreviewRoom = null;
   if (dom.app) {
     dom.app.classList.remove("is-hidden");
   }
