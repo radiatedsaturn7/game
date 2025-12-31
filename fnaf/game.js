@@ -865,6 +865,8 @@ let hasStartedGame = false;
 let titleAudioUnlocked = false;
 let titleSyncAnimationId = null;
 let canStartAmbience = false;
+let audioLoopsPrimed = false;
+const audioPlayFailureLogged = new Set();
 const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
 const debugLogBuffer = [];
 
@@ -936,6 +938,45 @@ function mirrorConsole() {
     consoleProxy.debug(...args);
     appendDebugLog("debug", args);
   };
+}
+
+function logAudioPlayFailure(label, audio, err) {
+  if (audioPlayFailureLogged.has(label)) return;
+  audioPlayFailureLogged.add(label);
+  console.warn(`${label} audio play() failed:`, err);
+  if (audio) {
+    console.log(`${label}Audio currentSrc:`, audio.currentSrc, "readyState:", audio.readyState);
+  }
+}
+
+function attemptPlayAudio(audio, label) {
+  if (!audio) return;
+  const playAttempt = audio.play();
+  if (playAttempt && typeof playAttempt.catch === "function") {
+    playAttempt.catch((err) => logAudioPlayFailure(label, audio, err));
+  }
+}
+
+function primeLoopAudioInGesture() {
+  if (audioLoopsPrimed) return;
+  audioLoopsPrimed = true;
+  const loopEntries = [
+    { element: dom.rainAudio, label: "rain" },
+    { element: dom.sunnyAudio, label: "sunny" },
+    { element: dom.runningAudio, label: "running" },
+    { element: dom.sneakAudio, label: "sneak" },
+  ];
+  loopEntries.forEach((entry) => {
+    if (!entry.element) return;
+    const audio = entry.element;
+    audio.loop = true;
+    audio.muted = true;
+    audio.volume = 0;
+    audio.currentTime = 0;
+    if (audio.paused) {
+      attemptPlayAudio(audio, entry.label);
+    }
+  });
 }
 
 const AudioManager = {
@@ -1149,16 +1190,11 @@ function handleAudioGateGesture(event) {
     video.currentTime = 0;
   });
   const audioReady = AudioManager.init();
+  primeLoopAudioInGesture();
 
   if (!isTitleScreenActive()) return;
   if (audioEl) {
-    const playAttempt = audioEl.play();
-    if (playAttempt && typeof playAttempt.catch === "function") {
-      playAttempt.catch((err) => {
-        console.warn("title audio play() failed:", err);
-        console.log("titleAudio currentSrc:", audioEl.currentSrc, "readyState:", audioEl.readyState);
-      });
-    }
+    attemptPlayAudio(audioEl, "title");
   }
   if (!prefersReducedMotion) {
     videoEls.forEach((video) => {
@@ -1357,7 +1393,8 @@ function updateFxJitter(now) {
 function startGameFromTitle() {
   if (hasStartedGame) return;
   hasStartedGame = true;
-  canStartAmbience = false;
+  canStartAmbience = true;
+  primeLoopAudioInGesture();
   stopTitleSyncLoop();
   if (dom.titleScreen) {
     dom.titleScreen.classList.add("title-fade-out");
@@ -2678,18 +2715,12 @@ function startRunningAudio() {
   if (!titleAudioUnlocked || !hasStartedGame) return;
   const audio = dom.runningAudio;
   const token = ++runTransitionToken;
+  audio.loop = true;
+  audio.muted = false;
+  audio.volume = 0;
+  audio.currentTime = 0;
   if (audio.paused) {
-    audio.loop = true;
-    audio.muted = false;
-    audio.volume = 0;
-    audio.currentTime = 0;
-    const playAttempt = audio.play();
-    if (playAttempt && typeof playAttempt.catch === "function") {
-      playAttempt.catch((err) => {
-        console.warn("running audio play() failed:", err);
-        console.log("runningAudio currentSrc:", audio.currentSrc, "readyState:", audio.readyState);
-      });
-    }
+    attemptPlayAudio(audio, "running");
   }
   const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
   fadeRunAudioVolume(audio, startVolume, RUN_AUDIO_VOLUME, RUN_AUDIO_FADE_IN_MS, token);
@@ -2701,18 +2732,12 @@ function startSneakAudio() {
   if (!titleAudioUnlocked || !hasStartedGame) return;
   const audio = dom.sneakAudio;
   const token = ++sneakTransitionToken;
+  audio.loop = true;
+  audio.muted = false;
+  audio.volume = 0;
+  audio.currentTime = 0;
   if (audio.paused) {
-    audio.loop = true;
-    audio.muted = false;
-    audio.volume = 0;
-    audio.currentTime = 0;
-    const playAttempt = audio.play();
-    if (playAttempt && typeof playAttempt.catch === "function") {
-      playAttempt.catch((err) => {
-        console.warn("sneak audio play() failed:", err);
-        console.log("sneakAudio currentSrc:", audio.currentSrc, "readyState:", audio.readyState);
-      });
-    }
+    attemptPlayAudio(audio, "sneak");
   }
   const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
   fadeSneakAudioVolume(audio, startVolume, SNEAK_AUDIO_VOLUME, SNEAK_AUDIO_FADE_IN_MS, token);
@@ -2733,13 +2758,7 @@ function startTypingAudio(durationMs) {
     audio.muted = false;
     audio.volume = 0;
     audio.currentTime = 0;
-    const playAttempt = audio.play();
-    if (playAttempt && typeof playAttempt.catch === "function") {
-      playAttempt.catch((err) => {
-        console.warn("typing audio play() failed:", err);
-        console.log("typingAudio currentSrc:", audio.currentSrc, "readyState:", audio.readyState);
-      });
-    }
+    attemptPlayAudio(audio, "typing");
   }
   const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
   fadeTypingAudioVolume(audio, startVolume, TYPING_AUDIO_VOLUME, TYPING_AUDIO_FADE_IN_MS, token);
@@ -2849,6 +2868,19 @@ function stopAmbientTrack(track) {
   if (!track?.element) return;
   track.element.pause();
   track.element.currentTime = 0;
+  track.element.volume = 0;
+  track.element.muted = true;
+}
+
+function stopAllAmbientTracks(exceptElement = null) {
+  const ambientElements = [dom.rainAudio, dom.sunnyAudio];
+  ambientElements.forEach((element) => {
+    if (!element || element === exceptElement) return;
+    element.pause();
+    element.currentTime = 0;
+    element.volume = 0;
+    element.muted = true;
+  });
 }
 
 function restartAmbientTrack(track) {
@@ -2862,6 +2894,7 @@ function restartAmbientTrack(track) {
 
 function fadeOutAmbientTrack(duration = AMBIENT_FADE_OUT_MS) {
   if (!currentAmbientTrack?.element) return;
+  stopAllAmbientTracks(currentAmbientTrack.element);
   const token = ++ambientTransitionToken;
   const audio = currentAmbientTrack.element;
   const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
@@ -2876,17 +2909,14 @@ function startAmbientTrack(track, duration = AMBIENT_FADE_IN_MS) {
   if (!track?.element) return;
   const token = ++ambientTransitionToken;
   const audio = track.element;
+  stopAllAmbientTracks(audio);
   audio.loop = true;
   audio.muted = false;
   audio.volume = 0;
   audio.currentTime = 0;
   currentAmbientTrack = track;
-  const playAttempt = audio.play();
-  if (playAttempt && typeof playAttempt.catch === "function") {
-    playAttempt.catch((err) => {
-      console.warn(`${track.label} audio play() failed:`, err);
-      console.log(`${track.label}Audio currentSrc:`, audio.currentSrc, "readyState:", audio.readyState);
-    });
+  if (audio.paused) {
+    attemptPlayAudio(audio, track.label);
   }
   fadeAudioVolume(audio, 0, track.volume, duration, token);
 }
