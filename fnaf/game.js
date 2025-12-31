@@ -236,6 +236,7 @@ const RUN_AUDIO_FADE_OUT_MS = 450;
 const SNEAK_AUDIO_VOLUME = 0.45;
 const SNEAK_AUDIO_FADE_IN_MS = 300;
 const SNEAK_AUDIO_FADE_OUT_MS = 450;
+const MOVEMENT_AUDIO_EPSILON = 0.01;
 const TYPING_AUDIO_VOLUME = 0.5;
 const TYPING_AUDIO_FADE_IN_MS = 250;
 const TYPING_AUDIO_FADE_OUT_MS = 300;
@@ -771,6 +772,8 @@ let runTransitionToken = 0;
 let runAudioActive = false;
 let sneakTransitionToken = 0;
 let sneakAudioActive = false;
+let desiredMovementMode = "none";
+let lastMovementMode = "none";
 let typingTransitionToken = 0;
 let typingAudioActive = false;
 let typingAudioTimeoutId = null;
@@ -955,6 +958,14 @@ function attemptPlayAudio(audio, label) {
   if (playAttempt && typeof playAttempt.catch === "function") {
     playAttempt.catch((err) => logAudioPlayFailure(label, audio, err));
   }
+}
+
+function isLoopActuallyPlaying(audio) {
+  return Boolean(audio) && !audio.paused && !Number.isNaN(audio.currentTime);
+}
+
+function isAudible(audio) {
+  return Boolean(audio) && !audio.muted && audio.volume > 0.001;
 }
 
 function primeLoopAudioInGesture() {
@@ -2714,15 +2725,20 @@ function startRunningAudio() {
   if (!dom.runningAudio) return;
   if (!titleAudioUnlocked || !hasStartedGame) return;
   const audio = dom.runningAudio;
+  const isPlaying = isLoopActuallyPlaying(audio);
+  const currentVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  if (runAudioActive && isPlaying && !audio.muted && currentVolume >= RUN_AUDIO_VOLUME - MOVEMENT_AUDIO_EPSILON) {
+    return;
+  }
   const token = ++runTransitionToken;
   audio.loop = true;
   audio.muted = false;
-  audio.volume = 0;
-  audio.currentTime = 0;
-  if (audio.paused) {
+  if (!isPlaying) {
+    audio.volume = 0;
+    audio.currentTime = 0;
     attemptPlayAudio(audio, "running");
   }
-  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  const startVolume = Number.isFinite(audio.volume) ? audio.volume : currentVolume;
   fadeRunAudioVolume(audio, startVolume, RUN_AUDIO_VOLUME, RUN_AUDIO_FADE_IN_MS, token);
   runAudioActive = true;
 }
@@ -2731,15 +2747,20 @@ function startSneakAudio() {
   if (!dom.sneakAudio) return;
   if (!titleAudioUnlocked || !hasStartedGame) return;
   const audio = dom.sneakAudio;
+  const isPlaying = isLoopActuallyPlaying(audio);
+  const currentVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  if (sneakAudioActive && isPlaying && !audio.muted && currentVolume >= SNEAK_AUDIO_VOLUME - MOVEMENT_AUDIO_EPSILON) {
+    return;
+  }
   const token = ++sneakTransitionToken;
   audio.loop = true;
   audio.muted = false;
-  audio.volume = 0;
-  audio.currentTime = 0;
-  if (audio.paused) {
+  if (!isPlaying) {
+    audio.volume = 0;
+    audio.currentTime = 0;
     attemptPlayAudio(audio, "sneak");
   }
-  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  const startVolume = Number.isFinite(audio.volume) ? audio.volume : currentVolume;
   fadeSneakAudioVolume(audio, startVolume, SNEAK_AUDIO_VOLUME, SNEAK_AUDIO_FADE_IN_MS, token);
   sneakAudioActive = true;
 }
@@ -2774,40 +2795,52 @@ function startTypingAudio(durationMs) {
 function stopRunningAudio() {
   if (!dom.runningAudio) return;
   const audio = dom.runningAudio;
-  if (audio.paused || audio.volume <= 0.01) {
-    audio.pause();
-    audio.currentTime = 0;
+  const currentVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  if (!runAudioActive && currentVolume <= MOVEMENT_AUDIO_EPSILON) {
+    if (!audio.paused) {
+      audio.volume = 0;
+      audio.pause();
+    }
+    return;
+  }
+  if (audio.paused || currentVolume <= MOVEMENT_AUDIO_EPSILON) {
     audio.volume = 0;
+    audio.pause();
     runAudioActive = false;
     return;
   }
   const token = ++runTransitionToken;
-  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  const startVolume = Number.isFinite(audio.volume) ? audio.volume : currentVolume;
+  runAudioActive = false;
   fadeRunAudioVolume(audio, startVolume, 0, RUN_AUDIO_FADE_OUT_MS, token, () => {
     if (token !== runTransitionToken) return;
     audio.pause();
-    audio.currentTime = 0;
-    runAudioActive = false;
   });
 }
 
 function stopSneakAudio() {
   if (!dom.sneakAudio) return;
   const audio = dom.sneakAudio;
-  if (audio.paused || audio.volume <= 0.01) {
-    audio.pause();
-    audio.currentTime = 0;
+  const currentVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  if (!sneakAudioActive && currentVolume <= MOVEMENT_AUDIO_EPSILON) {
+    if (!audio.paused) {
+      audio.volume = 0;
+      audio.pause();
+    }
+    return;
+  }
+  if (audio.paused || currentVolume <= MOVEMENT_AUDIO_EPSILON) {
     audio.volume = 0;
+    audio.pause();
     sneakAudioActive = false;
     return;
   }
   const token = ++sneakTransitionToken;
-  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  const startVolume = Number.isFinite(audio.volume) ? audio.volume : currentVolume;
+  sneakAudioActive = false;
   fadeSneakAudioVolume(audio, startVolume, 0, SNEAK_AUDIO_FADE_OUT_MS, token, () => {
     if (token !== sneakTransitionToken) return;
     audio.pause();
-    audio.currentTime = 0;
-    sneakAudioActive = false;
   });
 }
 
@@ -2835,33 +2868,68 @@ function stopTypingAudio() {
   });
 }
 
-function updateRunningAudioState() {
-  const shouldPlay = titleAudioUnlocked &&
-    hasStartedGame &&
-    isPlayerTraveling() &&
-    state.playerTravelMode === "run";
+function updateRunningAudioState(shouldPlay) {
   if (shouldPlay) {
-    startRunningAudio();
-  } else if (runAudioActive || !shouldPlay) {
-    stopRunningAudio();
+    if (!runAudioActive || !isAudible(dom.runningAudio)) {
+      startRunningAudio();
+    }
+    return;
   }
+  stopRunningAudio();
 }
 
-function updateSneakAudioState() {
-  const shouldPlay = titleAudioUnlocked &&
-    hasStartedGame &&
-    isPlayerTraveling() &&
-    state.playerTravelMode === "sneak";
+function updateSneakAudioState(shouldPlay) {
   if (shouldPlay) {
-    startSneakAudio();
-  } else if (sneakAudioActive || !shouldPlay) {
-    stopSneakAudio();
+    if (!sneakAudioActive || !isAudible(dom.sneakAudio)) {
+      startSneakAudio();
+    }
+    return;
   }
+  stopSneakAudio();
 }
 
 function updateMovementAudioState() {
-  updateRunningAudioState();
-  updateSneakAudioState();
+  if (titleAudioUnlocked && hasStartedGame && isPlayerTraveling()) {
+    if (state.playerTravelMode === "run") {
+      desiredMovementMode = "run";
+    } else if (state.playerTravelMode === "sneak") {
+      desiredMovementMode = "sneak";
+    } else {
+      desiredMovementMode = "none";
+    }
+  } else {
+    desiredMovementMode = "none";
+  }
+
+  if (desiredMovementMode !== lastMovementMode) {
+    if (desiredMovementMode === "run") {
+      updateSneakAudioState(false);
+      updateRunningAudioState(true);
+    } else if (desiredMovementMode === "sneak") {
+      updateRunningAudioState(false);
+      updateSneakAudioState(true);
+    } else {
+      updateRunningAudioState(false);
+      updateSneakAudioState(false);
+    }
+    lastMovementMode = desiredMovementMode;
+    return;
+  }
+
+  if (desiredMovementMode === "run") {
+    updateRunningAudioState(true);
+    if (sneakAudioActive || isAudible(dom.sneakAudio)) {
+      updateSneakAudioState(false);
+    }
+  } else if (desiredMovementMode === "sneak") {
+    updateSneakAudioState(true);
+    if (runAudioActive || isAudible(dom.runningAudio)) {
+      updateRunningAudioState(false);
+    }
+  } else {
+    updateRunningAudioState(false);
+    updateSneakAudioState(false);
+  }
 }
 
 function stopAmbientTrack(track) {
