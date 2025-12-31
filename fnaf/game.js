@@ -224,6 +224,7 @@ const DEBUG_UI = true;
 const DEBUG_ALWAYS_VISIBLE = false;
 const TITLE_FADE_IN_MS = 5000;
 const TITLE_FADE_OUT_MS = 5000;
+const MUSIC_BUS_DEFAULT = 0.8;
 const REWIRE_DAMPEN_TURNS = 3;
 const REWIRE_DAMPEN_DECAY = 0.05;
 const REWIRE_DAMPEN_CURRENT = 0.18;
@@ -843,6 +844,7 @@ let gameLoopId = null;
 let hasStartedGame = false;
 let titleAudioUnlocked = false;
 let titleSyncAnimationId = null;
+let canStartAmbience = false;
 const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
 const debugLogBuffer = [];
 
@@ -937,7 +939,7 @@ const AudioManager = {
     const ambience = ctx.createGain();
     const ui = ctx.createGain();
     master.gain.value = 1;
-    music.gain.value = 0.8;
+    music.gain.value = MUSIC_BUS_DEFAULT;
     sfx.gain.value = 1.0;
     ambience.gain.value = 0.7;
     ui.gain.value = 0.9;
@@ -964,12 +966,11 @@ const AudioManager = {
   },
   async loadMusicFromElement(audioEl) {
     if (!audioEl) return false;
-    this.musicElement = audioEl;
     if (!this.ctx) return false;
-    if (!this.musicSource) {
-      this.musicSource = this.ctx.createMediaElementSource(audioEl);
-      this.musicSource.connect(this.musicBus);
-    }
+    if (this.musicSource) return true;
+    this.musicElement = audioEl;
+    this.musicSource = this.ctx.createMediaElementSource(audioEl);
+    this.musicSource.connect(this.musicBus);
     return true;
   },
   setMasterVolume(value) {
@@ -1050,6 +1051,7 @@ function initHorrorFX() {
 function initTitleScreen() {
   mirrorConsole();
   if (!dom.titleScreen || !dom.titleStartBtn) {
+    canStartAmbience = true;
     initHorrorFX();
     init();
     return;
@@ -1151,10 +1153,14 @@ function handleAudioGateGesture(event) {
       video.pause();
     });
   }
-  if (audioReady && typeof audioReady.then === "function") {
-    audioReady.then(() => AudioManager.unlock());
-  } else if (audioReady) {
+  const finishAudioSetup = () => {
     AudioManager.unlock();
+    AudioManager.loadMusicFromElement(audioEl);
+  };
+  if (audioReady && typeof audioReady.then === "function") {
+    audioReady.then(finishAudioSetup);
+  } else if (audioReady) {
+    finishAudioSetup();
   }
   if (dom.titleScreen) {
     dom.titleScreen.classList.add("title-video-visible");
@@ -1205,24 +1211,29 @@ function syncTitleMediaPlayback() {
   }
 }
 
-function fadeOutTitleAudio(duration = TITLE_FADE_OUT_MS) {
-  if (!dom.titleAudio) return Promise.resolve();
-  const audio = dom.titleAudio;
-  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 1;
-  if (startVolume <= 0) return Promise.resolve();
+function fadeGain(gainNode, fromValue, toValue, durationMs) {
+  if (!gainNode) return Promise.resolve();
+  const duration = Math.max(0, durationMs);
+  const ctx = gainNode.context;
+  const startTime = ctx.currentTime;
+  gainNode.gain.cancelScheduledValues(startTime);
+  gainNode.gain.setValueAtTime(fromValue, startTime);
+  gainNode.gain.linearRampToValueAtTime(toValue, startTime + duration / 1000);
   return new Promise((resolve) => {
-    const start = performance.now();
-    const tick = (now) => {
-      const progress = Math.min(1, (now - start) / duration);
-      audio.volume = Math.max(0, startVolume * (1 - progress));
-      if (progress < 1) {
-        requestAnimationFrame(tick);
-      } else {
-        resolve();
-      }
-    };
-    requestAnimationFrame(tick);
+    if (duration === 0) {
+      resolve();
+      return;
+    }
+    setTimeout(resolve, duration);
   });
+}
+
+function fadeOutMusicBus(duration = TITLE_FADE_OUT_MS) {
+  const musicBus = AudioManager.musicBus;
+  if (!musicBus) return Promise.resolve();
+  const startValue = Number.isFinite(musicBus.gain.value) ? musicBus.gain.value : MUSIC_BUS_DEFAULT;
+  if (startValue <= 0) return Promise.resolve();
+  return fadeGain(musicBus, startValue, 0, duration);
 }
 
 function ensureFxOverlay() {
@@ -1312,10 +1323,10 @@ function updateFxJitter(now) {
 function startGameFromTitle() {
   if (hasStartedGame) return;
   hasStartedGame = true;
+  canStartAmbience = false;
   stopTitleSyncLoop();
   if (dom.titleScreen) {
     dom.titleScreen.classList.add("title-fade-out");
-    dom.titleScreen.setAttribute("aria-hidden", "true");
   }
   state.startRevealPending = true;
   state.introSequenceActive = true;
@@ -1328,12 +1339,12 @@ function startGameFromTitle() {
     if (dom.titleAudio) {
       dom.titleAudio.pause();
       dom.titleAudio.currentTime = 0;
-      dom.titleAudio.volume = 1;
     }
     dom.titleVideos.forEach((video) => {
       video.pause();
       video.currentTime = 0;
     });
+    AudioManager.setMusicVolume(MUSIC_BUS_DEFAULT);
     if (dom.titleScreen) {
       dom.titleScreen.setAttribute("aria-hidden", "true");
     }
@@ -1341,8 +1352,10 @@ function startGameFromTitle() {
     if (dom.app && !state.startRevealPending) {
       dom.app.classList.remove("is-hidden");
     }
+    canStartAmbience = true;
+    updateWeatherAmbience();
   };
-  fadeOutTitleAudio(TITLE_FADE_OUT_MS).finally(finishStart);
+  fadeOutMusicBus(TITLE_FADE_OUT_MS).finally(finishStart);
 }
 
 function attachEvents() {
@@ -2623,7 +2636,7 @@ function transitionAmbientTrack(targetTrack) {
 }
 
 function updateWeatherAmbience() {
-  const shouldPlay = hasStartedGame && titleAudioUnlocked;
+  const shouldPlay = hasStartedGame && titleAudioUnlocked && canStartAmbience;
   const targetTrack = shouldPlay ? getAmbientTrackForWeather(state.weather?.type) : null;
   transitionAmbientTrack(targetTrack);
 }
