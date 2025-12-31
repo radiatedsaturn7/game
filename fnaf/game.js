@@ -794,6 +794,7 @@ const dom = {
   componentCount: document.getElementById("componentCount"),
   tasksPanel: document.getElementById("tasksPanel"),
   tasksText: document.getElementById("tasksText"),
+  tasksOkBtn: document.getElementById("tasksOkBtn"),
   objectiveModal: document.getElementById("objectiveModal"),
   objectiveModalText: document.getElementById("objectiveModalText"),
   ackObjectiveBtn: document.getElementById("ackObjectiveBtn"),
@@ -1351,6 +1352,7 @@ function attachEvents() {
   dom.mapBtn.addEventListener("click", openMap);
   dom.liveBtn.addEventListener("click", returnToRoom);
   dom.tasksBtn.addEventListener("click", openTasks);
+  dom.tasksOkBtn.addEventListener("click", closeTasks);
   dom.useBtn.addEventListener("click", openUse);
   dom.debugBtn.addEventListener("click", openDebug);
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
@@ -3858,7 +3860,9 @@ function getObjectiveText() {
     if (state.missionType === MISSION_TYPES.ESCAPE) {
       if (state.escapeMode === "manual") {
         if (!state.escapeReady) {
-          const base = "* Find and align over ride nodes";
+          const done = state.manualOverridesDone.size;
+          const total = state.manualOverrideNeeded;
+          const base = `Find and align override nodes (${done}/${total})`;
           const alarm = alarmText ? `, ${alarmText.toLowerCase()}` : "";
           objective = `${base}${alarm}, then escape.`;
         }
@@ -5720,8 +5724,7 @@ function updateMap() {
       poi.classList.toggle("poi-exit", isExit);
       const allowBlink = !state.objectiveBlocked && canShowDiscoveries;
       const isIntroEscapeHighlight = state.introStep === "highlight-escape";
-      let shouldBlink = allowBlink &&
-        (isExit ? state.escapeReady : (hasItem || hasSchematic));
+      let shouldBlink = allowBlink && isExit && state.escapeReady;
       if (isIntroEscapeHighlight) {
         shouldBlink = isExit;
       }
