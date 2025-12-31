@@ -5518,7 +5518,15 @@ function getRobotRoomHint(roomId) {
 }
 
 function robotStatusLabel() {
-  if (state.robotDisabled) return "It's strangely quiet.";
+  if (state.robotDisabled) {
+    const weatherQuietLines = {
+      Rain: "Rain hammers the metal roof.",
+      Clear: "You can hear the birds chirping outside.",
+      Fog: "The chirping outside stopped.",
+      Storm: "Thunder rolls in the distance.",
+    };
+    return weatherQuietLines[state.weather?.type] ?? "The factory holds its breath.";
+  }
   if (state.robotDormant > 0) return "The halls fall quiet.";
 
   const distance = getRobotDistance();
@@ -5713,6 +5721,7 @@ function getRoutePlanningOrigin() {
 }
 
 function updateMap() {
+  const isIntroEscapeHighlight = state.introStep === "highlight-escape";
   const robotPath = state.robotPlannedTarget === null
     ? []
     : getShortestPath(state.robotRoom, state.robotPlannedTarget);
@@ -5734,9 +5743,9 @@ function updateMap() {
     const b = Math.max(plannedPath[i], plannedPath[i + 1]);
     plannedEdges.add(`${a}-${b}`);
   }
-  const actionTargets = getMapTargetCandidates();
+  const actionTargets = isIntroEscapeHighlight ? null : getMapTargetCandidates();
   const actionEdges = new Set();
-  if (state.mapTargetMode === "jam" || state.mapTargetMode === "unjam") {
+  if (!isIntroEscapeHighlight && (state.mapTargetMode === "jam" || state.mapTargetMode === "unjam")) {
     const source = state.mapTargetSourceRoom ?? state.playerRoom;
     (roomConnections[source] || []).forEach((neighbor) => {
       const key = edgeKey(source, neighbor);
@@ -5809,9 +5818,9 @@ function updateMap() {
       state.robotDisabled && roomId === state.playerRoom && roomId === state.robotRoom
     );
     node.classList.toggle("preview", roomId === state.routePreviewRoom);
-    node.classList.toggle("adjacent", playerAdjacents.has(roomId));
-    node.classList.toggle("action-target", Boolean(actionTargets?.has(roomId)));
-    node.classList.toggle("action-selected", roomId === state.mapTargetSelection);
+    node.classList.toggle("adjacent", !isIntroEscapeHighlight && playerAdjacents.has(roomId));
+    node.classList.toggle("action-target", !isIntroEscapeHighlight && Boolean(actionTargets?.has(roomId)));
+    node.classList.toggle("action-selected", !isIntroEscapeHighlight && roomId === state.mapTargetSelection);
     node.classList.toggle(
       "robot-adjacent",
       showRobotIntel && showRobotVision && roomId === state.robotScanTarget
@@ -5826,7 +5835,7 @@ function updateMap() {
       const room = rooms[roomId];
       const discoveriesEnabled = state.escapeConsoleInspected;
       const isExit = Boolean(room.isExit);
-      const canShowDiscoveries = discoveriesEnabled || isExit;
+      const canShowDiscoveries = isIntroEscapeHighlight ? isExit : discoveriesEnabled || isExit;
       const hasItem = discoveriesEnabled && Boolean(room.item) && !state.inventory.has(room.item);
       const allowSchematicMarkers = state.unlocks.allowCrafting ||
         state.missionType === MISSION_TYPES.DATA ||
@@ -5850,7 +5859,6 @@ function updateMap() {
       poi.classList.toggle("poi-schematic", hasSchematic && !isExit);
       poi.classList.toggle("poi-exit", isExit);
       const allowBlink = !state.objectiveBlocked && canShowDiscoveries;
-      const isIntroEscapeHighlight = state.introStep === "highlight-escape";
       let shouldBlink = allowBlink && isExit && state.escapeReady;
       if (isIntroEscapeHighlight) {
         shouldBlink = isExit;
