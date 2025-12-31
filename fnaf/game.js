@@ -236,6 +236,9 @@ const RUN_AUDIO_FADE_OUT_MS = 450;
 const SNEAK_AUDIO_VOLUME = 0.45;
 const SNEAK_AUDIO_FADE_IN_MS = 300;
 const SNEAK_AUDIO_FADE_OUT_MS = 450;
+const TYPING_AUDIO_VOLUME = 0.5;
+const TYPING_AUDIO_FADE_IN_MS = 250;
+const TYPING_AUDIO_FADE_OUT_MS = 300;
 
 const NIGHT_UNLOCKS = {
   1: {
@@ -768,6 +771,9 @@ let runTransitionToken = 0;
 let runAudioActive = false;
 let sneakTransitionToken = 0;
 let sneakAudioActive = false;
+let typingTransitionToken = 0;
+let typingAudioActive = false;
+let typingAudioTimeoutId = null;
 
 const dom = {
   audioGate: document.getElementById("audioGate"),
@@ -781,6 +787,7 @@ const dom = {
   sunnyAudio: document.getElementById("sunnyAudio"),
   sneakAudio: document.getElementById("sneakAudio"),
   runningAudio: document.getElementById("runningAudio"),
+  typingAudio: document.getElementById("typingAudio"),
   titleStartBtn: document.getElementById("titleStartBtn"),
   app: document.querySelector(".app"),
   dateLabel: document.getElementById("dateLabel"),
@@ -2642,6 +2649,30 @@ function fadeSneakAudioVolume(audio, fromVolume, toVolume, duration, token, onCo
   requestAnimationFrame(tick);
 }
 
+function fadeTypingAudioVolume(audio, fromVolume, toVolume, duration, token, onComplete) {
+  if (!audio) {
+    if (onComplete) onComplete();
+    return;
+  }
+  if (duration <= 0) {
+    audio.volume = toVolume;
+    if (onComplete) onComplete();
+    return;
+  }
+  const start = performance.now();
+  const tick = (now) => {
+    if (token !== typingTransitionToken) return;
+    const progress = Math.min(1, (now - start) / duration);
+    audio.volume = fromVolume + (toVolume - fromVolume) * progress;
+    if (progress < 1) {
+      requestAnimationFrame(tick);
+    } else if (onComplete) {
+      onComplete();
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
 function startRunningAudio() {
   if (!dom.runningAudio) return;
   if (!titleAudioUnlocked || !hasStartedGame) return;
@@ -2688,6 +2719,39 @@ function startSneakAudio() {
   sneakAudioActive = true;
 }
 
+function startTypingAudio(durationMs) {
+  if (!dom.typingAudio) return;
+  if (!titleAudioUnlocked || !hasStartedGame) return;
+  const audio = dom.typingAudio;
+  const token = ++typingTransitionToken;
+  if (typingAudioTimeoutId) {
+    clearTimeout(typingAudioTimeoutId);
+    typingAudioTimeoutId = null;
+  }
+  if (audio.paused) {
+    audio.loop = true;
+    audio.muted = false;
+    audio.volume = 0;
+    audio.currentTime = 0;
+    const playAttempt = audio.play();
+    if (playAttempt && typeof playAttempt.catch === "function") {
+      playAttempt.catch((err) => {
+        console.warn("typing audio play() failed:", err);
+        console.log("typingAudio currentSrc:", audio.currentSrc, "readyState:", audio.readyState);
+      });
+    }
+  }
+  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  fadeTypingAudioVolume(audio, startVolume, TYPING_AUDIO_VOLUME, TYPING_AUDIO_FADE_IN_MS, token);
+  typingAudioActive = true;
+  if (Number.isFinite(durationMs) && durationMs > 0) {
+    typingAudioTimeoutId = setTimeout(() => {
+      if (token !== typingTransitionToken) return;
+      stopTypingAudio();
+    }, durationMs);
+  }
+}
+
 function stopRunningAudio() {
   if (!dom.runningAudio) return;
   const audio = dom.runningAudio;
@@ -2725,6 +2789,30 @@ function stopSneakAudio() {
     audio.pause();
     audio.currentTime = 0;
     sneakAudioActive = false;
+  });
+}
+
+function stopTypingAudio() {
+  if (typingAudioTimeoutId) {
+    clearTimeout(typingAudioTimeoutId);
+    typingAudioTimeoutId = null;
+  }
+  if (!dom.typingAudio) return;
+  const audio = dom.typingAudio;
+  if (audio.paused || audio.volume <= 0.01) {
+    audio.pause();
+    audio.currentTime = 0;
+    audio.volume = 0;
+    typingAudioActive = false;
+    return;
+  }
+  const token = ++typingTransitionToken;
+  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  fadeTypingAudioVolume(audio, startVolume, 0, TYPING_AUDIO_FADE_OUT_MS, token, () => {
+    if (token !== typingTransitionToken) return;
+    audio.pause();
+    audio.currentTime = 0;
+    typingAudioActive = false;
   });
 }
 
@@ -3218,6 +3306,13 @@ function runLockedAction({ label, steps, onStep }) {
     }
   };
   runStep();
+}
+
+function runLockedActionWithTypingSfx({ label, steps, onStep }) {
+  if (isActionLocked()) return;
+  const durationMs = ACTION_LOCK_MS * steps;
+  startTypingAudio(durationMs);
+  runLockedAction({ label, steps, onStep });
 }
 
 function pulseActionSignal(roomId, type) {
@@ -4717,8 +4812,19 @@ function startSpecialPickup(roomId) {
   });
 }
 
+function shouldPlayTypingSfxForDataFragment(roomId) {
+  if (state.missionType !== MISSION_TYPES.DATA) return false;
+  if (!state.escapeConsoleInspected) return false;
+  const room = rooms[roomId];
+  if (!room?.schematic) return false;
+  return !state.dataFragmentsFound.has(roomId);
+}
+
 function startSchematicScan(roomId) {
-  runLockedAction({
+  const actionRunner = shouldPlayTypingSfxForDataFragment(roomId)
+    ? runLockedActionWithTypingSfx
+    : runLockedAction;
+  actionRunner({
     label: "Scanning schematic…",
     steps: 1,
     onStep: () => {
@@ -4736,7 +4842,7 @@ function startEscapeConsoleInspect() {
     showObjectiveModal(`Cait: Not yet. Grab the ${pickupName}.`);
     return;
   }
-  runLockedAction({
+  runLockedActionWithTypingSfx({
     label: "Inspecting console…",
     steps: 1,
     onStep: () => {
@@ -4760,7 +4866,7 @@ function startStabilizeSystem(target) {
 }
 
 function startAlignManualOverride(roomId) {
-  runLockedAction({
+  runLockedActionWithTypingSfx({
     label: "Aligning override node…",
     steps: 1,
     onStep: () => {
