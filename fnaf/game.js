@@ -231,10 +231,10 @@ const REWIRE_DAMPEN_CURRENT = 0.18;
 const REWIRE_DAMPEN_ADJACENT = 0.1;
 const REWIRE_SIGNAL_STRENGTH = 0.06;
 const RUN_AUDIO_VOLUME = 0.55;
-const RUN_AUDIO_FADE_IN_MS = 300;
+const RUN_AUDIO_FADE_IN_MS = 90;
 const RUN_AUDIO_FADE_OUT_MS = 450;
 const SNEAK_AUDIO_VOLUME = 0.45;
-const SNEAK_AUDIO_FADE_IN_MS = 300;
+const SNEAK_AUDIO_FADE_IN_MS = 140;
 const SNEAK_AUDIO_FADE_OUT_MS = 450;
 const TYPING_AUDIO_VOLUME = 0.5;
 const TYPING_AUDIO_FADE_IN_MS = 250;
@@ -1368,9 +1368,13 @@ function syncTitleMediaPlayback() {
   if (!dom.titleAudio || !dom.titleVideo) return;
   if (dom.titleAudio.paused) return;
   if (prefersReducedMotion) return;
-  if (dom.titleVideo.paused) {
+  const videoDuration = Number.isFinite(dom.titleVideo.duration) ? dom.titleVideo.duration : 0;
+  const targetTime = videoDuration > 0
+    ? dom.titleAudio.currentTime % videoDuration
+    : dom.titleAudio.currentTime;
+  if (dom.titleVideo.paused || dom.titleVideo.ended) {
     dom.titleVideos.forEach((video) => {
-      video.currentTime = dom.titleAudio.currentTime;
+      video.currentTime = targetTime;
       const playAttempt = video.play();
       if (playAttempt && typeof playAttempt.catch === "function") {
         playAttempt.catch((err) => {
@@ -1380,10 +1384,10 @@ function syncTitleMediaPlayback() {
     });
     return;
   }
-  const drift = Math.abs(dom.titleVideo.currentTime - dom.titleAudio.currentTime);
+  const drift = Math.abs(dom.titleVideo.currentTime - targetTime);
   if (drift > 0.1) {
     dom.titleVideos.forEach((video) => {
-      video.currentTime = dom.titleAudio.currentTime;
+      video.currentTime = targetTime;
     });
   }
 }
