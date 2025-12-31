@@ -738,6 +738,10 @@ const state = {
   mapTargetSourceRoom: null,
   mapTargetSelection: null,
   robotLastRoom: null,
+  recentMoves: [],
+  lastMeaningfulActionTurn: -999,
+  goofWarningsThisNight: 0,
+  lastGoofTriggerTurn: -999,
   permaJammedEdges: new Set(),
   lastNightSpawnedParts: new Set(),
   introStep: null,
@@ -1802,6 +1806,117 @@ function setRobotMode(mode) {
   }
 }
 
+function recordMeaningfulAction() {
+  state.lastMeaningfulActionTurn = state.turn;
+}
+
+function resetGoofingState() {
+  state.recentMoves = [];
+  state.lastMeaningfulActionTurn = -999;
+  state.goofWarningsThisNight = 0;
+  state.lastGoofTriggerTurn = -999;
+}
+
+function detectGoofing() {
+  const windowSize = 8;
+  const moves = state.recentMoves.slice(-windowSize);
+  if (moves.length < 4) return null;
+  const runCount = moves.filter((move) => move.mode === "run").length;
+  const runRatio = runCount / moves.length;
+  const runThreshold = state.currentNight >= 4 ? 0.65 : 0.75;
+  if (runRatio < runThreshold) return null;
+  const meaningfulRecent = state.turn - state.lastMeaningfulActionTurn <= 4;
+  if (meaningfulRecent) return null;
+  const uniqueRooms = new Set(moves.map((move) => move.roomId)).size;
+  if (uniqueRooms >= 6) return null;
+  if (state.turn - state.lastGoofTriggerTurn < 6) return null;
+
+  let loopScore = 0;
+  const roomsWindow = moves.map((move) => move.roomId);
+  const modeWindow = moves.map((move) => move.mode);
+  for (let i = 0; i <= roomsWindow.length - 4; i += 1) {
+    const a = roomsWindow[i];
+    const b = roomsWindow[i + 1];
+    if (a === b) continue;
+    if (a === roomsWindow[i + 2] && b === roomsWindow[i + 3]) {
+      const runSegment = modeWindow.slice(i, i + 4).filter((mode) => mode === "run").length;
+      if (runSegment >= 3) {
+        loopScore += 1;
+      }
+    }
+  }
+  for (let i = 0; i <= roomsWindow.length - 6; i += 1) {
+    const a = roomsWindow[i];
+    const b = roomsWindow[i + 1];
+    const c = roomsWindow[i + 2];
+    if (a === b || b === c || a === c) continue;
+    if (a === roomsWindow[i + 3] && b === roomsWindow[i + 4] && c === roomsWindow[i + 5]) {
+      const runSegment = modeWindow.slice(i, i + 6).filter((mode) => mode === "run").length;
+      if (runSegment >= 4) {
+        loopScore += 1;
+      }
+    }
+  }
+
+  const loopThreshold = state.currentNight >= 4 ? 1 : 2;
+  if (loopScore < loopThreshold) return null;
+
+  const visitCounts = new Map();
+  moves.forEach((move) => {
+    visitCounts.set(move.roomId, (visitCounts.get(move.roomId) || 0) + 1);
+  });
+  let sourceRoomId = moves[moves.length - 1].roomId;
+  let bestCount = visitCounts.get(sourceRoomId) || 0;
+  moves.forEach((move) => {
+    const count = visitCounts.get(move.roomId) || 0;
+    if (count >= bestCount) {
+      bestCount = count;
+      sourceRoomId = move.roomId;
+    }
+  });
+
+  return { sourceRoomId, reason: "looping-run" };
+}
+
+function triggerDisciplineCheck(sourceRoomId) {
+  const wasDisabled = state.robotDisabled;
+  state.robotDisabled = false;
+  const adjacentRooms = roomConnections[sourceRoomId] || [];
+  const spawnCandidates = adjacentRooms.filter((roomId) => roomId !== state.playerRoom);
+  const spawnRoom = spawnCandidates.length > 0 ? spawnCandidates[0] : sourceRoomId;
+  const shouldTeleport = wasDisabled || state.currentNight <= 3;
+  if (shouldTeleport) {
+    state.robotRoom = spawnRoom;
+    state.robotDormant = Math.max(state.robotDormant, 1);
+  }
+  state.robotFocus = sourceRoomId;
+  state.robotPath = [];
+  state.robotPlannedTarget = sourceRoomId;
+  state.robotPath = getShortestPath(state.robotRoom, sourceRoomId).slice(1);
+  if (state.robotPath.length > 0) {
+    startRobotTravelStep();
+  }
+
+  const earlyNight = state.currentNight <= 3;
+  const warningOnly = earlyNight && state.goofWarningsThisNight === 0;
+  if (warningOnly) {
+    state.robotInvestigateTurns = Math.max(state.robotInvestigateTurns, 2);
+    setRobotMode("investigate");
+  } else if (earlyNight) {
+    state.robotInvestigateTurns = 0;
+    state.threat = Math.min(5, state.threat + 0.5);
+    setRobotMode("hunt");
+  } else {
+    state.robotInvestigateTurns = Math.max(state.robotInvestigateTurns, 1);
+    setRobotMode("hunt");
+  }
+
+  pushStatus("Metal shifts toward your noise.", 4);
+  queueObjectiveModal("Cait: Geist… stop. You’re ringing the halls.");
+  state.goofWarningsThisNight += 1;
+  state.lastGoofTriggerTurn = state.turn;
+}
+
 function setRobotMood(mood, ticks) {
   if (!mood || ticks <= 0 || state.robotDisabled || state.robotDormant > 0) return;
   const profile = getNightProfile();
@@ -2035,6 +2150,7 @@ function pickMissionForNight(night) {
 function setupMissionForNight() {
   state.missionType = pickMissionForNight(state.currentNight);
   state.escapeMode = state.currentNight <= 3 ? "manual" : "fabricate";
+  resetGoofingState();
   if (!state.unlocks.allowCrafting) {
     state.escapeMode = "manual";
   }
@@ -3074,6 +3190,7 @@ function alarmDisableTurnsRequired() {
 
 function applyAlarmDisableStep(roomId, step, totalSteps) {
   if (!isAlarmCapable(roomId)) return;
+  recordMeaningfulAction();
   const progress = state.alarmDisableProgress.get(roomId) || 0;
   const next = progress + 1;
   state.alarmDisableProgress.set(roomId, next);
@@ -4187,6 +4304,7 @@ function startCollectItem(roomId) {
     label: `Collecting ${room.item}…`,
     steps: 1,
     onStep: () => {
+      recordMeaningfulAction();
       pulseActionSignal(roomId, "quiet");
       state.turn += 1;
       collectItem(roomId, { force: true });
@@ -4258,6 +4376,7 @@ function startSpecialPickup(roomId) {
     label: `Collecting ${itemName}…`,
     steps: 1,
     onStep: () => {
+      recordMeaningfulAction();
       pulseActionSignal(roomId, "quiet");
       state.turn += 1;
       collectSpecialPickup(roomId, { force: true });
@@ -4270,6 +4389,7 @@ function startSchematicScan(roomId) {
     label: "Scanning schematic…",
     steps: 1,
     onStep: () => {
+      recordMeaningfulAction();
       pulseActionSignal(roomId, "quiet");
       state.turn += 1;
       collectSchematic(roomId, { force: true });
@@ -4287,6 +4407,7 @@ function startEscapeConsoleInspect() {
     label: "Inspecting console…",
     steps: 1,
     onStep: () => {
+      recordMeaningfulAction();
       state.turn += 1;
       revealEscapeSchematic();
     },
@@ -4298,6 +4419,7 @@ function startStabilizeSystem(target) {
     label: `Stabilizing ${target.room}…`,
     steps: 1,
     onStep: () => {
+      recordMeaningfulAction();
       state.turn += 1;
       stabilizeSystem(target);
     },
@@ -4309,6 +4431,7 @@ function startAlignManualOverride(roomId) {
     label: "Aligning override node…",
     steps: 1,
     onStep: () => {
+      recordMeaningfulAction();
       state.turn += 1;
       alignManualOverride(roomId);
     },
@@ -4356,6 +4479,7 @@ function startHideAction(spot) {
       label: "Leaving hiding spot…",
       steps: 1,
       onStep: () => {
+        recordMeaningfulAction();
         setHidden(null, { force: true });
         state.turn += 1;
         updateUI();
@@ -4369,6 +4493,7 @@ function startHideAction(spot) {
     label,
     steps: 1,
     onStep: () => {
+      recordMeaningfulAction();
       setHidden(spot, { force: true });
       state.turn += 1;
       updateUI();
@@ -4501,6 +4626,7 @@ function deployNoiseLure(targetRoom) {
     label: "Deploying noise lure…",
     steps: 1,
     onStep: () => {
+      recordMeaningfulAction();
       pulseActionSignal(state.playerRoom, "trace");
       useDevice("noise", targetRoom);
       state.turn += 1;
@@ -4842,6 +4968,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.robotMood = null;
   state.robotMoodTicks = 0;
   state.robotLastRoom = null;
+  resetGoofingState();
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
   state.completedNight = null;
@@ -6101,6 +6228,7 @@ function craftItem() {
     return;
   }
   if (!craftable.parts.every((part) => state.inventory.has(part))) return;
+  recordMeaningfulAction();
   craftable.parts.forEach((part) => state.inventory.delete(part));
   if (craftable.name === "Door Jam") {
     state.doorJams += 1;
@@ -6214,6 +6342,10 @@ function startGameLoop() {
       }
     }
     tickPlayerTravel();
+    const goof = detectGoofing();
+    if (goof) {
+      triggerDisciplineCheck(goof.sourceRoomId);
+    }
     tickRobotTravel();
     processPendingSignals();
     tickAlarmedRooms();
@@ -6373,6 +6505,7 @@ function deployDoorJam(roomId) {
     label: "Setting door jam…",
     steps: 1,
     onStep: () => {
+      recordMeaningfulAction();
       pulseActionSignal(state.playerRoom, "trace");
       jamDoorTo(roomId);
       state.turn += 1;
@@ -6412,6 +6545,7 @@ function useBlowtorch(roomId) {
     label: "Cutting through jam…",
     steps: 2,
     onStep: (step, total) => {
+      recordMeaningfulAction();
       pulseActionSignal(state.playerRoom, "trace");
       const profile = getNightProfile();
       registerSignal(
@@ -6466,6 +6600,10 @@ function tickPlayerTravel() {
   const isRun = state.playerTravelMode === "run";
   // Ensure lastMoveType is based on the resolved travel mode.
   state.lastMoveType = isRun ? "run" : "sneak";
+  state.recentMoves.push({ roomId: state.playerRoom, mode: state.lastMoveType, turn: state.turn });
+  if (state.recentMoves.length > 10) {
+    state.recentMoves.shift();
+  }
   if (isRun) {
     registerSignal(nextRoom, 0.95 * profile.signalStrength.run * effects.signalSpike, {
       type: "run",
