@@ -783,6 +783,7 @@ const dom = {
   floorplanMap: document.getElementById("floorplanMap"),
   mapWeatherLabel: document.getElementById("mapWeatherLabel"),
   randomizeBtn: document.getElementById("randomizeBtn"),
+  forceEscapeBtn: document.getElementById("forceEscapeBtn"),
   selectedRoom: document.getElementById("selectedRoom"),
   menuBtn: document.getElementById("menuBtn"),
   mapBtn: document.getElementById("mapBtn"),
@@ -1364,6 +1365,7 @@ function attachEvents() {
   dom.retryBtn.addEventListener("click", resetGame);
   dom.nextNightBtn.addEventListener("click", advanceNight);
   dom.randomizeBtn.addEventListener("click", randomizeLayout);
+  dom.forceEscapeBtn.addEventListener("click", forceEscape);
   dom.goBtn.addEventListener("click", () => moveSelected(false));
   dom.runBtn.addEventListener("click", () => moveSelected(true));
   dom.cancelBtn.addEventListener("click", cancelMovement);
@@ -2619,12 +2621,12 @@ function transitionAmbientTrack(targetTrack) {
     return;
   }
   if (currentAmbientTrack?.element === targetTrack.element) {
-    if (currentAmbientTrack.element.paused) {
+    const audio = currentAmbientTrack.element;
+    if (audio.paused || audio.volume <= 0.01) {
       startAmbientTrack(targetTrack);
       return;
     }
     const token = ++ambientTransitionToken;
-    const audio = currentAmbientTrack.element;
     const startVolume = Number.isFinite(audio.volume) ? audio.volume : targetTrack.volume;
     fadeAudioVolume(audio, startVolume, targetTrack.volume, AMBIENT_FADE_IN_MS, token);
     currentAmbientTrack = targetTrack;
@@ -3792,6 +3794,27 @@ function updateDebugUI() {
   if (debugLabel) {
     debugLabel.classList.toggle("hidden", !DEBUG_UI);
   }
+}
+
+function forceEscape() {
+  if (!state.isAlive || state.hasEscaped) return;
+  const exitRoom = rooms.find((room) => room.isExit)?.id ?? state.playerRoom;
+  clearActionLock();
+  closeMap();
+  state.hidden = false;
+  state.hiddenSpot = null;
+  state.hiddenTurns = 0;
+  state.playerPath = [];
+  state.playerTravelTotal = 0;
+  state.playerTravelStepStart = null;
+  state.playerTravelStepDuration = 0;
+  state.routePreviewRoom = null;
+  state.selectedRoom = exitRoom;
+  state.escapeConsoleInspected = true;
+  state.escapeReady = true;
+  state.playerRoom = exitRoom;
+  updateUI();
+  buildEscape();
 }
 
 function updateRequiredComponents() {
@@ -6804,7 +6827,11 @@ function tickPlayerTravel() {
     lastKnown: state.lastKnownPlayerRoom,
   });
   if (state.playerPath.length === 0) {
-    clearSelectedRoom();
+    if (state.selectedRoom === state.playerRoom) {
+      clearSelectedRoom();
+    } else {
+      updateUI();
+    }
     state.playerTravelTotal = 0;
     state.playerTravelStepStart = null;
     state.playerTravelStepDuration = 0;
