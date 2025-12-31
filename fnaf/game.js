@@ -230,6 +230,9 @@ const REWIRE_DAMPEN_DECAY = 0.05;
 const REWIRE_DAMPEN_CURRENT = 0.18;
 const REWIRE_DAMPEN_ADJACENT = 0.1;
 const REWIRE_SIGNAL_STRENGTH = 0.06;
+const RUN_AUDIO_VOLUME = 0.55;
+const RUN_AUDIO_FADE_IN_MS = 300;
+const RUN_AUDIO_FADE_OUT_MS = 450;
 
 const NIGHT_UNLOCKS = {
   1: {
@@ -758,6 +761,8 @@ let pendingMoveTimeoutId = null;
 const ACTION_LOCK_MS = 1200;
 let ambientTransitionToken = 0;
 let currentAmbientTrack = null;
+let runTransitionToken = 0;
+let runAudioActive = false;
 
 const dom = {
   audioGate: document.getElementById("audioGate"),
@@ -769,6 +774,7 @@ const dom = {
   titleAudio: document.getElementById("titleAudio"),
   rainAudio: document.getElementById("rainAudio"),
   sunnyAudio: document.getElementById("sunnyAudio"),
+  runningAudio: document.getElementById("runningAudio"),
   titleStartBtn: document.getElementById("titleStartBtn"),
   app: document.querySelector(".app"),
   dateLabel: document.getElementById("dateLabel"),
@@ -2569,6 +2575,85 @@ function fadeAudioVolume(audio, fromVolume, toVolume, duration, token, onComplet
   requestAnimationFrame(tick);
 }
 
+function fadeRunAudioVolume(audio, fromVolume, toVolume, duration, token, onComplete) {
+  if (!audio) {
+    if (onComplete) onComplete();
+    return;
+  }
+  if (duration <= 0) {
+    audio.volume = toVolume;
+    if (onComplete) onComplete();
+    return;
+  }
+  const start = performance.now();
+  const tick = (now) => {
+    if (token !== runTransitionToken) return;
+    const progress = Math.min(1, (now - start) / duration);
+    audio.volume = fromVolume + (toVolume - fromVolume) * progress;
+    if (progress < 1) {
+      requestAnimationFrame(tick);
+    } else if (onComplete) {
+      onComplete();
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
+function startRunningAudio() {
+  if (!dom.runningAudio) return;
+  if (!titleAudioUnlocked || !hasStartedGame) return;
+  const audio = dom.runningAudio;
+  const token = ++runTransitionToken;
+  if (audio.paused) {
+    audio.loop = true;
+    audio.muted = false;
+    audio.volume = 0;
+    audio.currentTime = 0;
+    const playAttempt = audio.play();
+    if (playAttempt && typeof playAttempt.catch === "function") {
+      playAttempt.catch((err) => {
+        console.warn("running audio play() failed:", err);
+        console.log("runningAudio currentSrc:", audio.currentSrc, "readyState:", audio.readyState);
+      });
+    }
+  }
+  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  fadeRunAudioVolume(audio, startVolume, RUN_AUDIO_VOLUME, RUN_AUDIO_FADE_IN_MS, token);
+  runAudioActive = true;
+}
+
+function stopRunningAudio() {
+  if (!dom.runningAudio) return;
+  const audio = dom.runningAudio;
+  if (audio.paused || audio.volume <= 0.01) {
+    audio.pause();
+    audio.currentTime = 0;
+    audio.volume = 0;
+    runAudioActive = false;
+    return;
+  }
+  const token = ++runTransitionToken;
+  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  fadeRunAudioVolume(audio, startVolume, 0, RUN_AUDIO_FADE_OUT_MS, token, () => {
+    if (token !== runTransitionToken) return;
+    audio.pause();
+    audio.currentTime = 0;
+    runAudioActive = false;
+  });
+}
+
+function updateRunningAudioState() {
+  const shouldPlay = titleAudioUnlocked &&
+    hasStartedGame &&
+    isPlayerTraveling() &&
+    state.playerTravelMode === "run";
+  if (shouldPlay) {
+    startRunningAudio();
+  } else if (runAudioActive || !shouldPlay) {
+    stopRunningAudio();
+  }
+}
+
 function stopAmbientTrack(track) {
   if (!track?.element) return;
   track.element.pause();
@@ -4279,6 +4364,7 @@ function movePlayer(roomId, isRun, options = {}) {
   startPlayerTravelStep();
   state.selectedRoom = roomId;
   updateUI();
+  updateRunningAudioState();
 }
 
 function setRoutePreview(roomId) {
@@ -5001,6 +5087,7 @@ function triggerDeath() {
   state.isAlive = false;
   clearActionLock();
   closeMap();
+  stopRunningAudio();
   state.runSummary = buildRunSummary("loss");
   dom.deathSummary.textContent = state.runSummary;
   dom.deathScreen.classList.add("active");
@@ -5011,6 +5098,7 @@ function buildEscape() {
   if (!state.isAlive || state.hasEscaped) return;
   if (!rooms[state.playerRoom].isExit || !state.escapeReady) return;
   fadeOutAmbientTrack();
+  stopRunningAudio();
   state.hasEscaped = true;
   state.completedNight = state.currentNight;
   state.dayCount += 1;
@@ -5061,6 +5149,7 @@ function resetGame({ preserveItems = false } = {}) {
     clearTimeout(pendingMoveTimeoutId);
     pendingMoveTimeoutId = null;
   }
+  stopRunningAudio();
   state.playerRoom = 0;
   state.robotRoom = 0;
   state.hidden = false;
@@ -6733,10 +6822,12 @@ function tickPlayerTravel() {
   if (state.playerPath.length === 0) {
     state.playerTravelStepStart = null;
     state.playerTravelStepDuration = 0;
+    updateRunningAudioState();
     return;
   }
   if (!state.playerTravelStepStart) {
     startPlayerTravelStep();
+    updateRunningAudioState();
     return;
   }
   const elapsed = Date.now() - state.playerTravelStepStart;
@@ -6835,8 +6926,10 @@ function tickPlayerTravel() {
     state.playerTravelTotal = 0;
     state.playerTravelStepStart = null;
     state.playerTravelStepDuration = 0;
+    updateRunningAudioState();
   } else {
     startPlayerTravelStep();
+    updateRunningAudioState();
   }
 }
 
