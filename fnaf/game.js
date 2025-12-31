@@ -1216,7 +1216,20 @@ function stopTitleSyncLoop() {
 
 function syncTitleMediaPlayback() {
   if (!dom.titleAudio || !dom.titleVideo) return;
-  if (dom.titleAudio.paused || dom.titleVideo.paused) return;
+  if (dom.titleAudio.paused) return;
+  if (prefersReducedMotion) return;
+  if (dom.titleVideo.paused) {
+    dom.titleVideos.forEach((video) => {
+      video.currentTime = dom.titleAudio.currentTime;
+      const playAttempt = video.play();
+      if (playAttempt && typeof playAttempt.catch === "function") {
+        playAttempt.catch((err) => {
+          console.warn("title video resume failed:", err);
+        });
+      }
+    });
+    return;
+  }
   const drift = Math.abs(dom.titleVideo.currentTime - dom.titleAudio.currentTime);
   if (drift > 0.1) {
     dom.titleVideos.forEach((video) => {
