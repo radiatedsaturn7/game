@@ -2637,6 +2637,20 @@ function setupSpecialPickupsForNight() {
     state.scannerHighlight = false;
   }
 
+  if (state.currentNight === 4) {
+    const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
+    state.requiredPickup = {
+      itemName: "Pulse Scanner",
+      roomId,
+      caitIntroLine: `Cait: I can give you eyes tonight. Pulse Scanner is in ${rooms[roomId].name}. Get it first.`,
+      caitWarnLine: "Cait: That’s it. Quick—grab it and move.",
+      blocksEscapeConsole: true,
+      warned: false,
+    };
+    state.specialPickups.set(roomId, "Pulse Scanner");
+    state.nightIntroLine = state.requiredPickup.caitIntroLine;
+  }
+
   if (state.currentNight === 5) {
     const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
     state.requiredPickup = {
@@ -4450,7 +4464,7 @@ function pickPartList(count) {
 
 function pickSchematicList(count) {
   if (count <= 0) return [];
-  if (state.currentNight === 4) return ["Pulse Scanner"];
+  if (state.currentNight === 4) return [];
   const blocked = new Set(["Pulse Scanner"]);
   if (!state.unlocks.allowDoorJams) blocked.add("Door Jam");
   const options = craftableItems
@@ -4525,9 +4539,6 @@ function assignRoomFinds() {
 
   const baseSchematicBudget = getSchematicSpawnBudget(state.currentNight);
   const guaranteedSchematics = [];
-  if (state.currentNight === 4) {
-    guaranteedSchematics.push("Pulse Scanner");
-  }
   if (state.missionType === MISSION_TYPES.DATA) {
     guaranteedSchematics.push(...pickDataFragmentSchematics(state.dataFragmentsNeeded));
   }
