@@ -222,6 +222,25 @@ const TICK_MS = 1200;
 const DEBUG_AI = false;
 const DEBUG_UI = true;
 const DEBUG_ALWAYS_VISIBLE = false;
+// AI tuning: focus, pacing, and investigation pacing.
+const ROBOT_FOCUS_TTL = 6;
+const ROBOT_FOCUS_ARRIVAL_LINGER = 1;
+const ROBOT_FOCUS_BIAS = 0.35;
+const ROBOT_FOCUS_OVERRIDE_SIGNAL = 0.6;
+// Director nudges are soft hints near (not on) the player.
+const DIRECTOR_SAFE_TURNS_THRESHOLD = 8;
+const DIRECTOR_COOLDOWN = 7;
+const DIRECTOR_SIGNAL_STRENGTH = 0.45;
+const DIRECTOR_LAST_KNOWN_CHANCE = 0.05;
+// Double-backs are rare false retreats after a trail cools.
+const DOUBLE_BACK_CHANCE = 0.15;
+const DOUBLE_BACK_SIGNAL_WINDOW = 3;
+const DOUBLE_BACK_SIGNAL_COLD = 0.25;
+// Investigation pacing nudges the robot to move occasionally.
+const INVESTIGATE_MOVE_INTERVAL = 2;
+const INVESTIGATE_CONFIDENCE_MOVE = 0.65;
+const INVESTIGATE_FORCED_MOVE_TURNS = 4;
+const INVESTIGATE_MAX_TURNS = 6;
 const TITLE_FADE_IN_MS = 5000;
 const TITLE_FADE_OUT_MS = 5000;
 const MUSIC_BUS_DEFAULT = 0.8;
@@ -618,6 +637,7 @@ const state = {
   craftedItems: new Set(),
   usedDevices: new Map(),
   robotFocus: null,
+  robotFocusTTL: 0,
   lastKnownPlayerRoom: null,
   trailTurns: 0,
   routePreviewRoom: null,
@@ -699,6 +719,8 @@ const state = {
   lastTrailBreakTick: -999,
   lastDeviceFatigueTick: -999,
   sneakStepsWithoutSignal: 0,
+  turnsSinceStrongSignal: 0,
+  directorCooldown: 0,
   pendingSignals: [],
   persistentSignals: new Map(),
   roomNoisePenalty: new Map(),
@@ -2138,7 +2160,7 @@ function triggerDisciplineCheck(sourceRoomId) {
     state.robotRoom = spawnRoom;
     state.robotDormant = Math.max(state.robotDormant, 1);
   }
-  state.robotFocus = sourceRoomId;
+  setRobotFocus(sourceRoomId, { reason: "discipline" });
   state.robotPath = [];
   state.robotPlannedTarget = sourceRoomId;
   state.robotPath = getShortestPath(state.robotRoom, sourceRoomId).slice(1);
@@ -3090,6 +3112,49 @@ function tickSunlitRooms() {
   });
 }
 
+function pickDirectorSignalRoom() {
+  const adjacent = roomConnections[state.playerRoom] || [];
+  const directOptions = adjacent.filter((roomId) => roomId !== state.playerRoom);
+  if (directOptions.length > 0) {
+    return directOptions[Math.floor(Math.random() * directOptions.length)];
+  }
+  const twoHop = new Set();
+  adjacent.forEach((neighbor) => {
+    (roomConnections[neighbor] || []).forEach((roomId) => {
+      if (roomId !== state.playerRoom) {
+        twoHop.add(roomId);
+      }
+    });
+  });
+  const options = [...twoHop];
+  if (options.length === 0) return null;
+  return options[Math.floor(Math.random() * options.length)];
+}
+
+function tickDirector() {
+  if (state.robotDisabled) return;
+  if (state.directorCooldown > 0) {
+    state.directorCooldown -= 1;
+  }
+  if (hasStrongSignal()) {
+    state.turnsSinceStrongSignal = 0;
+    return;
+  }
+  // Only nudge when the player has been "too safe" for several turns.
+  state.turnsSinceStrongSignal += 1;
+  if (state.directorCooldown > 0) return;
+  if (state.turnsSinceStrongSignal < DIRECTOR_SAFE_TURNS_THRESHOLD) return;
+  const roomId = pickDirectorSignalRoom();
+  if (roomId === null || roomId === state.playerRoom) return;
+  const profile = getNightProfile();
+  registerSignal(
+    roomId,
+    DIRECTOR_SIGNAL_STRENGTH * profile.signalStrength.sneak,
+    { type: "director", lastKnownChance: DIRECTOR_LAST_KNOWN_CHANCE }
+  );
+  state.directorCooldown = DIRECTOR_COOLDOWN;
+}
+
 function tickStoryQueue() {
   if (!state.storyQueue.length) return;
   const ready = state.storyQueue.filter((entry) => state.turn >= entry.triggerTurn);
@@ -3163,7 +3228,7 @@ function triggerPowerSurge(roomId) {
   if (roomId === null || roomId === undefined) return;
   const firstSurge = !state.ohShitTriggered;
   state.ohShitTriggered = true;
-  state.robotFocus = roomId;
+  setRobotFocus(roomId, { reason: "surge" });
   state.surgeTargetRoom = null;
   registerSignal(roomId, 0.85, { type: "surge", forceLastKnown: true, bleed: true });
   const effects = getPassiveEffects();
@@ -3292,6 +3357,12 @@ function tickRobotMemory() {
     state.robotMoodTicks -= 1;
     if (state.robotMoodTicks <= 0) {
       state.robotMood = null;
+    }
+  }
+  if (state.robotFocusTTL > 0) {
+    state.robotFocusTTL -= 1;
+    if (state.robotFocusTTL <= 0) {
+      clearRobotFocus("ttl");
     }
   }
   state.robotPresenceHeat.forEach((value, roomId) => {
@@ -5088,7 +5159,7 @@ function useDevice(type, targetRoom = null) {
       .map((room) => room.id);
     diversion = availableRooms[Math.floor(Math.random() * availableRooms.length)];
   }
-  state.robotFocus = diversion;
+  setRobotFocus(diversion, { reason: "device" });
   applyRobotPause("distract");
   if (type === "noise") {
     state.noiseLures = Math.max(0, state.noiseLures - 1);
@@ -5156,6 +5227,8 @@ function advanceRobot() {
     return;
   }
 
+  handleRobotFocusArrival();
+
   if (!state.robotMovedThisTick) {
     if (isAlarmTriggered(state.robotRoom)) {
       recordRobotAlarmVisit(state.robotRoom);
@@ -5176,7 +5249,24 @@ function advanceRobot() {
   }
 
   if (state.robotInvestigateTurns > 0) {
-    state.robotInvestigateTurns -= 1;
+    const confidence = Math.max(state.robotTargetConfidence, getRoomConfidence(state.robotRoom));
+    const shouldNudgeSweep = state.robotInvestigateTurns % INVESTIGATE_MOVE_INTERVAL === 0
+      || confidence >= INVESTIGATE_CONFIDENCE_MOVE
+      || state.robotInvestigateTurns >= INVESTIGATE_FORCED_MOVE_TURNS;
+    if (shouldNudgeSweep && state.robotSweepQueue.length === 0) {
+      buildSweepQueue(state.robotRoom);
+    }
+    if (state.robotSweepQueue.length > 0) {
+      const nextSweep = state.robotSweepQueue.shift();
+      if (nextSweep !== undefined) {
+        state.robotInvestigateTurns = Math.max(0, Math.min(state.robotInvestigateTurns, INVESTIGATE_MAX_TURNS) - 1);
+        state.robotPath = [nextSweep];
+        startRobotTravelStep();
+        setRobotMode("sweep");
+        return;
+      }
+    }
+    state.robotInvestigateTurns = Math.min(state.robotInvestigateTurns, INVESTIGATE_MAX_TURNS) - 1;
     setRobotMode("investigate");
     return;
   }
@@ -5273,6 +5363,11 @@ function advanceRobot() {
   } else {
     state.robotPlannedTarget = null;
     state.robotTargetConfidence = 0;
+    if (shouldPlanDoubleBack()) {
+      if (planDoubleBack()) {
+        return;
+      }
+    }
     const avoidAlarmLoop = isAlarmTriggered(state.robotRoom);
     const roamRooms = roomConnections[state.robotRoom].filter((id) => id !== state.robotRoom);
     const roamOptions = avoidAlarmLoop
@@ -5295,7 +5390,7 @@ function advanceRobot() {
   }
 
   if (state.robotRoom === state.playerRoom && state.robotFocus) {
-    state.robotFocus = null;
+    clearRobotFocus("caught");
   }
 
   markRoomChecked(state.robotRoom);
@@ -5448,6 +5543,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.craftedItems.clear();
   state.usedDevices.clear();
   state.robotFocus = null;
+  state.robotFocusTTL = 0;
   state.lastKnownPlayerRoom = null;
   state.trailTurns = 0;
   state.routePreviewRoom = null;
@@ -5519,6 +5615,8 @@ function resetGame({ preserveItems = false } = {}) {
   state.lastTrailBreakTick = -999;
   state.lastDeviceFatigueTick = -999;
   state.sneakStepsWithoutSignal = 0;
+  state.turnsSinceStrongSignal = 0;
+  state.directorCooldown = 0;
   state.pendingSignals = [];
   state.persistentSignals.clear();
   state.roomNoisePenalty.clear();
@@ -5664,6 +5762,13 @@ function registerSignal(roomId, strength, options = {}) {
     state.lastStrongSignalTick = state.turn;
     state.lastStrongSignalRoom = roomId;
   }
+  if (
+    state.robotFocus !== null &&
+    roomId !== state.robotFocus &&
+    (scaledStrength >= ROBOT_FOCUS_OVERRIDE_SIGNAL || next >= ROBOT_FOCUS_OVERRIDE_SIGNAL)
+  ) {
+    state.robotFocusTTL = Math.min(state.robotFocusTTL, 1);
+  }
   logDebug("signal", {
     roomId,
     strength: scaledStrength,
@@ -5771,6 +5876,34 @@ function applyRobotPause(reason) {
   if (reason === "distract") base = 2;
   if (reason === "blocked") base = 2;
   state.robotDormant = Math.max(state.robotDormant, Math.ceil(base * threatFactor));
+}
+
+function setRobotFocus(roomId, { ttl = ROBOT_FOCUS_TTL, linger = 0, reason = "signal" } = {}) {
+  if (roomId === null || roomId === undefined) return;
+  const sameRoom = state.robotFocus === roomId;
+  state.robotFocus = roomId;
+  state.robotFocusTTL = sameRoom ? Math.max(state.robotFocusTTL, ttl) : ttl;
+  if (linger > 0) {
+    state.robotFocusLinger = Math.max(state.robotFocusLinger, linger);
+  }
+  logDebug("robot-focus", { roomId, ttl, reason });
+}
+
+function clearRobotFocus(reason = "expired") {
+  if (state.robotFocus === null) return;
+  logDebug("robot-focus-clear", { roomId: state.robotFocus, reason });
+  state.robotFocus = null;
+  state.robotFocusTTL = 0;
+  state.robotFocusLinger = 0;
+}
+
+function handleRobotFocusArrival() {
+  if (state.robotFocus === null) return;
+  if (state.robotRoom !== state.robotFocus) return;
+  state.robotFocusTTL = Math.min(state.robotFocusTTL, ROBOT_FOCUS_ARRIVAL_LINGER);
+  if (state.robotFocusTTL <= 0) {
+    clearRobotFocus("arrived");
+  }
 }
 
 function getRobotTaskChance() {
@@ -5885,6 +6018,41 @@ function buildSweepQueue(roomId) {
   state.robotSweepCooldown = profile.sweepCooldown;
 }
 
+// Rare false retreat: step away, then quietly double-back.
+function shouldPlanDoubleBack() {
+  const wasInvestigating = state.robotMode === "investigate" || state.robotMode === "search";
+  const justLostTrail = state.turn - state.lastTrailBreakTick <= 1;
+  if (!wasInvestigating && !justLostTrail) return false;
+  if (!state.lastStrongSignalRoom || state.lastStrongSignalTick < 0) return false;
+  if (state.turn - state.lastStrongSignalTick > DOUBLE_BACK_SIGNAL_WINDOW) return false;
+  const signal = state.roomSignals.get(state.lastStrongSignalRoom) || 0;
+  if (signal > DOUBLE_BACK_SIGNAL_COLD) return false;
+  return Math.random() < DOUBLE_BACK_CHANCE;
+}
+
+function planDoubleBack() {
+  const adjacent = roomConnections[state.robotRoom] || [];
+  const fallbackRoom = state.robotLastRoom;
+  const preferredRoom = state.lastStrongSignalRoom;
+  const interestingRoom = adjacent.includes(preferredRoom)
+    ? preferredRoom
+    : adjacent.includes(fallbackRoom)
+      ? fallbackRoom
+      : state.robotRoom;
+  const retreatOptions = adjacent.filter((roomId) => roomId !== interestingRoom);
+  if (retreatOptions.length === 0) return false;
+  const retreatRoom = retreatOptions[Math.floor(Math.random() * retreatOptions.length)];
+  state.robotPath = [retreatRoom];
+  state.robotSweepQueue = [interestingRoom];
+  state.robotLinger = Math.max(state.robotLinger, 1);
+  state.robotPlannedTarget = null;
+  state.robotTargetConfidence = Math.max(0, state.robotTargetConfidence - 0.1);
+  state.robotScanTarget = null;
+  startRobotTravelStep();
+  setRobotMode("hunt");
+  return true;
+}
+
 function predictNextRoom() {
   if (state.playerTrail.length < 2) return null;
   const current = state.playerTrail[state.playerTrail.length - 1];
@@ -5900,64 +6068,87 @@ function predictNextRoom() {
   return bySignal[0];
 }
 
-function pickRobotTarget() {
-  if (state.robotFocus !== null) return state.robotFocus;
-  const avoidAlarmLoop = isAlarmTriggered(state.robotRoom);
-  const signals = Array.from(state.roomSignals.entries())
-    .map(([roomId, value]) => ({
-      roomId,
-      value,
-      adjusted: value - alarmVisitPenalty(roomId),
-    }))
-    .sort((a, b) => b.adjusted - a.adjusted);
-  for (const entry of signals) {
-    const { roomId, value, adjusted } = entry;
-    if (adjusted <= 0.2) continue;
-    if (avoidAlarmLoop && roomId === state.robotLastRoom && isAlarmTriggered(roomId)) continue;
-    if (!state.robotCheckedCooldown.has(roomId)) return roomId;
-    if (value >= 0.7 && adjusted >= 0.4) return roomId;
-  }
-
-  if (state.trailTurns > 0 && state.lastKnownPlayerRoom !== null) {
-    const penalty = alarmVisitPenalty(state.lastKnownPlayerRoom);
-    const confidence = getRoomConfidence(state.lastKnownPlayerRoom) - penalty;
-    if (
-      avoidAlarmLoop &&
-      state.lastKnownPlayerRoom === state.robotLastRoom &&
-      isAlarmTriggered(state.lastKnownPlayerRoom)
-    ) {
-      return null;
-    }
-    if (!state.robotCheckedCooldown.has(state.lastKnownPlayerRoom) || confidence >= 0.7) {
-      return state.lastKnownPlayerRoom;
-    }
-  }
-
+function maybePickPredictionTarget() {
   const predicted = predictNextRoom();
   if (
-    predicted !== null &&
-    state.lastKnownPlayerRoom !== null &&
-    state.robotPredictionCooldown === 0
+    predicted === null ||
+    state.lastKnownPlayerRoom === null ||
+    state.robotPredictionCooldown !== 0
   ) {
-    const profile = getNightProfile();
-    if (!profile.prediction.enabled) return null;
-    const penalty = alarmVisitPenalty(state.lastKnownPlayerRoom);
-    const confidence = getRoomConfidence(state.lastKnownPlayerRoom) - penalty;
-    const lastSignal = state.roomSignals.get(state.lastKnownPlayerRoom) || 0;
-    const moodBoost = state.robotMood === "confident" ? 0.1 : 0;
-    const moodPenalty = state.robotMood === "cautious" ? -0.1 : 0;
-    const chance = clamp(profile.prediction.chance + moodBoost + moodPenalty, 0.1, 0.6);
-    const signalThreshold = state.robotMood === "cautious"
-      ? profile.prediction.signal + 0.05
-      : profile.prediction.signal;
-    if (confidence >= profile.prediction.confidence && lastSignal >= signalThreshold && Math.random() < chance) {
-      state.robotPredictionCooldown = profile.prediction.cooldown;
-      logDebug("predict", { predicted, confidence, lastSignal });
-      return predicted;
+    return null;
+  }
+  const profile = getNightProfile();
+  if (!profile.prediction.enabled) return null;
+  const penalty = alarmVisitPenalty(state.lastKnownPlayerRoom);
+  const confidence = getRoomConfidence(state.lastKnownPlayerRoom) - penalty;
+  const lastSignal = state.roomSignals.get(state.lastKnownPlayerRoom) || 0;
+  const moodBoost = state.robotMood === "confident" ? 0.1 : 0;
+  const moodPenalty = state.robotMood === "cautious" ? -0.1 : 0;
+  const chance = clamp(profile.prediction.chance + moodBoost + moodPenalty, 0.1, 0.6);
+  const signalThreshold = state.robotMood === "cautious"
+    ? profile.prediction.signal + 0.05
+    : profile.prediction.signal;
+  if (confidence >= profile.prediction.confidence && lastSignal >= signalThreshold && Math.random() < chance) {
+    state.robotPredictionCooldown = profile.prediction.cooldown;
+    logDebug("predict", { predicted, confidence, lastSignal });
+    return predicted;
+  }
+  return null;
+}
+
+function pickRobotTarget() {
+  const avoidAlarmLoop = isAlarmTriggered(state.robotRoom);
+  const predicted = maybePickPredictionTarget();
+  const candidates = new Set(state.roomSignals.keys());
+  if (state.lastKnownPlayerRoom !== null) {
+    candidates.add(state.lastKnownPlayerRoom);
+  }
+  if (predicted !== null) {
+    candidates.add(predicted);
+  }
+  if (state.robotFocus !== null && state.robotFocusTTL > 0) {
+    candidates.add(state.robotFocus);
+  }
+  if (candidates.size === 0) return null;
+
+  // Blend signals, trail memory, prediction, and focus bias into a unified score.
+  let bestRoom = null;
+  let bestScore = 0;
+  for (const roomId of candidates) {
+    if (avoidAlarmLoop && roomId === state.robotLastRoom && isAlarmTriggered(roomId)) {
+      continue;
+    }
+    const signal = state.roomSignals.get(roomId) || 0;
+    const persistent = state.persistentSignals.get(roomId) || 0;
+    const persistentBoost = persistent > 0 ? Math.min(0.3, 0.1 + persistent * 0.05) : 0;
+    const isLastKnown = state.trailTurns > 0 && roomId === state.lastKnownPlayerRoom;
+    const lastKnownBoost = isLastKnown ? 0.35 : 0;
+    const predictedBoost = roomId === predicted ? 0.25 : 0;
+    const focusBoost = roomId === state.robotFocus && state.robotFocusTTL > 0
+      ? ROBOT_FOCUS_BIAS * (state.robotFocusTTL / ROBOT_FOCUS_TTL)
+      : 0;
+    const penalty = alarmVisitPenalty(roomId);
+    const distance = Math.max(0, getShortestPath(state.robotRoom, roomId).length - 1);
+    const distancePenalty = Math.min(0.3, distance * 0.05);
+    const checkedPenalty = state.robotCheckedCooldown.has(roomId) ? 0.2 : 0;
+    let score = signal + persistentBoost + lastKnownBoost + predictedBoost + focusBoost;
+    score -= penalty + distancePenalty + checkedPenalty;
+    if (
+      state.robotCheckedCooldown.has(roomId) &&
+      signal < 0.7 &&
+      !isLastKnown &&
+      predictedBoost === 0 &&
+      focusBoost === 0
+    ) {
+      score -= 0.2;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestRoom = roomId;
     }
   }
 
-  return null;
+  return bestScore >= 0.2 ? bestRoom : null;
 }
 
 function getRoomConfidence(roomId) {
@@ -5992,7 +6183,7 @@ function triggerSiren(roomId) {
         updateUI();
         return;
       }
-      state.robotFocus = roomId;
+      setRobotFocus(roomId, { reason: "siren" });
       registerSignal(roomId, lure.strength * profile.signalStrength.device * effects.signalSpike, {
         type: "siren",
         forceLastKnown: true,
@@ -6012,7 +6203,7 @@ function interruptRobotTask(roomId) {
   state.robotSweepQueue = [];
   state.robotInvestigateTurns = 0;
   state.robotTask = null;
-  state.robotFocus = roomId;
+  setRobotFocus(roomId, { reason: "interrupt" });
   setRobotMode("hunt");
 }
 
@@ -6429,7 +6620,7 @@ function getRoomPressure(roomId) {
   const visit = state.robotPresenceHeat.get(roomId) || 0;
   const targetBoost = state.robotPlannedTarget === roomId ? 0.6 : 0;
   const sweepBoost = state.robotSweepQueue.includes(roomId) ? 0.4 : 0;
-  const focusBoost = state.robotFocus === roomId ? 0.5 : 0;
+  const focusBoost = state.robotFocus === roomId && state.robotFocusTTL > 0 ? ROBOT_FOCUS_BIAS : 0;
   const pressure = clamp(Math.max(signal, visit, targetBoost, sweepBoost, focusBoost), 0, 1);
   if (state.robotDisabled && signal < 0.2) return 0;
   return pressure;
@@ -6785,6 +6976,13 @@ function craftItem() {
   updateUI();
 }
 
+/*
+AI loop flow:
+1) Director nudges (soft signals near the player).
+2) Signals decay/update, last-known memory updates.
+3) Target scoring blends signals, trail, prediction, and focus bias.
+4) Robot chooses to move, sweep, linger, or investigate based on confidence.
+*/
 function startGameLoop() {
   if (gameLoopId) {
     clearInterval(gameLoopId);
@@ -6884,6 +7082,7 @@ function startGameLoop() {
     tickPowerSurge();
     tickPersistentSignals();
     decaySignals();
+    tickDirector();
     tickRewireDampen();
     tickJammedEdges();
     maybeExpireLastKnown();
@@ -7262,6 +7461,7 @@ function tickRobotTravel() {
   state.robotRoom = nextRoom;
   state.robotLastRoom = previousRoom;
   state.robotMovedThisTick = true;
+  handleRobotFocusArrival();
   markRoomChecked(state.robotRoom);
   recordRobotAlarmVisit(state.robotRoom);
   if (isAlarmTriggered(state.robotRoom)) {
@@ -7340,7 +7540,7 @@ function toggleRobot() {
     state.robotSearchTurns = 0;
     state.robotSearchSpot = null;
     state.robotLookTurns = 0;
-    state.robotFocus = null;
+    clearRobotFocus("disabled");
     state.robotPath = [];
     state.robotTravelStepStart = null;
     state.robotTravelStepDuration = 0;
