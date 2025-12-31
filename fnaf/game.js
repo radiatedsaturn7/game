@@ -755,6 +755,8 @@ let actionLockTimeoutId = null;
 let actionLockStepTimeoutId = null;
 let pendingMoveTimeoutId = null;
 const ACTION_LOCK_MS = 1200;
+let ambientTransitionToken = 0;
+let currentAmbientTrack = null;
 
 const dom = {
   audioGate: document.getElementById("audioGate"),
@@ -765,6 +767,7 @@ const dom = {
   titleVideos: document.querySelectorAll(".title-video"),
   titleAudio: document.getElementById("titleAudio"),
   rainAudio: document.getElementById("rainAudio"),
+  sunnyAudio: document.getElementById("sunnyAudio"),
   titleStartBtn: document.getElementById("titleStartBtn"),
   app: document.querySelector(".app"),
   dateLabel: document.getElementById("dateLabel"),
@@ -2513,29 +2516,116 @@ function announceWeather() {
   state.weatherAnnounced = true;
 }
 
-function updateWeatherAmbience() {
-  const rainAudio = dom.rainAudio;
-  if (!rainAudio) return;
-  const shouldPlay = hasStartedGame && titleAudioUnlocked && state.weather?.type === "Rain";
-  if (!shouldPlay) {
-    if (!rainAudio.paused) {
-      rainAudio.pause();
-    }
-    rainAudio.currentTime = 0;
+const AMBIENT_FADE_IN_MS = 1200;
+const AMBIENT_FADE_OUT_MS = 1200;
+
+function getAmbientTrackForWeather(weatherType) {
+  if (weatherType === "Rain") {
+    return { element: dom.rainAudio, volume: 0.6, label: "rain" };
+  }
+  if (weatherType === "Clear") {
+    return { element: dom.sunnyAudio, volume: 0.5, label: "sunny" };
+  }
+  return null;
+}
+
+function fadeAudioVolume(audio, fromVolume, toVolume, duration, token, onComplete) {
+  if (!audio) {
+    if (onComplete) onComplete();
     return;
   }
-  rainAudio.loop = true;
-  rainAudio.muted = false;
-  rainAudio.volume = 0.6;
-  if (rainAudio.paused) {
-    const playAttempt = rainAudio.play();
-    if (playAttempt && typeof playAttempt.catch === "function") {
-      playAttempt.catch((err) => {
-        console.warn("rain audio play() failed:", err);
-        console.log("rainAudio currentSrc:", rainAudio.currentSrc, "readyState:", rainAudio.readyState);
-      });
-    }
+  if (duration <= 0) {
+    audio.volume = toVolume;
+    if (onComplete) onComplete();
+    return;
   }
+  const start = performance.now();
+  const tick = (now) => {
+    if (token !== ambientTransitionToken) return;
+    const progress = Math.min(1, (now - start) / duration);
+    audio.volume = fromVolume + (toVolume - fromVolume) * progress;
+    if (progress < 1) {
+      requestAnimationFrame(tick);
+    } else if (onComplete) {
+      onComplete();
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
+function stopAmbientTrack(track) {
+  if (!track?.element) return;
+  track.element.pause();
+  track.element.currentTime = 0;
+}
+
+function fadeOutAmbientTrack(duration = AMBIENT_FADE_OUT_MS) {
+  if (!currentAmbientTrack?.element) return;
+  const token = ++ambientTransitionToken;
+  const audio = currentAmbientTrack.element;
+  const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+  fadeAudioVolume(audio, startVolume, 0, duration, token, () => {
+    if (token !== ambientTransitionToken) return;
+    stopAmbientTrack(currentAmbientTrack);
+    currentAmbientTrack = null;
+  });
+}
+
+function startAmbientTrack(track, duration = AMBIENT_FADE_IN_MS) {
+  if (!track?.element) return;
+  const token = ++ambientTransitionToken;
+  const audio = track.element;
+  audio.loop = true;
+  audio.muted = false;
+  audio.volume = 0;
+  audio.currentTime = 0;
+  currentAmbientTrack = track;
+  const playAttempt = audio.play();
+  if (playAttempt && typeof playAttempt.catch === "function") {
+    playAttempt.catch((err) => {
+      console.warn(`${track.label} audio play() failed:`, err);
+      console.log(`${track.label}Audio currentSrc:`, audio.currentSrc, "readyState:", audio.readyState);
+    });
+  }
+  fadeAudioVolume(audio, 0, track.volume, duration, token);
+}
+
+function transitionAmbientTrack(targetTrack) {
+  if (!targetTrack?.element) {
+    fadeOutAmbientTrack();
+    return;
+  }
+  if (currentAmbientTrack?.element === targetTrack.element) {
+    if (currentAmbientTrack.element.paused) {
+      startAmbientTrack(targetTrack);
+      return;
+    }
+    const token = ++ambientTransitionToken;
+    const audio = currentAmbientTrack.element;
+    const startVolume = Number.isFinite(audio.volume) ? audio.volume : targetTrack.volume;
+    fadeAudioVolume(audio, startVolume, targetTrack.volume, AMBIENT_FADE_IN_MS, token);
+    currentAmbientTrack = targetTrack;
+    return;
+  }
+  if (currentAmbientTrack) {
+    const token = ++ambientTransitionToken;
+    const audio = currentAmbientTrack.element;
+    const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
+    fadeAudioVolume(audio, startVolume, 0, AMBIENT_FADE_OUT_MS, token, () => {
+      if (token !== ambientTransitionToken) return;
+      stopAmbientTrack(currentAmbientTrack);
+      currentAmbientTrack = null;
+      startAmbientTrack(targetTrack);
+    });
+    return;
+  }
+  startAmbientTrack(targetTrack);
+}
+
+function updateWeatherAmbience() {
+  const shouldPlay = hasStartedGame && titleAudioUnlocked;
+  const targetTrack = shouldPlay ? getAmbientTrackForWeather(state.weather?.type) : null;
+  transitionAmbientTrack(targetTrack);
 }
 
 function setCurrentNight(night) {
@@ -4867,6 +4957,7 @@ function triggerDeath() {
 function buildEscape() {
   if (!state.isAlive || state.hasEscaped) return;
   if (!rooms[state.playerRoom].isExit || !state.escapeReady) return;
+  fadeOutAmbientTrack();
   state.hasEscaped = true;
   state.completedNight = state.currentNight;
   state.dayCount += 1;
