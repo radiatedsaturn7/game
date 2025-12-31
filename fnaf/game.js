@@ -266,7 +266,7 @@ const NIGHT_UNLOCKS = {
     allowCrafting: false,
     allowDoorJams: false,
     showRobotIntelOnMap: false,
-    allowAlarmedRooms: false,
+    allowAlarmedRooms: true,
   },
   4: {
     showMap: true,
@@ -1032,6 +1032,7 @@ function init() {
   setupMissionForNight();
   assignRoomFinds();
   announceWeather();
+  updateWeatherAmbience({ forceRestart: true });
   configureRobotStart();
   updateSchematicList();
   updatePlayerTrail(state.playerRoom);
@@ -4183,6 +4184,9 @@ They normally don’t care about us.
 We’re ants to them.
 
 Why now?`,
+  },
+  3: {
+    robotActivation: "Cait: One more thing. Watch out. I think its following you.",
   },
 };
 
