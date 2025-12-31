@@ -893,6 +893,10 @@ function registerLoopTrack(name, element, bus, baseVolume) {
     currentTargetVolume: 0,
     fadeToken: 0,
     isPrimed: false,
+    isReady: false,
+    readyListenerAttached: false,
+    pendingPlay: false,
+    loadRequested: false,
   });
 }
 
@@ -904,6 +908,10 @@ function primeLoopTrack(track) {
   audio.muted = true;
   audio.volume = 0;
   track.isPrimed = true;
+  if (!track.loadRequested && typeof audio.load === "function") {
+    audio.load();
+    track.loadRequested = true;
+  }
 }
 
 function ensureLoopTrackPlaying(name, { restart = false } = {}) {
@@ -915,7 +923,7 @@ function ensureLoopTrackPlaying(name, { restart = false } = {}) {
     audio.currentTime = 0;
   }
   if (audio.paused) {
-    attemptPlayAudio(audio, track.name);
+    queueLoopTrackPlay(track);
   }
 }
 
@@ -1032,6 +1040,41 @@ function attemptPlayAudio(audio, label) {
   }
 }
 
+function queueLoopTrackPlay(track) {
+  if (!track?.element) return;
+  const audio = track.element;
+  const readyState = Number.isFinite(audio.readyState) ? audio.readyState : 0;
+  if (readyState >= 2) {
+    track.isReady = true;
+    track.pendingPlay = false;
+    attemptPlayAudio(audio, track.name);
+    return;
+  }
+  track.pendingPlay = true;
+  if (track.readyListenerAttached) return;
+  track.readyListenerAttached = true;
+  const onCanPlay = () => {
+    track.readyListenerAttached = false;
+    track.isReady = true;
+    audio.removeEventListener("canplay", onCanPlay);
+    if (track.pendingPlay) {
+      track.pendingPlay = false;
+      attemptPlayAudio(audio, track.name);
+    }
+  };
+  audio.addEventListener("canplay", onCanPlay);
+  if (!track.loadRequested && typeof audio.load === "function") {
+    audio.load();
+    track.loadRequested = true;
+  }
+}
+
+function clearLoopTrackPending(name) {
+  const track = loopTracks.get(name);
+  if (!track) return;
+  track.pendingPlay = false;
+}
+
 function setBusVolume(busName, volume) {
   if (!(busName in audioBuses)) return;
   audioBuses[busName] = clamp(volume, 0, 1);
@@ -1138,7 +1181,7 @@ function primeLoopTracksInGesture() {
     const audio = track.element;
     primeLoopTrack(track);
     if (audio.paused) {
-      attemptPlayAudio(audio, track.name);
+      queueLoopTrackPlay(track);
     }
   });
 }
@@ -2808,6 +2851,12 @@ function updateWeatherAmbience({ forceRestart = false } = {}) {
   if (targetName) {
     ensureLoopTrackPlaying(targetName);
   }
+  if (targetName !== "rain") {
+    clearLoopTrackPending("rain");
+  }
+  if (targetName !== "sunny") {
+    clearLoopTrackPending("sunny");
+  }
   fadeTrackTo("rain", targetName === "rain" ? targetVolume : 0, targetName === "rain" ? fadeIn : fadeOut);
   fadeTrackTo("sunny", targetName === "sunny" ? targetVolume : 0, targetName === "sunny" ? fadeIn : fadeOut);
 }
@@ -2905,6 +2954,7 @@ function startRunningAudio() {
 
 function stopRunningAudio() {
   if (!dom.runningAudio) return;
+  clearLoopTrackPending("run");
   const audio = dom.runningAudio;
   const token = ++runAudioTransitionToken;
   if (runAudioStopTimeoutId) {
@@ -2941,7 +2991,7 @@ function updateRunningAudioState() {
     isPlayerTraveling() &&
     state.playerTravelMode === "run";
   if (shouldPlay) {
-    startRunningAudio();
+    if (!runAudioActive) startRunningAudio();
   } else if (runAudioActive) {
     stopRunningAudio();
   }
@@ -2965,6 +3015,7 @@ function startSneakAudio() {
 
 function stopSneakAudio() {
   if (!dom.sneakAudio) return;
+  clearLoopTrackPending("sneak");
   const audio = dom.sneakAudio;
   const token = ++sneakAudioTransitionToken;
   if (sneakAudioStopTimeoutId) {
@@ -3001,7 +3052,7 @@ function updateSneakAudioState() {
     isPlayerTraveling() &&
     state.playerTravelMode === "sneak";
   if (shouldPlay) {
-    startSneakAudio();
+    if (!sneakAudioActive) startSneakAudio();
   } else if (sneakAudioActive) {
     stopSneakAudio();
   }
