@@ -4783,7 +4783,7 @@ function getRobotActivationAlertText() {
 
 function showRobotActivationDialog() {
   const text = getRobotActivationAlertText();
-  if (state.currentNight === 2) {
+  if (state.currentNight === 2 || state.currentNight === 3) {
     showObjectiveModal(text);
     return;
   }
