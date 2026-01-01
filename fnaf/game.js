@@ -757,10 +757,12 @@ const state = {
   ohShitTriggered: false,
   sanity: 1,
   minSanity: 1,
+  prevSanity: 1,
   sanityGlitchCooldown: 0,
   sanityScanCooldown: 0,
   phantomCueShown: false,
   lastSanityRecoveryTick: -999,
+  caitFrayedTutorialShown: false,
   caitCooldown: 0,
   caitTalkCount: 0,
   runMoments: [],
@@ -2336,6 +2338,29 @@ function sanityPressurePhrase() {
     return "You should have moved.";
   }
   return "";
+}
+
+function maybeTriggerCaitFrayedTutorial() {
+  if (state.caitFrayedTutorialShown) return;
+  if (state.currentNight < 4) return;
+  if (!(state.prevSanity > 0.4 && state.sanity < 0.4)) return;
+  state.caitFrayedTutorialShown = true;
+  state.robotDormant = Math.max(state.robotDormant, 3);
+  state.robotPath = [];
+  state.robotLinger = 0;
+  state.robotInvestigateTurns = 0;
+  state.robotSearchTurns = 0;
+  queueObjectiveModal(
+    `Cait: Geist… I saw one.
+No— I felt it.
+
+…Am I— shit. Am I becoming human?
+
+I think the robots are fucking with us.
+If it starts getting to you— talk to me.
+
+Just… be quiet when you do it. OK?`
+  );
 }
 
 function logDebug(event, payload) {
@@ -5561,6 +5586,7 @@ function resetGame({ preserveItems = false } = {}) {
   const savedFoundSchematics = preserveItems ? new Set(state.foundSchematics) : null;
   const savedDoorJams = preserveItems ? state.doorJams : null;
   const savedNoiseLures = preserveItems ? state.noiseLures : null;
+  const savedCaitFrayedTutorialShown = preserveItems ? state.caitFrayedTutorialShown : null;
   clearActionLock();
   if (pendingMoveTimeoutId) {
     clearTimeout(pendingMoveTimeoutId);
@@ -5727,10 +5753,12 @@ function resetGame({ preserveItems = false } = {}) {
   state.ohShitTriggered = false;
   state.sanity = 1;
   state.minSanity = 1;
+  state.prevSanity = state.sanity;
   state.sanityGlitchCooldown = 0;
   state.sanityScanCooldown = 0;
   state.phantomCueShown = false;
   state.lastSanityRecoveryTick = -999;
+  state.caitFrayedTutorialShown = false;
   state.caitCooldown = 0;
   state.caitTalkCount = 0;
   state.runMoments = [];
@@ -5742,6 +5770,7 @@ function resetGame({ preserveItems = false } = {}) {
     savedFoundSchematics.forEach((item) => state.foundSchematics.add(item));
     state.doorJams = savedDoorJams;
     state.noiseLures = savedNoiseLures;
+    state.caitFrayedTutorialShown = savedCaitFrayedTutorialShown;
   }
   setupMissionForNight();
   assignRoomFinds();
@@ -7130,6 +7159,8 @@ function startGameLoop() {
     advanceRobot();
     checkThreat();
     tickRobotMemory();
+    maybeTriggerCaitFrayedTutorial();
+    state.prevSanity = state.sanity;
     updateUI();
   }, TICK_MS);
 }
