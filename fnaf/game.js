@@ -946,11 +946,11 @@ const fxState = {
 
 let gameLoopId = null;
 let hasStartedGame = false;
-let titleAudioUnlocked = false;
+let audioUnlockedOnce = false;
 let titleSyncAnimationId = null;
 let canStartAmbience = false;
 let audioLoopsPrimed = false;
-const audioPlayFailureLogged = new Set();
+const audioPlayFailureLogged = new Map();
 const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
 const debugLogBuffer = [];
 
@@ -1025,16 +1025,35 @@ function mirrorConsole() {
 }
 
 function logAudioPlayFailure(label, audio, err) {
-  if (audioPlayFailureLogged.has(label)) return;
-  audioPlayFailureLogged.add(label);
-  console.warn(`${label} audio play() failed:`, err);
+  const errorName = err?.name ?? "UnknownError";
+  let loggedNames = audioPlayFailureLogged.get(label);
+  if (!loggedNames) {
+    loggedNames = new Set();
+    audioPlayFailureLogged.set(label, loggedNames);
+  }
+  if (loggedNames.has(errorName)) return;
+  loggedNames.add(errorName);
+  console.warn(`${label} audio play() failed (${errorName}):`, err);
   if (audio) {
-    console.log(`${label}Audio currentSrc:`, audio.currentSrc, "readyState:", audio.readyState);
+    const mediaError = audio.error
+      ? { code: audio.error.code, message: audio.error.message }
+      : null;
+    console.log(
+      `${label}Audio currentSrc:`,
+      audio.currentSrc,
+      "readyState:",
+      audio.readyState,
+      "networkState:",
+      audio.networkState,
+      "error:",
+      mediaError,
+    );
   }
 }
 
 function attemptPlayAudio(audio, label) {
   if (!audio) return;
+  if (!audioUnlockedOnce) return;
   const playAttempt = audio.play();
   if (playAttempt && typeof playAttempt.catch === "function") {
     playAttempt.catch((err) => logAudioPlayFailure(label, audio, err));
@@ -1054,16 +1073,35 @@ function queueLoopTrackPlay(track) {
   track.pendingPlay = true;
   if (track.readyListenerAttached) return;
   track.readyListenerAttached = true;
-  const onCanPlay = () => {
+  const readyEvents = ["loadeddata", "canplay", "canplaythrough"];
+  const cleanup = () => {
     track.readyListenerAttached = false;
+    readyEvents.forEach((eventName) => {
+      audio.removeEventListener(eventName, onReady);
+    });
+    audio.removeEventListener("error", onError);
+  };
+  const onReady = () => {
+    cleanup();
     track.isReady = true;
-    audio.removeEventListener("canplay", onCanPlay);
     if (track.pendingPlay) {
       track.pendingPlay = false;
       attemptPlayAudio(audio, track.name);
     }
   };
-  audio.addEventListener("canplay", onCanPlay);
+  const onError = () => {
+    cleanup();
+    track.pendingPlay = false;
+    console.warn(`${track.name} audio error:`, audio.error, {
+      currentSrc: audio.currentSrc,
+      readyState: audio.readyState,
+      networkState: audio.networkState,
+    });
+  };
+  readyEvents.forEach((eventName) => {
+    audio.addEventListener(eventName, onReady, { once: true });
+  });
+  audio.addEventListener("error", onError, { once: true });
   if (!track.loadRequested && typeof audio.load === "function") {
     audio.load();
     track.loadRequested = true;
@@ -1129,9 +1167,11 @@ function playRunTestSound() {
   AudioManager.setUiVolume(0);
   ensureLoopTrackPlaying("run", { restart: true });
   if (dom.runningAudio) {
+    dom.runningAudio.currentTime = 0;
     dom.runningAudio.muted = false;
+    dom.runningAudio.volume = 1;
+    attemptPlayAudio(dom.runningAudio, "run-test");
   }
-  fadeTrackTo("run", RUN_AUDIO_VOLUME, 80);
 }
 
 function getEffectiveVolume(track, targetVolume) {
@@ -1376,15 +1416,36 @@ function initTitleScreen() {
   }
 }
 
-function handleAudioGateGesture(event) {
-  if (titleAudioUnlocked) return;
-  if (!event || !event.isTrusted) return;
+async function ensureAudioUnlockedFromGesture(event) {
+  if (audioUnlockedOnce) return true;
+  if (!event || !event.isTrusted) return false;
   if (event.type === "keydown") {
     const allowedKeys = new Set(["Enter", " ", "Spacebar"]);
-    if (!allowedKeys.has(event.key)) return;
+    if (!allowedKeys.has(event.key)) return false;
     event.preventDefault();
   }
-  titleAudioUnlocked = true;
+  const audioReady = await AudioManager.init();
+  if (audioReady) {
+    await AudioManager.unlock();
+  }
+  audioUnlockedOnce = true;
+  primeLoopTracksInGesture();
+  loopTracks.forEach((track) => {
+    const audio = track.element;
+    if (!audio) return;
+    if (typeof audio.load === "function") {
+      audio.load();
+    }
+    track.loadRequested = true;
+  });
+  if (dom.titleAudio && typeof dom.titleAudio.load === "function") {
+    dom.titleAudio.load();
+  }
+  return true;
+}
+
+async function handleAudioGateGesture(event) {
+  if (!(await ensureAudioUnlockedFromGesture(event))) return;
   if (dom.audioGate) {
     dom.audioGate.removeEventListener("click", handleAudioGateGesture, true);
     dom.audioGate.setAttribute("aria-hidden", "true");
@@ -1410,9 +1471,6 @@ function handleAudioGateGesture(event) {
     video.loop = true;
     video.currentTime = 0;
   });
-  const audioReady = AudioManager.init();
-  primeLoopTracksInGesture();
-
   if (!isTitleScreenActive()) return;
   if (audioEl) {
     attemptPlayAudio(audioEl, "title");
@@ -1432,14 +1490,9 @@ function handleAudioGateGesture(event) {
     });
   }
   const finishAudioSetup = () => {
-    AudioManager.unlock();
     AudioManager.loadMusicFromElement(audioEl);
   };
-  if (audioReady && typeof audioReady.then === "function") {
-    audioReady.then(finishAudioSetup);
-  } else if (audioReady) {
-    finishAudioSetup();
-  }
+  finishAudioSetup();
   if (dom.titleScreen) {
     dom.titleScreen.classList.add("title-video-visible");
   }
@@ -1451,7 +1504,7 @@ function startTitleSyncLoop() {
     cancelAnimationFrame(titleSyncAnimationId);
   }
   const loop = () => {
-    if (!isTitleScreenActive() || !titleAudioUnlocked) {
+    if (!isTitleScreenActive() || !audioUnlockedOnce) {
       titleSyncAnimationId = null;
       return;
     }
@@ -1660,7 +1713,11 @@ function attachEvents() {
   dom.nextNightBtn.addEventListener("click", advanceNight);
   dom.randomizeBtn.addEventListener("click", randomizeLayout);
   dom.forceEscapeBtn.addEventListener("click", forceEscape);
-  dom.testRunAudioBtn.addEventListener("click", playRunTestSound);
+  dom.testRunAudioBtn.addEventListener("click", async (event) => {
+    const unlocked = await ensureAudioUnlockedFromGesture(event);
+    if (!unlocked) return;
+    playRunTestSound();
+  });
   dom.silenceAudioBtn.addEventListener("click", silenceAllSound);
   dom.goBtn.addEventListener("click", () => moveSelected(false));
   dom.runBtn.addEventListener("click", () => moveSelected(true));
@@ -2874,7 +2931,7 @@ function getAmbientTrackForWeather(weatherType) {
 }
 
 function updateWeatherAmbience({ forceRestart = false } = {}) {
-  const shouldPlay = hasStartedGame && titleAudioUnlocked && canStartAmbience;
+  const shouldPlay = hasStartedGame && audioUnlockedOnce && canStartAmbience;
   const targetTrack = shouldPlay ? getAmbientTrackForWeather(state.weather?.type) : null;
   const targetName = targetTrack?.name ?? null;
   const targetVolume = targetTrack?.volume ?? 0;
@@ -2920,7 +2977,7 @@ function fadeTypingAudioVolume(audio, fromVolume, toVolume, duration, token, onC
 
 function startTypingAudio(durationMs) {
   if (!dom.typingAudio) return;
-  if (!titleAudioUnlocked || !hasStartedGame) return;
+  if (!audioUnlockedOnce || !hasStartedGame) return;
   const audio = dom.typingAudio;
   const token = ++typingTransitionToken;
   if (typingAudioTimeoutId) {
@@ -2971,7 +3028,7 @@ function stopTypingAudio() {
 
 function startRunningAudio() {
   if (!dom.runningAudio) return;
-  if (!titleAudioUnlocked || !hasStartedGame) return;
+  if (!audioUnlockedOnce || !hasStartedGame) return;
   const audio = dom.runningAudio;
   const token = ++runAudioTransitionToken;
   if (runAudioStopTimeoutId) {
@@ -3019,7 +3076,7 @@ function stopRunningAudio() {
 
 function updateRunningAudioState() {
   const shouldPlay =
-    titleAudioUnlocked &&
+    audioUnlockedOnce &&
     hasStartedGame &&
     isPlayerTraveling() &&
     state.playerTravelMode === "run";
@@ -3032,7 +3089,7 @@ function updateRunningAudioState() {
 
 function startSneakAudio() {
   if (!dom.sneakAudio) return;
-  if (!titleAudioUnlocked || !hasStartedGame) return;
+  if (!audioUnlockedOnce || !hasStartedGame) return;
   const audio = dom.sneakAudio;
   const token = ++sneakAudioTransitionToken;
   if (sneakAudioStopTimeoutId) {
@@ -3080,7 +3137,7 @@ function stopSneakAudio() {
 
 function updateSneakAudioState() {
   const shouldPlay =
-    titleAudioUnlocked &&
+    audioUnlockedOnce &&
     hasStartedGame &&
     isPlayerTraveling() &&
     state.playerTravelMode === "sneak";
