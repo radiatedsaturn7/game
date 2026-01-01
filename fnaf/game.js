@@ -865,11 +865,10 @@ const dom = {
   victoryScreen: document.getElementById("victoryScreen"),
   retryBtn: document.getElementById("retryBtn"),
   nextNightBtn: document.getElementById("nextNightBtn"),
+  victoryTitle: document.getElementById("victoryTitle"),
   actionStatus: document.getElementById("actionStatus"),
   actionLock: document.getElementById("actionLock"),
   actionLockLabel: document.getElementById("actionLockLabel"),
-  deathSummary: document.getElementById("deathSummary"),
-  victorySummary: document.getElementById("victorySummary"),
   nightSelect: document.getElementById("nightSelect"),
   debugLog: document.getElementById("debugLog"),
 };
@@ -3429,12 +3428,7 @@ function buildRunSummary(outcome) {
     lines.push("Escape protocol initiated.");
   }
   if (outcome === "win") {
-    const escapeSuccessLine = getEscapeSuccessLine(night);
-    if (escapeSuccessLine) {
-      lines.push(escapeSuccessLine);
-    } else {
-      lines.push(`You escaped the factory on Night ${night}.`);
-    }
+    lines.push(`You escaped the factory on Night ${night}.`);
   } else {
     lines.push(`You were caught in ${rooms[state.playerRoom].name}.`);
   }
@@ -4225,7 +4219,15 @@ function updateEscapeReadiness() {
   }
   state.escapeReady = ready;
   if (!wasReady && ready) {
+    const preLine = getEscapeReadyLine();
     const line = getObjectiveCompleteLine();
+    if (preLine) {
+      showObjectiveModal(preLine);
+      if (line) {
+        queueObjectiveModal(line);
+      }
+      return;
+    }
     if (line) {
       showObjectiveModal(line);
     }
@@ -4744,7 +4746,7 @@ They’re everywhere out here.
 
 Go.
 Get back to the escape ⎋ workshop and get out.`,
-    escapeSuccess: `Cait: I have to move.
+    escapeReady: `Cait: I have to move.
 
 And… Rob—
 
@@ -4787,8 +4789,8 @@ function getObjectiveCompleteLine() {
   return getNightDialogue(state.currentNight)?.objectiveComplete ?? null;
 }
 
-function getEscapeSuccessLine(night) {
-  return getNightDialogue(night)?.escapeSuccess ?? null;
+function getEscapeReadyLine() {
+  return getNightDialogue(state.currentNight)?.escapeReady ?? null;
 }
 
 function getRobotActivationAlertText() {
@@ -5607,8 +5609,6 @@ function triggerDeath() {
   closeMap();
   fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
   fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
-  state.runSummary = buildRunSummary("loss");
-  dom.deathSummary.textContent = state.runSummary;
   dom.deathScreen.classList.add("active");
   dom.deathScreen.setAttribute("aria-hidden", "false");
 }
@@ -5624,16 +5624,20 @@ function buildEscape() {
   state.completedNight = state.currentNight;
   state.dayCount += 1;
   state.threat = Math.min(5, state.threat + 0.4);
-  state.runSummary = buildRunSummary("win");
-  dom.victorySummary.textContent = state.runSummary;
+  updateVictoryTitle();
   updateNextNightButton();
   dom.victoryScreen.classList.add("active");
   dom.victoryScreen.setAttribute("aria-hidden", "false");
 }
 
+function updateVictoryTitle() {
+  if (!dom.victoryTitle) return;
+  dom.victoryTitle.textContent = state.currentNight >= 2 ? "Breached Containment" : "Breached Exit";
+}
+
 function updateNextNightButton() {
   const isFinalNight = state.currentNight >= 10;
-  dom.nextNightBtn.textContent = isFinalNight ? "Play Again" : "Next Night";
+  dom.nextNightBtn.textContent = isFinalNight ? "Play Again" : "Continue";
 }
 
 function advanceNight() {
@@ -5857,10 +5861,8 @@ function resetGame({ preserveItems = false } = {}) {
   configureRobotStart();
   dom.deathScreen.classList.remove("active");
   dom.deathScreen.setAttribute("aria-hidden", "true");
-  dom.deathSummary.textContent = "";
   dom.victoryScreen.classList.remove("active");
   dom.victoryScreen.setAttribute("aria-hidden", "true");
-  dom.victorySummary.textContent = "";
   dom.robotAlertModal.classList.remove("active");
   dom.robotAlertModal.setAttribute("aria-hidden", "true");
   updateUI();
