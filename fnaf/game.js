@@ -2745,7 +2745,30 @@ Go pick it up. It’s in ${rooms[roomId].name}.`,
     state.requiredPickup = {
       itemName: "Noise Lure",
       roomId,
-      caitIntroLine: `Cait: I found a Noise Lure in ${rooms[roomId].name}. It’ll be loud. Use it smart.`,
+      caitIntroLine: `Cait: Geist…
+
+Out here, they don’t rush.
+They don’t corner things.
+
+They leave space.
+
+I keep thinking about something you once told me—
+that the surest way to break someone
+is to leave them an exit they believe in.
+
+One of them left something behind.
+A noise lure.
+
+Not hidden.
+Not damaged.
+
+Just… placed.
+
+Take it.
+But remember—
+
+hope keeps you moving.
+And movement keeps you visible.`,
       caitWarnLine: null,
       blocksEscapeConsole: true,
       warned: false,
@@ -2760,8 +2783,19 @@ Go pick it up. It’s in ${rooms[roomId].name}.`,
     state.requiredPickup = {
       itemName: "Door Jam",
       roomId,
-      caitIntroLine: `Cait: Door Jam kit in ${rooms[roomId].name}. If we get pinned, it buys seconds.`,
-      caitWarnLine: null,
+      caitIntroLine: `Cait: Robtergeist? Are you there?
+
+I can’t hear you. What happened?
+
+…No. Wait— I hear something, but it’s wrong.
+
+I think they know.
+
+If you can hear me— get the door jam.
+It’s in ${rooms[roomId].name}.
+
+Please.`,
+      caitWarnLine: "Cait: …there— <static> …don’t— <static> …stay— <static>",
       blocksEscapeConsole: true,
       warned: false,
     };
@@ -2780,7 +2814,9 @@ Go pick it up. It’s in ${rooms[roomId].name}.`,
       blocksEscapeConsole: true,
       warned: false,
     };
-    state.nightIntroLine = "Cait: Robtergeist… I’m so sorry… we weren’t fast enough.";
+    state.nightIntroLine = `Cait: I’m sorry.
+
+I’m so sorry.`;
     state.objectiveHoldUntil = 3;
     state.storyQueue.push({
       triggerTurn: 2,
@@ -3316,7 +3352,9 @@ function tickStoryQueue() {
   state.storyQueue = state.storyQueue.filter((entry) => state.turn < entry.triggerTurn);
   ready.forEach((entry) => {
     if (entry.type === "night7-lockdown") {
-      showObjectiveModal("Cait: They… they managed to lock you in.");
+      showObjectiveModal(`Cait: I tried so hard.
+
+I’m so sorry.`);
       state.storyQueue.push({
         triggerTurn: state.turn + 1,
         type: "night7-blowtorch",
@@ -3327,7 +3365,16 @@ function tickStoryQueue() {
       const roomId = entry.roomId;
       state.specialPickups.set(roomId, "Blowtorch");
       showObjectiveModal(
-        `Cait: Wait— I found a Blowtorch in ${rooms[roomId].name}. It’ll unjam those doors. It’s gonna be loud.`
+        `Cait: Geist?
+
+I… I found a blowtorch.
+It’s in ${rooms[roomId].name}.
+
+Try it on the permanent door jams.
+
+I don’t know if this helps.
+
+But I don’t know what else we do now.`
       );
     }
   });
@@ -4056,7 +4103,7 @@ function updateRoomActions() {
     });
   }
 
-  if (state.currentNight >= 4 && !state.hidden && !isPlayerTraveling()) {
+  if (state.currentNight >= 4 && state.currentNight !== 6 && !state.hidden && !isPlayerTraveling()) {
     if (state.caitCooldown <= 0) {
       actions.push({
         label: "Talk to Cait",
@@ -4775,6 +4822,24 @@ Why now?`,
   3: {
     robotActivation: "Cait: One more thing. Watch out. I think its following you.",
   },
+  5: {
+    objectiveComplete: `Cait: It didn’t rush the sound.
+
+It adjusted around it.
+
+Like it expected you to follow.`,
+  },
+  6: {
+    objectiveComplete: `Cait: Geist—!
+
+Oh fuck. You’re back.
+
+Oh fuck— your back.
+
+I can’t…
+
+I just can’t.`,
+  },
 };
 
 function getNightDialogue(night) {
@@ -5045,14 +5110,33 @@ Only turn it on when you need eyes.`);
   }
   if (itemName === "Noise Lure") {
     state.noiseLures = Math.max(state.noiseLures, 3);
-    showObjectiveModal("Cait: Lure’s armed. Remember: loud buys time, not safety.");
+    showObjectiveModal(`Cait: When you use it—
+
+don’t think of it as pulling them away.
+
+Think of it as being shown
+where you’re allowed to go.`);
   }
   if (itemName === "Door Jam") {
     state.doorJams = Math.max(state.doorJams, 1);
-    showObjectiveModal("Cait: Jam kit’s live. Use it when the footsteps close in.");
+    showObjectiveModal(`Cait: …<static>… my eyes… <static>…
+
+…burning…
+
+…<static>… I can’t— I can’t hold it— <static>`);
   }
   if (itemName === "Blowtorch") {
-    showObjectiveModal("Cait: Blowtorch online. Pick the right door.");
+    showObjectiveModal(`Cait: Okay…
+
+If it works, it buys you a way through.
+
+If it doesn’t—
+
+…
+
+I don’t want to finish that thought.
+
+Just— pick the door carefully.`);
   }
   updateUI();
 }
