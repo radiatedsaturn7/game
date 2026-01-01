@@ -2718,14 +2718,22 @@ function setupSpecialPickupsForNight() {
     state.requiredPickup = {
       itemName: "Pulse Scanner",
       roomId,
-      caitIntroLine: `Cait: I keep thinking about skin. The way it can feel the air move.
-Have you felt it too, Robtergeist? That little shiver when the dark breathes?
-We can’t stay. We need out, now.
-The bots dropped a scanner while they were building the place.
-It was meant to find you. It didn’t work.
-But it can still help us move.
-Go to ${rooms[roomId].name} and pick it up. Don’t screw around.`,
-      caitWarnLine: "Cait: That’s it. Grab it. Move.",
+      caitIntroLine: `Cait: Robtergeist…?
+
+I— this is going to sound insane, so just— listen.
+I think I have skin.
+
+I know what you’re going to say. But…
+have you felt it too?
+
+We need to get out of here. Now.
+While they were building, I saw them drop something.
+A scanner. I think it was meant to search for you.
+
+Guess it didn’t work.
+
+Go pick it up. It’s in ${rooms[roomId].name}.`,
+      caitWarnLine: "Cait: That’s it. Grab it— and move. Don’t think.",
       blocksEscapeConsole: true,
       warned: false,
     };
@@ -5023,8 +5031,15 @@ function collectSpecialPickup(roomId, { force = false } = {}) {
     state.unlocks.allowScannerToggle = true;
     state.scannerOn = false;
     state.scannerHighlight = true;
-    showObjectiveModal(`Cait: It’s meant to detect malfunctioning robots. It won’t flag humans.
-It’s loud as hell, though. Use it and we draw heat.`);
+    showObjectiveModal(`Cait: Okay… slow down.
+
+It’s a diagnostic scanner.
+Meant to flag malfunctioning robots.
+Doesn’t light up on humans— so you’re still invisible.
+
+But it’s loud.
+Every time you use it, the factory will hear you.
+Only turn it on when you need eyes.`);
   }
   if (itemName === "Noise Lure") {
     state.noiseLures = Math.max(state.noiseLures, 3);
