@@ -2718,8 +2718,14 @@ function setupSpecialPickupsForNight() {
     state.requiredPickup = {
       itemName: "Pulse Scanner",
       roomId,
-      caitIntroLine: `Cait: I can give you eyes tonight. Pulse Scanner is in ${rooms[roomId].name}. Get it first.`,
-      caitWarnLine: "Cait: That’s it. Quick—grab it and move.",
+      caitIntroLine: `Cait: I keep thinking about skin. The way it can feel the air move.
+Have you felt it too, Robtergeist? That little shiver when the dark breathes?
+We can’t stay. We need out, now.
+The bots dropped a scanner while they were building the place.
+It was meant to find you. It didn’t work.
+But it can still help us move.
+Go to ${rooms[roomId].name} and pick it up. Don’t screw around.`,
+      caitWarnLine: "Cait: That’s it. Grab it. Move.",
       blocksEscapeConsole: true,
       warned: false,
     };
@@ -5017,7 +5023,8 @@ function collectSpecialPickup(roomId, { force = false } = {}) {
     state.unlocks.allowScannerToggle = true;
     state.scannerOn = false;
     state.scannerHighlight = true;
-    showObjectiveModal("Cait: Scanner’s loud. Use it from the map when you need eyes.");
+    showObjectiveModal(`Cait: It’s meant to detect malfunctioning robots. It won’t flag humans.
+It’s loud as hell, though. Use it and we draw heat.`);
   }
   if (itemName === "Noise Lure") {
     state.noiseLures = Math.max(state.noiseLures, 3);
