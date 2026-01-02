@@ -1026,6 +1026,10 @@ main {
   fill: rgba(255, 212, 140, 0.9);
 }
 
+.map-node .map-poi.poi-objective {
+  fill: rgba(255, 168, 214, 0.95);
+}
+
 .map-node .map-poi.poi-exit {
   fill: rgba(132, 255, 180, 0.9);
 }
