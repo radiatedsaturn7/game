@@ -1805,6 +1805,12 @@ body.night-11 .map-node text {
   font-size: 0.9rem;
 }
 
+.component-requirements {
+  margin-top: 16px;
+  display: grid;
+  gap: 8px;
+}
+
 .menu-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

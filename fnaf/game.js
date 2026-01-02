@@ -997,7 +997,6 @@ const dom = {
   bagTabSchematics: document.getElementById("bagTabSchematics"),
   bagTabItems: document.getElementById("bagTabItems"),
   bagTabTools: document.getElementById("bagTabTools"),
-  componentsBtn: document.getElementById("componentsBtn"),
   mapPanel: document.getElementById("mapPanel"),
   usePanel: document.getElementById("usePanel"),
   debugPanel: document.getElementById("debugPanel"),
@@ -1006,6 +1005,7 @@ const dom = {
   componentTitle: document.getElementById("componentTitle"),
   componentDetails: document.getElementById("componentDetails"),
   componentCount: document.getElementById("componentCount"),
+  componentRequirements: document.getElementById("componentRequirements"),
   tasksPanel: document.getElementById("tasksPanel"),
   tasksText: document.getElementById("tasksText"),
   tasksOkBtn: document.getElementById("tasksOkBtn"),
@@ -1928,7 +1928,6 @@ function attachEvents() {
   dom.bagTabTools?.addEventListener("click", () => setBagTab("tools"));
   dom.itemsPrevBtn?.addEventListener("click", () => cycleInventoryView(-1));
   dom.itemsNextBtn?.addEventListener("click", () => cycleInventoryView(1));
-  dom.componentsBtn?.addEventListener("click", focusRequiredComponents);
   if (dom.caitQuietModal) {
     dom.caitQuietModal.addEventListener("click", acknowledgeCaitQuietModal);
   }
@@ -2302,7 +2301,7 @@ function updateSchematicsInventory() {
   });
 }
 
-function updateSchematicList() {
+function updateSchematicList(schematicName = null) {
   dom.schematicList.innerHTML = "";
   if (!state.unlocks.allowCrafting) {
     const locked = document.createElement("li");
@@ -2313,7 +2312,9 @@ function updateSchematicList() {
     dom.schematicList.appendChild(locked);
     return;
   }
-  const selected = getSelectedSchematic();
+  const selected = schematicName
+    ? getObjectiveRecipeBySchematic(schematicName)
+    : getSelectedSchematic();
   if (!selected) {
     const empty = document.createElement("li");
     empty.textContent = "Select a schematic to view required components.";
@@ -2346,8 +2347,8 @@ function updateBuildButton() {
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = unlockNight
-      ? `Crafting locked (Night ${unlockNight})`
-      : "Crafting locked";
+      ? `Build locked (Night ${unlockNight})`
+      : "Build locked";
     return;
   }
   if (!selected) {
@@ -2382,7 +2383,7 @@ function updateBuildButton() {
     .every(([part, count]) => hasInventoryItem(part, count));
   dom.buildBtn.disabled = !(matchesEscape && hasAllParts && state.isAlive && !state.hasEscaped);
   dom.buildBtn.textContent = hasAllParts
-    ? `Craft ${selected.name}`
+    ? `Build ${selected.name}`
     : "Need More Components";
   dom.buildBtn.classList.toggle("objective-highlight", matchesEscape);
 }
@@ -4235,15 +4236,6 @@ function updateBagTabs() {
   });
 }
 
-function focusRequiredComponents() {
-  if (!dom.schematicList) return;
-  dom.schematicList.classList.add("attention");
-  dom.schematicList.scrollIntoView({ behavior: "smooth", block: "center" });
-  window.setTimeout(() => {
-    dom.schematicList?.classList.remove("attention");
-  }, 900);
-}
-
 function openMap() {
   togglePanel(dom.mapPanel);
   updateMapWeatherLabel();
@@ -4300,6 +4292,13 @@ function openComponent(part, { keepMenuOpen = false } = {}) {
   dom.componentTitle.textContent = part;
   dom.componentDetails.textContent = componentDescriptions[part] || "Critical component.";
   dom.componentCount.textContent = `You have ${countOwnedItem(part)}.`;
+  const recipe = getObjectiveRecipeBySchematic(part);
+  if (dom.componentRequirements) {
+    dom.componentRequirements.classList.toggle("hidden", !recipe);
+  }
+  if (recipe) {
+    updateSchematicList(part);
+  }
   openPanel(dom.componentPanel);
 }
 
@@ -5256,7 +5255,12 @@ function forceEscape() {
 }
 
 function updateRequiredComponents() {
-  updateSchematicList();
+  if (!dom.componentPanel || !dom.componentRequirements) return;
+  if (!dom.componentPanel.classList.contains("active")) return;
+  if (dom.componentRequirements.classList.contains("hidden")) return;
+  const schematicName = dom.componentTitle?.textContent;
+  if (!schematicName) return;
+  updateSchematicList(schematicName);
 }
 
 function selectSchematic(name) {
