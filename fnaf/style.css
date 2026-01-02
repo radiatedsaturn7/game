@@ -653,6 +653,43 @@ main {
   gap: 4px;
 }
 
+.overlay-actions button.hide-used {
+  border-color: rgba(124, 255, 184, 0.55);
+}
+
+.overlay-actions button.hide-searching {
+  border-color: rgba(255, 96, 96, 0.8);
+  background: rgba(68, 20, 24, 0.8);
+  box-shadow: 0 0 12px rgba(255, 96, 96, 0.35);
+}
+
+.action-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.action-tag {
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(140, 169, 255, 0.4);
+  color: rgba(210, 220, 245, 0.9);
+}
+
+.action-tag.tag-used {
+  border-color: rgba(124, 255, 184, 0.7);
+  color: rgba(124, 255, 184, 0.95);
+}
+
+.action-tag.tag-searching {
+  border-color: rgba(255, 96, 96, 0.85);
+  color: rgba(255, 180, 180, 0.95);
+  background: rgba(120, 18, 24, 0.6);
+}
+
 .overlay-footer {
   position: fixed;
   bottom: max(16px, env(safe-area-inset-bottom));
