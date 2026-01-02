@@ -707,7 +707,7 @@ const state = {
   hideHistory: new Map(),
   threat: 1,
   turn: 0,
-  inventory: new Set(),
+  inventory: new Map(),
   foundSchematics: new Set(),
   craftedItems: new Set(),
   bagTab: "schematics",
@@ -2069,7 +2069,7 @@ function createInspectButton(item) {
   button.type = "button";
   button.textContent = "Inspect";
   button.classList.add("inspect-button");
-  button.addEventListener("click", () => openComponent(item));
+  button.addEventListener("click", () => openComponent(item, { keepMenuOpen: true }));
   return button;
 }
 
@@ -2081,14 +2081,20 @@ function appendListHeader(list, label) {
 }
 
 function appendItemRow(list, item) {
+  let count = null;
+  let labelText = item;
+  if (typeof item === "object" && item !== null) {
+    count = item.count ?? null;
+    labelText = item.name ?? "";
+  }
   const li = document.createElement("li");
   li.classList.add("list-row");
   const label = document.createElement("span");
   label.classList.add("item-label");
-  label.textContent = item;
+  label.textContent = count && count > 1 ? `${labelText} x${count}` : labelText;
   const actions = document.createElement("div");
   actions.classList.add("item-actions");
-  actions.appendChild(createInspectButton(item));
+  actions.appendChild(createInspectButton(labelText));
   li.appendChild(label);
   li.appendChild(actions);
   list.appendChild(li);
@@ -2105,16 +2111,16 @@ function updateItemList() {
   const materials = [];
   const powerAccess = [];
   const other = [];
-  state.inventory.forEach((item) => {
+  state.inventory.forEach((count, item) => {
     if (TOOL_ITEMS.has(item)) {
       return;
     }
     if (isMaterial(item)) {
-      materials.push(item);
+      materials.push({ name: item, count });
     } else if (isPowerAccess(item)) {
-      powerAccess.push(item);
+      powerAccess.push({ name: item, count });
     } else {
-      other.push(item);
+      other.push({ name: item, count });
     }
   });
   const hasItems = materials.length + powerAccess.length + other.length > 0;
@@ -2213,20 +2219,17 @@ function updateSchematicList() {
     dom.schematicList.appendChild(empty);
     return;
   }
-  const requiredCounts = selected.parts.reduce((counts, part) => {
-    counts.set(part, (counts.get(part) ?? 0) + 1);
-    return counts;
-  }, new Map());
+  const requiredCounts = getRequiredPartCounts(selected.parts);
   requiredCounts.forEach((requiredCount, part) => {
     const count = countInventory(part);
     const li = document.createElement("li");
     const label = document.createElement("span");
-    label.textContent = part;
+    label.textContent = requiredCount > 1 ? `${part} x${requiredCount}` : part;
     li.appendChild(label);
     const info = document.createElement("button");
     info.type = "button";
     info.textContent = "Inspect";
-    info.addEventListener("click", () => openComponent(part));
+    info.addEventListener("click", () => openComponent(part, { keepMenuOpen: true }));
     li.appendChild(info);
     const tally = document.createElement("span");
     tally.textContent = `${count}/${requiredCount}`;
@@ -2260,7 +2263,9 @@ function updateBuildButton() {
     return;
   }
   const matchesEscape = !state.requiredEscapeSchematic || selected.name === state.requiredEscapeSchematic;
-  const hasAllParts = selected.parts.every((part) => state.inventory.has(part));
+  const requiredCounts = getRequiredPartCounts(selected.parts);
+  const hasAllParts = [...requiredCounts.entries()]
+    .every(([part, count]) => hasInventoryItem(part, count));
   dom.buildBtn.disabled = !(matchesEscape && hasAllParts && state.isAlive && !state.hasEscaped);
   dom.buildBtn.textContent = hasAllParts
     ? `Craft ${selected.name}`
@@ -2537,8 +2542,31 @@ function updatePlayerTrail(roomId) {
   }
 }
 
+function getInventoryCount(item) {
+  return state.inventory.get(item) ?? 0;
+}
+
+function hasInventoryItem(item, count = 1) {
+  return getInventoryCount(item) >= count;
+}
+
+function addInventoryItem(item, count = 1) {
+  if (count <= 0) return;
+  state.inventory.set(item, getInventoryCount(item) + count);
+}
+
+function removeInventoryItem(item, count = 1) {
+  if (count <= 0) return;
+  const current = getInventoryCount(item);
+  if (current <= count) {
+    state.inventory.delete(item);
+    return;
+  }
+  state.inventory.set(item, current - count);
+}
+
 function hasPart(name) {
-  return state.inventory.has(name);
+  return hasInventoryItem(name);
 }
 
 function hasCrafted(name) {
@@ -2663,7 +2691,7 @@ function getUnlocks() {
 }
 
 function hasCollectedTool(name) {
-  return state.toolCollected.has(name) || state.inventory.has(name);
+  return state.toolCollected.has(name) || hasInventoryItem(name);
 }
 
 function isRequiredPickupComplete() {
@@ -3025,7 +3053,7 @@ function setupSpecialPickupsForNight() {
   state.storyQueue = [];
   state.objectiveHoldUntil = 0;
   state.toolCollected = new Set();
-  if (state.inventory.has("Pulse Scanner")) {
+  if (hasInventoryItem("Pulse Scanner")) {
     state.toolCollected.add("Pulse Scanner");
   }
   if (state.currentNight === 4) {
@@ -4099,8 +4127,20 @@ function closeDebug() {
   closePanel(dom.debugPanel);
 }
 
-function openComponent(part) {
-  closePanels();
+function openComponent(part, { keepMenuOpen = false } = {}) {
+  if (keepMenuOpen) {
+    [dom.mapPanel, dom.usePanel, dom.debugPanel, dom.tasksPanel]
+      .forEach((panel) => {
+        if (!panel) return;
+        if (panel === dom.debugPanel && isDebugPanelPersistent()) {
+          openPanel(panel);
+          return;
+        }
+        closePanel(panel);
+      });
+  } else {
+    closePanels();
+  }
   dom.componentTitle.textContent = part;
   dom.componentDetails.textContent = componentDescriptions[part] || "Critical component.";
   dom.componentCount.textContent = `You have ${countOwnedItem(part)}.`;
@@ -4531,7 +4571,7 @@ function updateRoomActions() {
     });
   }
 
-  if (state.escapeConsoleInspected && room.item && !state.inventory.has(room.item)) {
+  if (state.escapeConsoleInspected && room.item && !hasInventoryItem(room.item)) {
     actions.push({
       label: `Collect ${room.item}`,
       onClick: () => startCollectItem(room.id),
@@ -4755,7 +4795,7 @@ function stabilizeSystem(target) {
   if (!target || state.stabilizedTargets.has(target.roomId)) return;
   if (!canStabilizeTarget(target)) return;
   if (hasPart(target.part)) {
-    state.inventory.delete(target.part);
+    removeInventoryItem(target.part);
   }
   state.stabilizedTargets.add(target.roomId);
   const profile = getNightProfile();
@@ -4970,18 +5010,25 @@ function giveAllDebugItems() {
   state.unlocks.allowScannerToggle = true;
   const allParts = Object.keys(ITEM_CLASSES);
   allParts.forEach((item) => {
-    state.inventory.add(item);
+    if (isMaterial(item)) {
+      addInventoryItem(item, 99);
+    } else {
+      addInventoryItem(item);
+    }
   });
   state.toolCollected.add("Pulse Scanner");
   state.toolCollected.add("Noise Lure");
   state.toolCollected.add("Blowtorch");
-  state.inventory.add("Pulse Scanner");
-  state.inventory.add("Noise Lure");
-  state.inventory.add("Blowtorch");
+  addInventoryItem("Pulse Scanner");
+  addInventoryItem("Noise Lure");
+  addInventoryItem("Blowtorch");
   rooms.forEach((room) => {
     if (room.schematic) {
       state.foundSchematics.add(room.schematic);
     }
+  });
+  craftableItems.forEach((item) => {
+    state.foundSchematics.add(item.name);
   });
   craftableItems.forEach((item) => {
     if (item.name !== "Door Jam") {
@@ -5055,12 +5102,15 @@ function getSelectedSchematic() {
   return craftableItems.find((item) => item.name === state.selectedSchematic) ?? null;
 }
 
+function getRequiredPartCounts(parts) {
+  return parts.reduce((counts, part) => {
+    counts.set(part, (counts.get(part) ?? 0) + 1);
+    return counts;
+  }, new Map());
+}
+
 function countInventory(item) {
-  let count = 0;
-  state.inventory.forEach((entry) => {
-    if (entry === item) count += 1;
-  });
-  return count;
+  return getInventoryCount(item);
 }
 
 function countOwnedItem(item) {
@@ -5068,7 +5118,7 @@ function countOwnedItem(item) {
   if (state.craftedItems.has(item)) {
     count += 1;
   }
-  if (state.toolCollected.has(item) && !state.inventory.has(item)) {
+  if (state.toolCollected.has(item) && !hasInventoryItem(item)) {
     count += 1;
   }
   return count;
@@ -5685,8 +5735,8 @@ function collectItem(roomId, { force = false } = {}) {
   if (isActionLocked() && !force) return;
   if (state.hidden) return;
   const room = rooms[roomId];
-  if (room.item && !state.inventory.has(room.item)) {
-    state.inventory.add(room.item);
+  if (room.item && !hasInventoryItem(room.item)) {
+    addInventoryItem(room.item);
     const profile = getNightProfile();
     const noiseRisk = getRoomNoiseRisk(roomId);
     const strength = (0.18 + noiseRisk * 0.12) * profile.signalStrength.sneak;
@@ -5716,7 +5766,7 @@ function collectSpecialPickup(roomId, { force = false } = {}) {
   const itemName = state.specialPickups.get(roomId);
   if (!itemName || hasCollectedTool(itemName)) return;
   state.toolCollected.add(itemName);
-  state.inventory.add(itemName);
+  addInventoryItem(itemName);
   state.specialPickups.delete(roomId);
   if (itemName === "Pulse Scanner") {
     state.unlocks.allowScannerToggle = true;
@@ -6417,7 +6467,7 @@ function advanceNight() {
 }
 
 function resetGame({ preserveItems = false } = {}) {
-  const savedInventory = preserveItems ? new Set(state.inventory) : null;
+  const savedInventory = preserveItems ? new Map(state.inventory) : null;
   const savedCraftedItems = preserveItems ? new Set(state.craftedItems) : null;
   const savedToolCollected = preserveItems ? new Set(state.toolCollected) : null;
   const savedFoundSchematics = preserveItems ? new Set(state.foundSchematics) : null;
@@ -6611,7 +6661,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.runMoments = [];
   state.runSummary = "";
   if (preserveItems) {
-    savedInventory.forEach((item) => state.inventory.add(item));
+    savedInventory.forEach((count, item) => state.inventory.set(item, count));
     savedCraftedItems.forEach((item) => state.craftedItems.add(item));
     savedToolCollected.forEach((item) => state.toolCollected.add(item));
     savedFoundSchematics.forEach((item) => state.foundSchematics.add(item));
@@ -7393,6 +7443,33 @@ function updateMap() {
   }
   const showRobotIntel = canSeeRobotIntel();
   const planningOrigin = getRoutePlanningOrigin();
+  const objectiveTargets = new Set();
+  if (state.requiredPickup && !isRequiredPickupComplete()) {
+    objectiveTargets.add(state.requiredPickup.roomId);
+  }
+  if (state.escapeConsoleInspected || state.debugEyes) {
+    if (state.missionType === MISSION_TYPES.ESCAPE && state.escapeMode === "manual") {
+      state.manualOverrideTargets.forEach((roomId) => {
+        if (!state.manualOverridesDone.has(roomId)) {
+          objectiveTargets.add(roomId);
+        }
+      });
+    }
+    if (state.missionType === MISSION_TYPES.STABILIZE) {
+      state.stabilizeTargets.forEach((target) => {
+        if (!state.stabilizedTargets.has(target.roomId)) {
+          objectiveTargets.add(target.roomId);
+        }
+      });
+    }
+    if (state.missionType === MISSION_TYPES.DATA) {
+      rooms.forEach((room) => {
+        if (room.schematic && !state.dataFragmentsFound.has(room.id)) {
+          objectiveTargets.add(room.id);
+        }
+      });
+    }
+  }
   const plannedPath = state.routePreviewRoom !== null
     ? getShortestPath(planningOrigin, state.routePreviewRoom)
     : [];
@@ -7500,13 +7577,21 @@ function updateMap() {
     if (poi) {
       if (night11) {
         poi.textContent = "";
-        poi.classList.remove("poi-item", "poi-schematic", "poi-exit", "poi-blink", "poi-exit-ready");
+        poi.classList.remove(
+          "poi-item",
+          "poi-schematic",
+          "poi-objective",
+          "poi-exit",
+          "poi-blink",
+          "poi-exit-ready"
+        );
       } else {
       const room = rooms[roomId];
       const discoveriesEnabled = state.escapeConsoleInspected || state.debugEyes;
       const isExit = isEscapeRoom;
       const canShowDiscoveries = isIntroEscapeHighlight ? isExit : discoveriesEnabled || isExit;
-      const hasItem = discoveriesEnabled && Boolean(room.item) && !state.inventory.has(room.item);
+      const hasObjective = objectiveTargets.has(roomId);
+      const hasItem = discoveriesEnabled && Boolean(room.item) && !hasInventoryItem(room.item);
       const allowSchematicMarkers = state.unlocks.allowCrafting ||
         state.missionType === MISSION_TYPES.DATA ||
         state.debugEyes;
@@ -7519,9 +7604,11 @@ function updateMap() {
         Boolean(specialPickup) &&
         !hasCollectedTool(specialPickup);
       let marker = "";
-      if (canShowDiscoveries) {
+      if (canShowDiscoveries || hasObjective) {
         if (isExit) {
           marker = "⎋";
+        } else if (hasObjective) {
+          marker = "◎";
         } else if (hasSpecialPickup) {
           marker = "★";
         } else if (hasSchematic) {
@@ -7535,6 +7622,7 @@ function updateMap() {
         "poi-item",
         (hasItem || hasSpecialPickup) && !isExit && !hasSchematic
       );
+      poi.classList.toggle("poi-objective", hasObjective && !isExit);
       poi.classList.toggle("poi-schematic", hasSchematic && !isExit);
       poi.classList.toggle("poi-exit", isExit);
       const allowBlink = !state.objectiveBlocked && canShowDiscoveries;
@@ -7921,9 +8009,12 @@ function craftItem() {
     pushStatus("Crafting failed: component class mismatch.", 3);
     return;
   }
-  if (!craftable.parts.every((part) => state.inventory.has(part))) return;
+  const requiredCounts = getRequiredPartCounts(craftable.parts);
+  if (![...requiredCounts.entries()].every(([part, count]) => hasInventoryItem(part, count))) {
+    return;
+  }
   recordMeaningfulAction();
-  craftable.parts.forEach((part) => state.inventory.delete(part));
+  requiredCounts.forEach((count, part) => removeInventoryItem(part, count));
   if (craftable.name === "Door Jam") {
     state.doorJams += 1;
   } else {
