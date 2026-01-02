@@ -1605,6 +1605,9 @@ body.night-11 .map-node text {
 }
 
 .craft-token {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid rgba(140, 200, 255, 0.35);
@@ -1615,6 +1618,15 @@ body.night-11 .map-node text {
   cursor: grab;
   user-select: none;
   transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.schematic-icon {
+  width: 28px;
+  height: 28px;
+  display: block;
+  color: rgba(220, 235, 255, 0.95);
+  filter: drop-shadow(0 0 6px rgba(110, 170, 220, 0.35));
+  pointer-events: none;
 }
 
 .craft-token:active {

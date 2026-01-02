@@ -930,6 +930,9 @@ let actionLockTimeoutId = null;
 let actionLockStepTimeoutId = null;
 let pendingMoveTimeoutId = null;
 const ACTION_LOCK_MS = 1200;
+let schematicSpriteReady = false;
+let schematicSpriteLoading = false;
+let schematicSpriteFailed = false;
 let runAudioActive = false;
 let sneakAudioActive = false;
 let runAudioTransitionToken = 0;
@@ -948,6 +951,7 @@ const INVENTORY_VIEWS = [
 ];
 
 const dom = {
+  svgSpriteHost: document.getElementById("svgSpriteHost"),
   audioGate: document.getElementById("audioGate"),
   audioGateBtn: document.getElementById("audioGateBtn"),
   titleScreen: document.getElementById("titleScreen"),
@@ -1508,8 +1512,40 @@ function isTitleScreenActive() {
     !hasStartedGame;
 }
 
+function initSchematicSprite() {
+  if (schematicSpriteReady || schematicSpriteLoading || schematicSpriteFailed) return;
+  const host = dom.svgSpriteHost;
+  if (!host) {
+    schematicSpriteFailed = true;
+    console.warn("Schematic sprite host missing; falling back to glyphs.");
+    return;
+  }
+  schematicSpriteLoading = true;
+  fetch("assets/schematics/sprite.svg")
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`Sprite fetch failed: ${response.status}`);
+      }
+      return response.text();
+    })
+    .then((markup) => {
+      host.innerHTML = markup;
+      schematicSpriteReady = true;
+      schematicSpriteLoading = false;
+    })
+    .catch((error) => {
+      schematicSpriteFailed = true;
+      schematicSpriteLoading = false;
+      console.warn("Failed to load schematic sprite.", error);
+      if (state.craftMiniGameActive) {
+        renderCraftMiniGame();
+      }
+    });
+}
+
 function init() {
   flushDebugLogBuffer();
+  initSchematicSprite();
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
   applyNightLayout();
@@ -1539,6 +1575,7 @@ function initHorrorFX() {
 }
 
 function initTitleScreen() {
+  initSchematicSprite();
   mirrorConsole();
   if (!dom.titleScreen || !dom.titleStartBtn) {
     canStartAmbience = true;
@@ -8255,16 +8292,47 @@ function installObjectiveItem() {
   });
 }
 
-const COMPONENT_SYMBOLS = {
+const SCHEMATIC_SYMBOLS = {
+  Resistors: "sym-resistor",
+  Capacitors: "sym-capacitor",
+  "Copper Wire": "sym-wire",
+  Microcontroller: "sym-ic",
+  "Servo Motor": "sym-motor",
+  "9V Battery": "sym-battery",
+  "Small Fuse (5A)": "sym-fuse",
+};
+
+const SCHEMATIC_FALLBACK_GLYPHS = {
   Resistors: "／\\/\\／",
   Capacitors: "|‖|",
   "Copper Wire": "────",
   Microcontroller: "[µ]",
   "Servo Motor": "(⟲)",
+  "9V Battery": "+| |−",
+  "Small Fuse (5A)": "[‒]",
 };
 
-function getComponentSymbol(partName) {
-  return COMPONENT_SYMBOLS[partName] ?? "◇";
+function getSchematicSymbolId(partName) {
+  return SCHEMATIC_SYMBOLS[partName] ?? "sym-generic";
+}
+
+function getFallbackGlyph(partName) {
+  return SCHEMATIC_FALLBACK_GLYPHS[partName] ?? "◇";
+}
+
+function createSchematicIcon(partName, { size = 28 } = {}) {
+  const symbolId = getSchematicSymbolId(partName);
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.classList.add("schematic-icon");
+  svg.setAttribute("viewBox", "0 0 64 64");
+  svg.setAttribute("width", size);
+  svg.setAttribute("height", size);
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", `#${symbolId}`);
+  use.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", `#${symbolId}`);
+  svg.appendChild(use);
+  return svg;
 }
 
 function openCraftMiniGame(craftable) {
@@ -8441,7 +8509,12 @@ function renderCraftMiniGame() {
 function createCraftToken(partName) {
   const token = document.createElement("div");
   token.className = "craft-token";
-  token.textContent = getComponentSymbol(partName);
+  token.textContent = "";
+  if (schematicSpriteFailed) {
+    token.textContent = getFallbackGlyph(partName);
+  } else {
+    token.appendChild(createSchematicIcon(partName));
+  }
   token.dataset.partName = partName;
   token.setAttribute("role", "button");
   token.setAttribute("aria-label", partName);
