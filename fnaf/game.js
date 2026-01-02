@@ -2323,7 +2323,7 @@ function updateToolsList() {
 
 function updateSchematicsInventory() {
   dom.schematicInventory.innerHTML = "";
-  if (!state.unlocks.allowCrafting) {
+  if (!state.unlocks.allowCrafting && state.foundSchematics.size === 0) {
     const locked = document.createElement("li");
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     locked.textContent = unlockNight
@@ -2363,7 +2363,11 @@ function updateSchematicsInventory() {
 
 function updateSchematicList(schematicName = null) {
   dom.schematicList.innerHTML = "";
-  if (!state.unlocks.allowCrafting) {
+  const selected = schematicName
+    ? getObjectiveRecipeBySchematic(schematicName)
+    : getSelectedSchematic();
+  const hasSelectedSchematic = selected && state.foundSchematics.has(selected.schematic);
+  if (!state.unlocks.allowCrafting && !hasSelectedSchematic && state.foundSchematics.size === 0) {
     const locked = document.createElement("li");
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     locked.textContent = unlockNight
@@ -2372,9 +2376,6 @@ function updateSchematicList(schematicName = null) {
     dom.schematicList.appendChild(locked);
     return;
   }
-  const selected = schematicName
-    ? getObjectiveRecipeBySchematic(schematicName)
-    : getSelectedSchematic();
   if (!selected) {
     const empty = document.createElement("li");
     empty.textContent = "Select a schematic to view required components.";
@@ -2403,7 +2404,8 @@ function updateSchematicList(schematicName = null) {
 
 function updateBuildButton() {
   const selected = getSelectedSchematic();
-  if (!state.unlocks.allowCrafting) {
+  const hasSelectedSchematic = selected && state.foundSchematics.has(selected.schematic);
+  if (!state.unlocks.allowCrafting && !hasSelectedSchematic) {
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = unlockNight
@@ -8563,7 +8565,7 @@ function craftItem() {
   if (state.objectiveBlocked) return;
   const craftable = getSelectedSchematic();
   if (!craftable) return;
-  if (!state.unlocks.allowCrafting) {
+  if (!state.unlocks.allowCrafting && !state.foundSchematics.has(craftable.schematic)) {
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     pushStatus(
       unlockNight ? `Crafting locked until Night ${unlockNight}.` : "Crafting locked.",
