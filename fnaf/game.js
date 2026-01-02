@@ -6068,16 +6068,16 @@ function updateVictoryTitle() {
 }
 
 function updateNextNightButton() {
-  const isFinalNight = state.currentNight >= 10;
+  const isFinalNight = state.currentNight >= 11;
   dom.nextNightBtn.textContent = isFinalNight ? "Play Again" : "Continue";
 }
 
 function advanceNight() {
   const previousNight = state.currentNight;
-  if (state.currentNight >= 10) {
+  if (state.currentNight >= 11) {
     state.currentNight = 1;
   } else {
-    state.currentNight = Math.min(10, state.currentNight + 1);
+    state.currentNight = Math.min(11, state.currentNight + 1);
   }
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
