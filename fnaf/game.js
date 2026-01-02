@@ -5154,6 +5154,11 @@ function giveAllDebugItems() {
   state.unlocks.allowDoorJams = true;
   state.unlocks.allowNoiseLure = true;
   state.unlocks.allowScannerToggle = true;
+  const schematicNames = [
+    ...rooms.map((room) => room.schematic).filter(Boolean),
+    ...OBJECTIVE_RECIPES.map((recipe) => recipe.schematic),
+  ];
+  schematicNames.forEach((schematic) => state.foundSchematics.add(schematic));
   const allParts = Object.keys(ITEM_CLASSES);
   allParts.forEach((item) => {
     if (isMaterial(item)) {
