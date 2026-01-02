@@ -2104,7 +2104,7 @@ function updateUI() {
   if (dom.toggleRobotBtn) {
     dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
   }
-  dom.tasksText.textContent = getObjectiveText();
+  renderTasksText();
   const controlBlocked = state.objectiveBlocked || state.actionLock;
   if (dom.useBtn) {
     const allowUse = true;
@@ -5692,6 +5692,56 @@ function getObjectiveText() {
   return objective;
 }
 
+function getStabilizeObjectiveTargets() {
+  if (state.objectiveHoldUntil > 0 && state.turn < state.objectiveHoldUntil) return null;
+  if (state.requiredPickup && !isRequiredPickupComplete()) return null;
+  if (
+    state.objectiveBlocksEscapeConsole &&
+    state.requiredEscapeSchematic &&
+    !state.objectiveItemInstalled &&
+    !state.foundSchematics.has(state.requiredEscapeSchematic)
+  ) {
+    return null;
+  }
+  if (!state.escapeConsoleInspected) return null;
+  if (state.missionType !== MISSION_TYPES.STABILIZE) return null;
+  if (state.escapeReady) return null;
+  return state.stabilizeTargets.map((target) => ({
+    roomId: target.roomId,
+    room: target.room,
+    part: target.part,
+    stabilized: state.stabilizedTargets.has(target.roomId),
+  }));
+}
+
+function renderTasksText() {
+  const stabilizeTargets = getStabilizeObjectiveTargets();
+  if (!stabilizeTargets) {
+    dom.tasksText.textContent = getObjectiveText();
+    return;
+  }
+  const done = state.stabilizedTargets.size;
+  const total = state.stabilizeTargets.length;
+  const alarmText = alarmObjectiveText();
+  dom.tasksText.textContent = "";
+  dom.tasksText.append(`Stabilize ${done}/${total} systems (`);
+  stabilizeTargets.forEach((target, index) => {
+    const marker = target.stabilized ? "✓" : "•";
+    dom.tasksText.append(`${marker} ${target.room} `);
+    const icon = createSchematicIcon(target.part, { size: 18 });
+    icon.classList.add("objective-icon");
+    icon.setAttribute("role", "img");
+    icon.setAttribute("aria-label", target.part);
+    icon.setAttribute("title", target.part);
+    dom.tasksText.append(icon);
+    if (index < stabilizeTargets.length - 1) {
+      dom.tasksText.append(", ");
+    }
+  });
+  const alarmSuffix = alarmText ? ` and ${alarmText.toLowerCase()}` : "";
+  dom.tasksText.append(`)${alarmSuffix}, then escape.`);
+}
+
 function getInitialObjectiveModalText() {
   const text = state.nightIntroLine ?? getObjectiveText();
   return stripCaitPrefix(text);
@@ -8299,6 +8349,8 @@ const SCHEMATIC_SYMBOLS = {
   "Servo Motor": "sym-motor",
   "9V Battery": "sym-battery",
   "Small Fuse (5A)": "sym-fuse",
+  "24V Power Pack": "sym-battery",
+  "Main Fuse (30A)": "sym-fuse",
 };
 
 const SCHEMATIC_FALLBACK_GLYPHS = {
@@ -8309,6 +8361,8 @@ const SCHEMATIC_FALLBACK_GLYPHS = {
   "Servo Motor": "(⟲)",
   "9V Battery": "+| |−",
   "Small Fuse (5A)": "[‒]",
+  "24V Power Pack": "+| |−",
+  "Main Fuse (30A)": "[‒]",
 };
 
 function getSchematicSymbolId(partName) {
