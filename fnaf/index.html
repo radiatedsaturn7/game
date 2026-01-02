@@ -125,14 +125,14 @@
         <h3>Bag</h3>
       </div>
       <div class="menu-tabs" role="tablist" aria-label="Bag tabs">
-        <button id="bagTabSchematics" class="tab-button active" type="button" role="tab" aria-selected="true" data-bag-tab="schematics">Schematics</button>
+        <button id="bagTabSchematics" class="tab-button active" type="button" role="tab" aria-selected="true" data-bag-tab="schematics">Craft</button>
         <button id="bagTabItems" class="tab-button" type="button" role="tab" aria-selected="false" data-bag-tab="items">Items</button>
         <button id="bagTabTools" class="tab-button" type="button" role="tab" aria-selected="false" data-bag-tab="tools">Tools</button>
       </div>
       <div class="menu-content bag-content">
         <section class="bag-tab active" data-bag-panel="schematics" role="tabpanel" aria-labelledby="bagTabSchematics">
           <div>
-            <h4>Schematics</h4>
+            <h4>Craft</h4>
             <ul id="schematicInventory" class="list"></ul>
           </div>
           <div>
@@ -146,7 +146,11 @@
         </section>
         <section class="bag-tab" data-bag-panel="items" role="tabpanel" aria-labelledby="bagTabItems">
           <div>
-            <h4>Items</h4>
+            <div class="bag-selector" role="group" aria-label="Inventory category">
+              <button id="itemsPrevBtn" class="selector-button" type="button" aria-label="Previous category">&lt;</button>
+              <h4 id="itemsCategoryLabel">Items</h4>
+              <button id="itemsNextBtn" class="selector-button" type="button" aria-label="Next category">&gt;</button>
+            </div>
             <ul id="inventoryList" class="list"></ul>
           </div>
         </section>
