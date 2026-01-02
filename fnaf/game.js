@@ -2745,30 +2745,12 @@ Go pick it up. It’s in ${rooms[roomId].name}.`,
     state.requiredPickup = {
       itemName: "Noise Lure",
       roomId,
-      caitIntroLine: `Cait: Geist…
-
-Out here, they don’t rush.
-They don’t corner things.
-
-They leave space.
-
-I keep thinking about something you once told me—
+      caitIntroLine: `I keep thinking about something you once told me—
 that the surest way to break someone
 is to leave them an exit they believe in.
 
 One of them left something behind.
-A noise lure.
-
-Not hidden.
-Not damaged.
-
-Just… placed.
-
-Take it.
-But remember—
-
-hope keeps you moving.
-And movement keeps you visible.`,
+A noise lure.`,
       caitWarnLine: null,
       blocksEscapeConsole: true,
       warned: false,
@@ -3370,7 +3352,7 @@ I’m so sorry.`);
 I… I found a blowtorch.
 It’s in ${rooms[roomId].name}.
 
-Try it on the permanent door jams.
+Try it on the door jams.
 
 I don’t know if this helps.
 
@@ -5110,12 +5092,7 @@ Only turn it on when you need eyes.`);
   }
   if (itemName === "Noise Lure") {
     state.noiseLures = Math.max(state.noiseLures, 3);
-    showObjectiveModal(`Cait: When you use it—
-
-don’t think of it as pulling them away.
-
-Think of it as being shown
-where you’re allowed to go.`);
+    showObjectiveModal(`Cait: Just... be careful all right? It might give you away...`);
   }
   if (itemName === "Door Jam") {
     state.doorJams = Math.max(state.doorJams, 1);
@@ -5126,17 +5103,11 @@ where you’re allowed to go.`);
 …<static>… I can’t— I can’t hold it— <static>`);
   }
   if (itemName === "Blowtorch") {
-    showObjectiveModal(`Cait: Okay…
+    showObjectiveModal(`Cait: Okay— listen.
 
-If it works, it buys you a way through.
+Try it on the jams. If it doesn’t work…
 
-If it doesn’t—
-
-…
-
-I don’t want to finish that thought.
-
-Just— pick the door carefully.`);
+It... It might be better than the alternative...`);
   }
   updateUI();
 }
