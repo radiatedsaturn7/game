@@ -537,6 +537,10 @@ main {
   font-size: 0.8rem;
 }
 
+.action-status.thought {
+  white-space: pre-line;
+}
+
 .escape-button {
   background: linear-gradient(135deg, rgba(107, 255, 159, 0.95), rgba(40, 188, 106, 0.95));
   color: #04110a;

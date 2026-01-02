@@ -709,6 +709,8 @@ const state = {
   statusTicks: 0,
   bannerMessage: "",
   bannerTicks: 0,
+  thoughtMessage: "",
+  thoughtTicks: 0,
   playerTrail: [],
   signalDecayBoost: new Map(),
   rewireDampen: new Map(),
@@ -752,6 +754,8 @@ const state = {
   surgeForeshadowed: false,
   surgeTargetRoom: null,
   surgeCharges: 0,
+  vista: 0,
+  sunlightMemoryShown: false,
   hiddenTurns: 0,
   lastMoveType: "sneak",
   ohShitTriggered: false,
@@ -797,6 +801,9 @@ let sneakAudioStopTimeoutId = null;
 let typingTransitionToken = 0;
 let typingAudioActive = false;
 let typingAudioTimeoutId = null;
+const SUNLIGHT_MEMORY_TEXT = "You remember sunlight on a chipped mug.\nIt mattered then.";
+const SUNLIGHT_MEMORY_CHANCE = 0.28;
+const SUNLIGHT_MEMORY_TICKS = 3;
 
 const dom = {
   audioGate: document.getElementById("audioGate"),
@@ -1798,8 +1805,13 @@ function updateUI() {
     node.classList.toggle("marquee", shouldMarquee);
     node.style.setProperty("--marquee-shift", `${Math.max(0, overflow)}px`);
   });
-  dom.actionStatus.textContent = "";
-  dom.actionStatus.classList.add("hidden");
+  const thoughtBlocked = state.objectiveBlocked ||
+    dom.objectiveModal.classList.contains("active") ||
+    dom.robotAlertModal.classList.contains("active");
+  const showThought = state.thoughtTicks > 0 && !thoughtBlocked;
+  dom.actionStatus.textContent = showThought ? state.thoughtMessage : "";
+  dom.actionStatus.classList.toggle("hidden", !showThought);
+  dom.actionStatus.classList.toggle("thought", showThought);
   updateActionLockUI();
   updateTravelStatus();
   updateMapWeatherLabel();
@@ -2157,6 +2169,25 @@ function pushStatus(message, ticks = 3) {
 function pushBanner(message, ticks = 3) {
   state.bannerMessage = stripCaitPrefix(message);
   state.bannerTicks = ticks;
+}
+
+function showThought(message, ticks = 3) {
+  state.thoughtMessage = message;
+  state.thoughtTicks = ticks;
+}
+
+function clearThought() {
+  state.thoughtMessage = "";
+  state.thoughtTicks = 0;
+}
+
+function canShowThought() {
+  if (state.objectiveBlocked) return false;
+  if (dom.objectiveModal.classList.contains("active")) return false;
+  if (dom.robotAlertModal.classList.contains("active")) return false;
+  if (state.pendingObjectiveModal) return false;
+  if (isActionLocked()) return false;
+  return true;
 }
 
 function setRobotMode(mode) {
@@ -3506,6 +3537,12 @@ function tickStatus() {
       state.bannerMessage = "";
     }
   }
+  if (state.thoughtTicks > 0) {
+    state.thoughtTicks -= 1;
+    if (state.thoughtTicks <= 0) {
+      state.thoughtMessage = "";
+    }
+  }
 }
 
 function tickRobotMemory() {
@@ -3754,6 +3791,7 @@ function showObjectiveModal(text) {
     state.pendingObjectiveModal = text;
     return;
   }
+  clearThought();
   dom.objectiveModalText.textContent = formatCaitModalText(text);
   dom.objectiveModal.classList.add("active");
   dom.objectiveModal.setAttribute("aria-hidden", "false");
@@ -3790,6 +3828,7 @@ function queueRobotAlert(text) {
 
 function showRobotAlert() {
   state.robotAlertQueued = false;
+  clearThought();
   dom.robotAlertText.textContent = state.robotAlertText || "Warning: Robot online.";
   dom.robotAlertModal.classList.add("active");
   dom.robotAlertModal.setAttribute("aria-hidden", "false");
@@ -5728,6 +5767,8 @@ function resetGame({ preserveItems = false } = {}) {
   const savedDoorJams = preserveItems ? state.doorJams : null;
   const savedNoiseLures = preserveItems ? state.noiseLures : null;
   const savedCaitFrayedTutorialShown = preserveItems ? state.caitFrayedTutorialShown : null;
+  const savedSunlightMemoryShown = preserveItems ? state.sunlightMemoryShown : null;
+  const savedVista = preserveItems ? state.vista : null;
   clearActionLock();
   if (pendingMoveTimeoutId) {
     clearTimeout(pendingMoveTimeoutId);
@@ -5812,6 +5853,8 @@ function resetGame({ preserveItems = false } = {}) {
   state.statusTicks = 0;
   state.bannerMessage = "";
   state.bannerTicks = 0;
+  state.thoughtMessage = "";
+  state.thoughtTicks = 0;
   state.playerPath = [];
   state.playerTravelMode = "sneak";
   state.playerTravelTotal = 0;
@@ -5874,6 +5917,8 @@ function resetGame({ preserveItems = false } = {}) {
   state.surgeForeshadowed = false;
   state.surgeTargetRoom = null;
   state.surgeCharges = 0;
+  state.vista = 0;
+  state.sunlightMemoryShown = false;
   state.hiddenTurns = 0;
   state.lastMoveType = "sneak";
   state.mapTargetMode = null;
@@ -5912,6 +5957,8 @@ function resetGame({ preserveItems = false } = {}) {
     state.doorJams = savedDoorJams;
     state.noiseLures = savedNoiseLures;
     state.caitFrayedTutorialShown = savedCaitFrayedTutorialShown;
+    state.sunlightMemoryShown = savedSunlightMemoryShown;
+    state.vista = savedVista;
   }
   setupMissionForNight();
   assignRoomFinds();
@@ -7513,6 +7560,25 @@ function handleEscape() {
   buildEscape();
 }
 
+function canTriggerSunlightMemory(roomId) {
+  if (state.sunlightMemoryShown) return false;
+  if (state.currentNight <= 4) return false;
+  if (state.vista <= 3) return false;
+  if (!state.sunlitRooms.has(roomId)) return false;
+  if (state.robotRoom === roomId) return false;
+  if (isAlarmTriggered(roomId)) return false;
+  const robotDistance = getRobotDistance();
+  if (robotDistance !== null && robotDistance <= 1) return false;
+  if (!canShowThought()) return false;
+  return Math.random() < SUNLIGHT_MEMORY_CHANCE;
+}
+
+function maybeTriggerSunlightMemory(roomId) {
+  if (!canTriggerSunlightMemory(roomId)) return;
+  state.sunlightMemoryShown = true;
+  showThought(SUNLIGHT_MEMORY_TEXT, SUNLIGHT_MEMORY_TICKS);
+}
+
 function tickPlayerTravel() {
   if (state.playerPath.length === 0) {
     state.playerTravelStepStart = null;
@@ -7530,6 +7596,7 @@ function tickPlayerTravel() {
   const nextRoom = state.playerPath.shift();
   const previousRoom = state.playerRoom;
   state.playerRoom = nextRoom;
+  state.vista = Math.max(0, state.vista + 1);
   state.hidden = false;
   state.hiddenSpot = null;
   state.hiddenTurns = 0;
@@ -7600,6 +7667,7 @@ function tickPlayerTravel() {
   if (state.sunlitRooms.has(nextRoom)) {
     pushStatus("Sunlight spills across the floor. It doesn’t care how quiet you are.", 3);
   }
+  maybeTriggerSunlightMemory(nextRoom);
   const prevPressure = getSignalPressure(previousRoom);
   const nextPressure = getSignalPressure(nextRoom);
   if (prevPressure >= 0.6 && nextPressure <= 0.3) {
