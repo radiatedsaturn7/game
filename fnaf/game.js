@@ -134,7 +134,9 @@ const ITEM_CLASSES = {
   "Main Fuse (30A)": "POWER_ACCESS",
 };
 
-const TOOL_ITEMS = new Set(["Pulse Scanner", "Noise Lure", "Blowtorch", "Door Jam"]);
+const COLLECTED_TOOLS = new Set(["Pulse Scanner", "Blowtorch"]);
+const DEPLOYABLE_ITEMS = new Set(["Noise Lure", "Door Jam"]);
+const TOOL_ITEMS = new Set([...COLLECTED_TOOLS]);
 
 function isMaterial(item) {
   return ITEM_CLASSES[item] === "MATERIAL";
@@ -154,12 +156,52 @@ const requiredParts = [
   "Small Fuse (5A)",
 ];
 
-const craftableItems = [
-  { name: "Signal Scrambler", parts: ["Capacitors", "Copper Wire"] },
-  { name: "Motion Dampener", parts: ["Resistors", "Servo Motor"] },
-  { name: "Override Key", parts: ["Microcontroller", "Copper Wire"] },
-  { name: "Door Jam", parts: ["Resistors", "Copper Wire"] },
+const OBJECTIVE_RECIPES = [
+  {
+    name: "Override Key",
+    schematic: "Override Key",
+    parts: ["Microcontroller", "Copper Wire"],
+  },
+  {
+    name: "Door Unjam Kit",
+    schematic: "Door Unjam Kit",
+    parts: ["Servo Motor", "Resistors", "Copper Wire"],
+  },
+  {
+    name: "Power Bypass Module",
+    schematic: "Power Bypass Module",
+    parts: ["Capacitors", "Microcontroller", "Small Fuse (5A)"],
+  },
+  {
+    name: "Lock Override Module",
+    schematic: "Lock Override Module",
+    parts: ["Microcontroller", "Capacitors", "Resistors"],
+  },
+  {
+    name: "Noise Lure (Decoy Emitter)",
+    schematic: "Noise Lure Schematic",
+    parts: ["Microcontroller", "Capacitors", "Copper Wire", "9V Battery"],
+    nightOnly: 5,
+    unlockDeployable: "noiseLure",
+    chargesGranted: 3,
+  },
+  {
+    name: "Door Jam (Wedge Clamp)",
+    schematic: "Door Jam Schematic",
+    parts: ["Servo Motor", "Resistors", "Copper Wire"],
+    nightOnly: 6,
+    unlockDeployable: "doorJam",
+    chargesGranted: 2,
+  },
 ];
+
+const OBJECTIVE_RECIPES_BY_SCHEMATIC = new Map(
+  OBJECTIVE_RECIPES.map((recipe) => [recipe.schematic, recipe])
+);
+const OBJECTIVE_RECIPES_BY_NAME = new Map(
+  OBJECTIVE_RECIPES.map((recipe) => [recipe.name, recipe])
+);
+const DATA_FRAGMENT_SCHEMATIC = "Data Fragment";
 
 const componentDescriptions = {
   Resistors: "Limits electrical current and stabilizes fragile circuits.",
@@ -171,12 +213,18 @@ const componentDescriptions = {
   "Small Fuse (5A)": "Low-current fuse used to protect fragile circuits.",
   "24V Power Pack": "Industrial power source for doors, machinery, and system startup.",
   "Main Fuse (30A)": "Heavy fuse rated for core systems and facility infrastructure.",
-  "Signal Scrambler": "Jams the robot's sensors and clears accumulated signals.",
-  "Motion Dampener": "Buys time by slowing the robot's movement for a short while.",
   "Override Key": "Overrides local locks and reduces the robot's alertness.",
-  "Door Jam": "Temporarily wedges a nearby door to slow pursuit.",
+  "Door Unjam Kit": "Cracked joints and torsion pins to release jammed door actuators.",
+  "Power Bypass Module": "Bridges power nodes to force critical systems online.",
+  "Lock Override Module": "Rewrites access logic for sealed exit controls.",
+  "Noise Lure Schematic": "Blueprint for a decoy emitter built from spare components.",
+  "Door Jam Schematic": "Blueprint for a wedge clamp that can brace doors shut.",
+  "Noise Lure (Decoy Emitter)": "Objective emitter designed to unlock deployable Noise Lure charges.",
+  "Door Jam (Wedge Clamp)": "Objective clamp used to unlock Door Jam deployable charges.",
+  "Data Fragment": "Encrypted slice of the lock override data stream.",
   "Pulse Scanner": "A toggleable scanner that hums with static to reveal nearby robot intel.",
   "Noise Lure": "Creates a loud distraction to pull the robot off your trail.",
+  "Door Jam": "Temporarily wedges a nearby door to slow pursuit.",
   "Blowtorch": "Burns through permanent jams. Loud, but it frees a locked edge.",
 };
 
@@ -490,10 +538,10 @@ const MISSION_TYPES = {
 };
 
 const STABILIZE_SYSTEMS = [
-  { room: "Power Junction", part: "24V Power Pack", tool: "Signal Scrambler" },
-  { room: "Control Bay", part: "Main Fuse (30A)", tool: "Override Key" },
-  { room: "Coolant Vault", part: "Small Fuse (5A)", tool: "Signal Scrambler" },
-  { room: "Hydraulic Core", part: "9V Battery", tool: "Motion Dampener" },
+  { room: "Power Junction", part: "24V Power Pack" },
+  { room: "Control Bay", part: "Main Fuse (30A)" },
+  { room: "Coolant Vault", part: "Small Fuse (5A)" },
+  { room: "Hydraulic Core", part: "9V Battery" },
 ];
 
 const NIGHT_PROFILES = {
@@ -709,7 +757,11 @@ const state = {
   turn: 0,
   inventory: new Map(),
   foundSchematics: new Set(),
-  craftedItems: new Set(),
+  objectiveItemName: null,
+  objectiveItemCrafted: false,
+  objectiveItemInstalled: false,
+  objectiveBlocksEscapeConsole: false,
+  completedObjectiveItems: new Set(),
   bagTab: "schematics",
   inventoryView: "items",
   usedDevices: new Map(),
@@ -738,7 +790,7 @@ const state = {
   actionLock: null,
   escapeConsoleInspected: false,
   tasksAcknowledgedNightOne: false,
-  noiseLures: 3,
+  noiseLureCharges: 0,
   playerPath: [],
   playerTravelMode: "sneak",
   playerTravelTotal: 0,
@@ -807,7 +859,7 @@ const state = {
   roomNoisePenalty: new Map(),
   burnedHidingSpots: new Set(),
   jammedEdges: new Map(),
-  doorJams: 1,
+  doorJamCharges: 0,
   robotTask: null,
   robotFocusLinger: 0,
   scanPulseTicks: 0,
@@ -824,6 +876,7 @@ const state = {
   specialPickups: new Map(),
   requiredPickup: null,
   toolCollected: new Set(),
+  deployableUnlocks: { noiseLure: false, doorJam: false },
   nightIntroLine: null,
   storyQueue: [],
   objectiveHoldUntil: 0,
@@ -2175,21 +2228,28 @@ function updateToolsList() {
   if (!dom.toolsList) return;
   dom.toolsList.innerHTML = "";
   const collectedTools = [...state.toolCollected].sort();
-  const craftedTools = [...state.craftedItems].sort();
-  if (collectedTools.length === 0 && craftedTools.length === 0) {
-    const empty = document.createElement("li");
-    empty.textContent = "No tools collected yet.";
-    dom.toolsList.appendChild(empty);
-    return;
-  }
+  const deployables = [
+    { name: "Noise Lure", count: state.noiseLureCharges },
+    { name: "Door Jam", count: state.doorJamCharges },
+  ];
   if (collectedTools.length > 0) {
     appendListHeader(dom.toolsList, "Collected Tools");
     collectedTools.forEach((item) => appendItemRow(dom.toolsList, item));
   }
-  if (craftedTools.length > 0) {
-    appendListHeader(dom.toolsList, "Crafted Gear");
-    craftedTools.forEach((item) => appendItemRow(dom.toolsList, item));
-  }
+  appendListHeader(dom.toolsList, "Deployables");
+  deployables.forEach((item) => {
+    const li = document.createElement("li");
+    li.classList.add("list-row");
+    const label = document.createElement("span");
+    label.classList.add("item-label");
+    label.textContent = `${item.name}: ${item.count}`;
+    const actions = document.createElement("div");
+    actions.classList.add("item-actions");
+    actions.appendChild(createInspectButton(item.name));
+    li.appendChild(label);
+    li.appendChild(actions);
+    dom.toolsList.appendChild(li);
+  });
 }
 
 function updateSchematicsInventory() {
@@ -2285,15 +2345,23 @@ function updateBuildButton() {
     dom.buildBtn.textContent = "Select a Schematic";
     return;
   }
-  if (selected.name === "Door Jam" && !state.unlocks.allowDoorJams) {
-    const unlockNight = getNextUnlockNightFromNow("allowDoorJams");
+  const matchesEscape = Boolean(state.requiredEscapeSchematic) &&
+    selected.schematic === state.requiredEscapeSchematic;
+  if (!matchesEscape) {
     dom.buildBtn.disabled = true;
-    dom.buildBtn.textContent = unlockNight
-      ? `Door Jams locked (Night ${unlockNight})`
-      : "Door Jams locked";
+    dom.buildBtn.textContent = "Objective schematic required";
     return;
   }
-  const matchesEscape = !state.requiredEscapeSchematic || selected.name === state.requiredEscapeSchematic;
+  if (state.objectiveItemInstalled) {
+    dom.buildBtn.disabled = true;
+    dom.buildBtn.textContent = "Objective already installed";
+    return;
+  }
+  if (state.objectiveItemCrafted) {
+    dom.buildBtn.disabled = true;
+    dom.buildBtn.textContent = "Objective item crafted";
+    return;
+  }
   const requiredCounts = getRequiredPartCounts(selected.parts);
   const hasAllParts = [...requiredCounts.entries()]
     .every(([part, count]) => hasInventoryItem(part, count));
@@ -2600,18 +2668,44 @@ function hasPart(name) {
   return hasInventoryItem(name);
 }
 
-function hasCrafted(name) {
-  return state.craftedItems.has(name);
+function hasObjectiveItemCrafted(name) {
+  return state.objectiveItemCrafted && state.objectiveItemName === name;
+}
+
+function getObjectiveRecipeBySchematic(schematic) {
+  return OBJECTIVE_RECIPES_BY_SCHEMATIC.get(schematic) ?? null;
+}
+
+function getObjectiveRecipeByName(name) {
+  return OBJECTIVE_RECIPES_BY_NAME.get(name) ?? null;
+}
+
+function getDeployableKey(name) {
+  if (name === "Noise Lure") return "noiseLure";
+  if (name === "Door Jam") return "doorJam";
+  return null;
+}
+
+function isDeployableUnlocked(key) {
+  return Boolean(state.deployableUnlocks[key]);
+}
+
+function setObjectiveRecipe(recipe, { blocksEscapeConsole = false } = {}) {
+  state.requiredEscapeSchematic = recipe?.schematic ?? null;
+  state.objectiveItemName = recipe?.name ?? null;
+  state.objectiveItemCrafted = false;
+  state.objectiveItemInstalled = false;
+  state.objectiveBlocksEscapeConsole = blocksEscapeConsole;
+  state.selectedSchematic = null;
 }
 
 function getPassiveEffects() {
-  const hasScrambler = hasCrafted("Signal Scrambler");
   return {
     noisePenaltyGain: hasPart("Resistors") ? 0.85 : 1,
     signalSpike: hasPart("Capacitors") ? 0.85 : 1,
     fatigueReliefChance: hasPart("Microcontroller") ? 0.5 : 0,
     jamBonus: hasPart("Servo Motor") ? 1 : 0,
-    bleedBoost: hasPart("Copper Wire") || hasScrambler ? 1.1 : 1,
+    bleedBoost: hasPart("Copper Wire") ? 1.1 : 1,
     persistentBonus: hasPart("24V Power Pack") ? 1 : 0,
   };
 }
@@ -2924,6 +3018,20 @@ function setupMissionForNight() {
   state.manualOverrideNeeded = 0;
   state.manualOverrideTargets = new Set();
   state.manualOverridesDone = new Set();
+  state.objectiveItemName = null;
+  state.objectiveItemCrafted = false;
+  state.objectiveItemInstalled = false;
+  state.objectiveBlocksEscapeConsole = false;
+  state.completedObjectiveItems = new Set();
+
+  const nightObjectiveRecipe = OBJECTIVE_RECIPES.find(
+    (recipe) => recipe.nightOnly === state.currentNight
+  );
+  if (nightObjectiveRecipe) {
+    state.missionType = MISSION_TYPES.ESCAPE;
+    state.escapeMode = "fabricate";
+    setObjectiveRecipe(nightObjectiveRecipe, { blocksEscapeConsole: true });
+  }
 
   if (state.missionType === MISSION_TYPES.STABILIZE) {
     const choices = [...STABILIZE_SYSTEMS].sort(() => Math.random() - 0.5);
@@ -2938,15 +3046,16 @@ function setupMissionForNight() {
     state.dataFragmentsNeeded = Math.floor(Math.random() * 2) + 2;
   }
 
-  if (state.missionType === MISSION_TYPES.ESCAPE && state.escapeMode === "fabricate") {
-    const options = craftableItems
-      .map((item) => item.name)
-      .filter((name) => name !== "Door Jam" && name !== "Pulse Scanner");
-    state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
-    state.selectedSchematic = null;
-  } else {
-    state.requiredEscapeSchematic = null;
-    state.selectedSchematic = null;
+  if (!nightObjectiveRecipe) {
+    if (state.missionType === MISSION_TYPES.ESCAPE && state.escapeMode === "fabricate") {
+      const options = OBJECTIVE_RECIPES.filter((recipe) => !recipe.nightOnly);
+      const recipe = options[Math.floor(Math.random() * options.length)];
+      setObjectiveRecipe(recipe);
+      state.selectedSchematic = null;
+    } else {
+      state.requiredEscapeSchematic = null;
+      state.selectedSchematic = null;
+    }
   }
 
   setupEnvironmentForNight();
@@ -3087,6 +3196,9 @@ function setupSpecialPickupsForNight() {
   if (hasInventoryItem("Pulse Scanner")) {
     state.toolCollected.add("Pulse Scanner");
   }
+  if (hasInventoryItem("Blowtorch")) {
+    state.toolCollected.add("Blowtorch");
+  }
   if (state.currentNight === 4) {
     state.unlocks.allowScannerToggle = false;
     state.scannerOn = false;
@@ -3122,31 +3234,16 @@ Go pick it up. It’s in ${rooms[roomId].name}.`,
   }
 
   if (state.currentNight === 5) {
-    const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
-    state.requiredPickup = {
-      itemName: "Noise Lure",
-      roomId,
-      caitIntroLine: `I keep thinking about something you once told me—
+    state.nightIntroLine = `I keep thinking about something you once told me—
 that the surest way to break someone
 is to leave them an exit they believe in.
 
-One of them left something behind.
-A noise lure.`,
-      caitWarnLine: null,
-      blocksEscapeConsole: true,
-      warned: false,
-    };
-    state.specialPickups.set(roomId, "Noise Lure");
-    state.nightIntroLine = state.requiredPickup.caitIntroLine;
-    state.noiseLures = 0;
+We need the Noise Lure Schematic tonight.
+Scan it, build the decoy emitter, then install it at the escape console.`;
   }
 
   if (state.currentNight === 6) {
-    const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
-    state.requiredPickup = {
-      itemName: "Door Jam",
-      roomId,
-      caitIntroLine: `Cait: Robtergeist? Are you there?
+    state.nightIntroLine = `Cait: Robtergeist? Are you there?
 
 I can’t hear you. What happened?
 
@@ -3154,17 +3251,10 @@ I can’t hear you. What happened?
 
 I think they know.
 
-If you can hear me— get the door jam.
-It’s in ${rooms[roomId].name}.
+Find the Door Jam Schematic, build the wedge clamp,
+and install it at the escape console.
 
-Please.`,
-      caitWarnLine: "Cait: …there— <static> …don’t— <static> …stay— <static>",
-      blocksEscapeConsole: true,
-      warned: false,
-    };
-    state.specialPickups.set(roomId, "Door Jam");
-    state.nightIntroLine = state.requiredPickup.caitIntroLine;
-    state.doorJams = 0;
+Please.`;
   }
 
   if (state.currentNight === 7) {
@@ -4611,27 +4701,39 @@ function updateRoomActions() {
     });
   }
 
-  if (state.escapeConsoleInspected && room.schematic && !state.foundSchematics.has(room.schematic)) {
+  if (room.schematic && !state.foundSchematics.has(room.schematic)) {
     const isDataMission = state.missionType === MISSION_TYPES.DATA;
-    const canScanSchematic = state.unlocks.allowCrafting;
-    const scanLabel = isDataMission
-      ? "Recover Data Fragment"
-      : canScanSchematic
-        ? `Scan Schematic: ${room.schematic}`
-        : `Schematic Scan (Night ${getNextUnlockNightFromNow("allowCrafting") ?? "?"})`;
-    actions.push({
-      label: scanLabel,
-      onClick: () => startSchematicScan(room.id),
-      disabled: state.hidden || blocked || (!isDataMission && !canScanSchematic),
-      risk: "Quiet",
-      highlight: isDataMission,
-    });
+    const isObjectiveSchematic = state.requiredEscapeSchematic === room.schematic;
+    const canScanSchematic = state.unlocks.allowCrafting || isDataMission || isObjectiveSchematic;
+    const allowScanBeforeConsole = isObjectiveSchematic && state.objectiveBlocksEscapeConsole;
+    if (!state.objectiveItemInstalled &&
+      (state.escapeConsoleInspected || isDataMission || allowScanBeforeConsole)) {
+      const scanLabel = isDataMission
+        ? "Recover Data Fragment"
+        : canScanSchematic
+          ? `Scan Schematic: ${room.schematic}`
+          : `Schematic Scan (Night ${getNextUnlockNightFromNow("allowCrafting") ?? "?"})`;
+      actions.push({
+        label: scanLabel,
+        onClick: () => startSchematicScan(room.id),
+        disabled: state.hidden || blocked || (!isDataMission && !canScanSchematic),
+        risk: "Quiet",
+        highlight: isDataMission || isObjectiveSchematic,
+      });
+    }
   }
 
   if (room.isExit && !state.escapeConsoleInspected) {
     const requiredBlocked = state.requiredPickup?.blocksEscapeConsole && !isRequiredPickupComplete();
-    if (requiredBlocked) {
-      const pickupName = state.requiredPickup?.itemName ?? "tool";
+    const objectiveBlocked =
+      state.objectiveBlocksEscapeConsole &&
+      state.requiredEscapeSchematic &&
+      !state.objectiveItemInstalled &&
+      !state.foundSchematics.has(state.requiredEscapeSchematic);
+    if (requiredBlocked || objectiveBlocked) {
+      const pickupName = requiredBlocked
+        ? state.requiredPickup?.itemName ?? "tool"
+        : state.requiredEscapeSchematic ?? "objective schematic";
       actions.push({
         label: `Get the ${pickupName} first. The console can wait.`,
         disabled: true,
@@ -4646,6 +4748,18 @@ function updateRoomActions() {
         risk: "Exposed",
       });
     }
+  }
+
+  if (room.isExit && state.escapeConsoleInspected &&
+    state.objectiveItemCrafted &&
+    !state.objectiveItemInstalled) {
+    actions.push({
+      label: `Install ${state.objectiveItemName}`,
+      onClick: () => installObjectiveItem(),
+      disabled: state.hidden || blocked,
+      highlight: true,
+      risk: "Trace",
+    });
   }
 
   if (state.missionType === MISSION_TYPES.STABILIZE && state.escapeConsoleInspected) {
@@ -4819,7 +4933,7 @@ function getStabilizeTarget(roomId) {
 }
 
 function canStabilizeTarget(target) {
-  return hasPart(target.part) || hasCrafted(target.tool);
+  return hasPart(target.part);
 }
 
 function stabilizeSystem(target) {
@@ -4884,13 +4998,14 @@ function updateEscapeReadiness() {
   if (state.missionType === MISSION_TYPES.ESCAPE) {
     if (state.escapeMode === "manual") {
       ready = state.manualOverridesDone.size >= state.manualOverrideNeeded;
-    } else if (state.requiredEscapeSchematic) {
-      ready = state.craftedItems.has(state.requiredEscapeSchematic);
+    } else if (state.requiredEscapeSchematic || state.objectiveItemName) {
+      ready = state.objectiveItemInstalled;
     }
   } else if (state.missionType === MISSION_TYPES.STABILIZE) {
     ready = state.stabilizedTargets.size >= state.stabilizeTargets.length;
   } else if (state.missionType === MISSION_TYPES.DATA) {
-    ready = state.dataFragmentsFound.size >= state.dataFragmentsNeeded;
+    const fragmentsReady = state.dataFragmentsFound.size >= state.dataFragmentsNeeded;
+    ready = fragmentsReady && state.objectiveItemInstalled;
   }
   if (ready && !hasCompletedAlarmedRooms()) {
     ready = false;
@@ -5048,26 +5163,13 @@ function giveAllDebugItems() {
     }
   });
   state.toolCollected.add("Pulse Scanner");
-  state.toolCollected.add("Noise Lure");
   state.toolCollected.add("Blowtorch");
   addInventoryItem("Pulse Scanner");
-  addInventoryItem("Noise Lure");
   addInventoryItem("Blowtorch");
-  rooms.forEach((room) => {
-    if (room.schematic) {
-      state.foundSchematics.add(room.schematic);
-    }
-  });
-  craftableItems.forEach((item) => {
-    state.foundSchematics.add(item.name);
-  });
-  craftableItems.forEach((item) => {
-    if (item.name !== "Door Jam") {
-      state.craftedItems.add(item.name);
-    }
-  });
-  state.doorJams = 99;
-  state.noiseLures = 99;
+  state.deployableUnlocks.noiseLure = true;
+  state.deployableUnlocks.doorJam = true;
+  state.noiseLureCharges = 99;
+  state.doorJamCharges = 99;
   updateUI();
   pushStatus("Debug: inventory packed.", 3);
 }
@@ -5130,7 +5232,7 @@ function selectSchematic(name) {
 
 function getSelectedSchematic() {
   if (!state.selectedSchematic) return null;
-  return craftableItems.find((item) => item.name === state.selectedSchematic) ?? null;
+  return getObjectiveRecipeBySchematic(state.selectedSchematic);
 }
 
 function getRequiredPartCounts(parts) {
@@ -5146,7 +5248,10 @@ function countInventory(item) {
 
 function countOwnedItem(item) {
   let count = countInventory(item);
-  if (state.craftedItems.has(item)) {
+  if (DEPLOYABLE_ITEMS.has(item)) {
+    return item === "Noise Lure" ? state.noiseLureCharges : state.doorJamCharges;
+  }
+  if (state.objectiveItemName === item && (state.objectiveItemCrafted || state.objectiveItemInstalled)) {
     count += 1;
   }
   if (state.toolCollected.has(item) && !hasInventoryItem(item)) {
@@ -5196,10 +5301,9 @@ function revealEscapeSchematic() {
   if (state.missionType === MISSION_TYPES.ESCAPE) {
     if (state.escapeMode === "fabricate") {
       if (!state.requiredEscapeSchematic) {
-        const options = craftableItems
-          .map((item) => item.name)
-          .filter((name) => name !== "Door Jam" && name !== "Pulse Scanner");
-        state.requiredEscapeSchematic = options[Math.floor(Math.random() * options.length)];
+        const options = OBJECTIVE_RECIPES.filter((recipe) => !recipe.nightOnly);
+        const recipe = options[Math.floor(Math.random() * options.length)];
+        setObjectiveRecipe(recipe);
       }
       state.selectedSchematic = state.requiredEscapeSchematic;
     } else {
@@ -5209,6 +5313,11 @@ function revealEscapeSchematic() {
       assignManualOverrideTargets();
     }
   }
+  if (state.missionType === MISSION_TYPES.DATA &&
+    state.dataFragmentsFound.size >= state.dataFragmentsNeeded) {
+    state.objectiveItemName = "Lock Override Module";
+    state.objectiveItemCrafted = true;
+  }
   state.escapeConsoleInspected = true;
   const escapeInspectLine = getEscapeConsoleInspectLine();
   if (escapeInspectLine) {
@@ -5217,7 +5326,8 @@ function revealEscapeSchematic() {
     if (state.escapeMode === "manual") {
       showObjectiveModal("Cait: Override nodes are live. Line them up.");
     } else {
-      showObjectiveModal(`Cait: Build ${state.requiredEscapeSchematic}.`);
+      const itemName = state.objectiveItemName ?? state.requiredEscapeSchematic ?? "the objective item";
+      showObjectiveModal(`Cait: Build ${itemName}, then install it at the console.`);
     }
   } else if (state.missionType === MISSION_TYPES.STABILIZE) {
     showObjectiveModal("Cait: Stabilize the core systems.");
@@ -5245,17 +5355,11 @@ But it can make you harder to pin down— for a moment.`);
 }
 
 function getPartSpawnBudget(night) {
-  if (night <= 1) return 2;
-  if (night === 2) return Math.floor(Math.random() * 2) + 2;
-  if (night === 3) return 3;
-  if (night === 4) return Math.floor(Math.random() * 2) + 3;
-  return Math.floor(Math.random() * 2) + 4;
+  return 0;
 }
 
 function getSchematicSpawnBudget(night) {
-  if (night <= 3) return 0;
-  if (night === 4) return 1;
-  return Math.floor(Math.random() * 2);
+  return 0;
 }
 
 function getSpawnWeight(room) {
@@ -5303,32 +5407,12 @@ function pickPartList(count) {
 }
 
 function pickSchematicList(count) {
-  if (count <= 0) return [];
-  if (state.currentNight === 4) return [];
-  const blocked = new Set(["Pulse Scanner"]);
-  if (!state.unlocks.allowDoorJams) blocked.add("Door Jam");
-  const options = craftableItems
-    .map((item) => item.name)
-    .filter((name) => !blocked.has(name));
-  if (options.length === 0) return [];
-  const shuffled = [...options].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+  return [];
 }
 
 function pickDataFragmentSchematics(count) {
   if (count <= 0) return [];
-  const blocked = new Set(["Pulse Scanner"]);
-  if (!state.unlocks.allowDoorJams) blocked.add("Door Jam");
-  const options = craftableItems
-    .map((item) => item.name)
-    .filter((name) => !blocked.has(name));
-  if (options.length === 0) return [];
-  const shuffled = [...options].sort(() => Math.random() - 0.5);
-  const picks = [];
-  for (let i = 0; i < count; i += 1) {
-    picks.push(shuffled[i % shuffled.length]);
-  }
-  return picks;
+  return Array.from({ length: count }, () => DATA_FRAGMENT_SCHEMATIC);
 }
 
 function getGuaranteedItems() {
@@ -5337,9 +5421,9 @@ function getGuaranteedItems() {
     guaranteed.push(...state.stabilizeTargets.map((target) => target.part));
   }
   if (state.missionType === MISSION_TYPES.ESCAPE && state.escapeMode === "fabricate") {
-    const schematic = craftableItems.find((item) => item.name === state.requiredEscapeSchematic);
-    if (schematic) {
-      guaranteed.push(...schematic.parts);
+    const recipe = getObjectiveRecipeBySchematic(state.requiredEscapeSchematic);
+    if (recipe && !state.objectiveItemCrafted && !state.objectiveItemInstalled) {
+      guaranteed.push(...recipe.parts);
     }
   }
   return guaranteed.filter(Boolean);
@@ -5382,6 +5466,13 @@ function assignRoomFinds() {
   if (state.missionType === MISSION_TYPES.DATA) {
     guaranteedSchematics.push(...pickDataFragmentSchematics(state.dataFragmentsNeeded));
   }
+  if (state.escapeMode === "fabricate" &&
+    state.requiredEscapeSchematic &&
+    !state.objectiveItemCrafted &&
+    !state.objectiveItemInstalled &&
+    !state.foundSchematics.has(state.requiredEscapeSchematic)) {
+    guaranteedSchematics.push(state.requiredEscapeSchematic);
+  }
   const schematicBudget = Math.max(baseSchematicBudget, guaranteedSchematics.length);
   const partRooms = [...guaranteedPartRooms, ...remainingPartRooms];
   const guaranteedSchematicRooms = pickSpawnRooms(
@@ -5396,18 +5487,20 @@ function assignRoomFinds() {
     }
   });
   const remainingSchematicBudget = schematicBudget - guaranteedSchematics.length;
-  const schematics = pickSchematicList(remainingSchematicBudget);
-  const schematicRooms = pickSpawnRooms(
-    schematics.length,
-    new Set([...baseExclusions, ...partRooms, ...guaranteedSchematicRooms]),
-    [...partRooms, ...guaranteedSchematicRooms]
-  );
-  schematicRooms.forEach((roomId, index) => {
-    const schematic = schematics[index];
-    if (schematic) {
-      rooms[roomId].schematic = schematic;
-    }
-  });
+  if (remainingSchematicBudget > 0) {
+    const schematics = pickSchematicList(remainingSchematicBudget);
+    const schematicRooms = pickSpawnRooms(
+      schematics.length,
+      new Set([...baseExclusions, ...partRooms, ...guaranteedSchematicRooms]),
+      [...partRooms, ...guaranteedSchematicRooms]
+    );
+    schematicRooms.forEach((roomId, index) => {
+      const schematic = schematics[index];
+      if (schematic) {
+        rooms[roomId].schematic = schematic;
+      }
+    });
+  }
 }
 
 function alarmObjectiveText() {
@@ -5426,6 +5519,13 @@ function getObjectiveText() {
   } else if (state.requiredPickup && !isRequiredPickupComplete()) {
     const roomName = rooms[state.requiredPickup.roomId]?.name ?? "a nearby room";
     objective = `Collect the ${state.requiredPickup.itemName} in ${roomName}.`;
+  } else if (
+    state.objectiveBlocksEscapeConsole &&
+    state.requiredEscapeSchematic &&
+    !state.objectiveItemInstalled &&
+    !state.foundSchematics.has(state.requiredEscapeSchematic)
+  ) {
+    objective = `Collect the ${state.requiredEscapeSchematic}.`;
   } else if (!state.escapeConsoleInspected) {
     objective = "Inspect the Escape Workshop console to receive your mission.";
   } else {
@@ -5441,7 +5541,14 @@ function getObjectiveText() {
         }
       } else if (!state.escapeReady && state.requiredEscapeSchematic) {
         const alarm = alarmText ? `, ${alarmText.toLowerCase()}` : "";
-        objective = `Find and build the ${state.requiredEscapeSchematic} schematic${alarm}, then escape.`;
+        const itemName = state.objectiveItemName ?? state.requiredEscapeSchematic;
+        if (!state.foundSchematics.has(state.requiredEscapeSchematic)) {
+          objective = `Collect the ${state.requiredEscapeSchematic}${alarm}.`;
+        } else if (!state.objectiveItemCrafted) {
+          objective = `Build the ${itemName}${alarm}, then install it at the Escape Workshop console.`;
+        } else if (!state.objectiveItemInstalled) {
+          objective = `Install the ${itemName} at the Escape Workshop console${alarm}.`;
+        }
       }
     }
     if (state.missionType === MISSION_TYPES.STABILIZE) {
@@ -5463,7 +5570,11 @@ function getObjectiveText() {
       const total = state.dataFragmentsNeeded;
       if (!state.escapeReady) {
         const alarm = alarmText ? ` and ${alarmText.toLowerCase()}` : "";
-        objective = `Recover ${done}/${total} data fragments${alarm} to assemble the Lock Override.`;
+        if (done < total) {
+          objective = `Recover ${done}/${total} data fragments${alarm} to assemble the Lock Override Module.`;
+        } else if (!state.objectiveItemInstalled) {
+          objective = `Install the Lock Override Module at the Escape Workshop console${alarm}.`;
+        }
       }
     }
     if (state.escapeReady) {
@@ -5813,21 +5924,6 @@ But it’s loud.
 Every time you use it, the factory will hear you.
 Only turn it on when you need eyes.`);
   }
-  if (itemName === "Noise Lure") {
-    state.noiseLures = Math.max(state.noiseLures, 3);
-    showObjectiveModal(`Cait: Don’t assume it’s a distraction.
-
-Sometimes they leave a path
-because they want to see who takes it.`);
-  }
-  if (itemName === "Door Jam") {
-    state.doorJams = Math.max(state.doorJams, 1);
-    showObjectiveModal(`Cait: …<static>… my eyes… <static>…
-
-…burning…
-
-…<static>… I can’t— I can’t hold it— <static>`);
-  }
   if (itemName === "Blowtorch") {
     showObjectiveModal(`Cait: Okay— listen.
 
@@ -5846,19 +5942,28 @@ function collectSchematic(roomId, { force = false } = {}) {
     pushStatus("You note the diagram, but you can't assemble it yet.", 3);
     return;
   }
-  if (room.schematic && !state.foundSchematics.has(room.schematic)) {
+  if (state.objectiveItemInstalled && room.schematic === state.requiredEscapeSchematic) {
+    return;
+  }
+  const isDataFragment = state.missionType === MISSION_TYPES.DATA &&
+    room.schematic === DATA_FRAGMENT_SCHEMATIC;
+  if (room.schematic && !isDataFragment && !state.foundSchematics.has(room.schematic)) {
     state.foundSchematics.add(room.schematic);
+  }
+  if (room.schematic) {
     const profile = getNightProfile();
     const strength = 0.2 * profile.signalStrength.sneak;
     registerSignal(roomId, strength, { type: "scan", lastKnownChance: 0.12 });
-    if (state.missionType === MISSION_TYPES.DATA && state.escapeConsoleInspected) {
-      if (!state.dataFragmentsFound.has(roomId)) {
-        state.dataFragmentsFound.add(roomId);
-        if (state.dataFragmentsFound.size >= state.dataFragmentsNeeded) {
-          pushStatus("Lock Override assembled from fragments.", 3);
-        }
-        updateEscapeReadiness();
+  }
+  if (state.missionType === MISSION_TYPES.DATA) {
+    if (!state.dataFragmentsFound.has(roomId)) {
+      state.dataFragmentsFound.add(roomId);
+      if (state.dataFragmentsFound.size >= state.dataFragmentsNeeded) {
+        state.objectiveItemName = "Lock Override Module";
+        state.objectiveItemCrafted = true;
+        pushStatus("Lock Override Module assembled from fragments.", 3);
       }
+      updateEscapeReadiness();
     }
   }
   updateUI();
@@ -5907,6 +6012,15 @@ function startEscapeConsoleInspect() {
   if (state.requiredPickup?.blocksEscapeConsole && !isRequiredPickupComplete()) {
     const pickupName = state.requiredPickup?.itemName ?? "tool";
     showObjectiveModal(`Cait: Not yet. Grab the ${pickupName}.`);
+    return;
+  }
+  if (
+    state.objectiveBlocksEscapeConsole &&
+    state.requiredEscapeSchematic &&
+    !state.objectiveItemInstalled &&
+    !state.foundSchematics.has(state.requiredEscapeSchematic)
+  ) {
+    showObjectiveModal(`Cait: Grab the ${state.requiredEscapeSchematic} first.`);
     return;
   }
   runLockedActionWithTypingSfx({
@@ -6097,7 +6211,11 @@ function handleAction(action) {
       );
       return;
     }
-    if (action === "noise" && state.noiseLures <= 0) return;
+    if (action === "noise" && !isDeployableUnlocked("noiseLure")) {
+      pushStatus("Noise Lure locked. Complete the objective to unlock it.", 3);
+      return;
+    }
+    if (action === "noise" && state.noiseLureCharges <= 0) return;
     if (action === "scan-toggle") {
       const toggled = toggleScanner();
       if (!toggled) return;
@@ -6139,7 +6257,7 @@ function useDevice(type, targetRoom = null) {
   setRobotFocus(diversion, { reason: "device" });
   applyRobotPause("distract");
   if (type === "noise") {
-    state.noiseLures = Math.max(0, state.noiseLures - 1);
+    state.noiseLureCharges = Math.max(0, state.noiseLureCharges - 1);
     registerSignal(diversion, 0.4 * profile.signalStrength.device * strengthMultiplier * effects.signalSpike, {
       type: "noise",
       forceLastKnown: true,
@@ -6177,7 +6295,8 @@ function useDevice(type, targetRoom = null) {
 }
 
 function deployNoiseLure(targetRoom) {
-  if (state.noiseLures <= 0) return;
+  if (!isDeployableUnlocked("noiseLure")) return;
+  if (state.noiseLureCharges <= 0) return;
   runLockedAction({
     label: "Deploying noise lure…",
     steps: 1,
@@ -6499,11 +6618,10 @@ function advanceNight() {
 
 function resetGame({ preserveItems = false } = {}) {
   const savedInventory = preserveItems ? new Map(state.inventory) : null;
-  const savedCraftedItems = preserveItems ? new Set(state.craftedItems) : null;
   const savedToolCollected = preserveItems ? new Set(state.toolCollected) : null;
-  const savedFoundSchematics = preserveItems ? new Set(state.foundSchematics) : null;
-  const savedDoorJams = preserveItems ? state.doorJams : null;
-  const savedNoiseLures = preserveItems ? state.noiseLures : null;
+  const savedDeployableUnlocks = preserveItems ? { ...state.deployableUnlocks } : null;
+  const savedDoorJams = preserveItems ? state.doorJamCharges : null;
+  const savedNoiseLures = preserveItems ? state.noiseLureCharges : null;
   const savedCaitFrayedTutorialShown = preserveItems ? state.caitFrayedTutorialShown : null;
   const savedSunlightMemoryShown = preserveItems ? state.sunlightMemoryShown : null;
   const savedVista = preserveItems ? state.vista : null;
@@ -6539,7 +6657,11 @@ function resetGame({ preserveItems = false } = {}) {
   state.turn = 0;
   state.inventory.clear();
   state.foundSchematics.clear();
-  state.craftedItems.clear();
+  state.objectiveItemName = null;
+  state.objectiveItemCrafted = false;
+  state.objectiveItemInstalled = false;
+  state.objectiveBlocksEscapeConsole = false;
+  state.completedObjectiveItems = new Set();
   state.usedDevices.clear();
   state.robotFocus = null;
   state.robotFocusTTL = 0;
@@ -6555,7 +6677,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.manualOverrideNeeded = 0;
   state.manualOverrideTargets = new Set();
   state.manualOverridesDone = new Set();
-  state.noiseLures = 3;
+  state.noiseLureCharges = 0;
   state.roomSignals.clear();
   state.checkedRooms.clear();
   state.robotLinger = 0;
@@ -6623,7 +6745,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.roomNoisePenalty.clear();
   state.burnedHidingSpots.clear();
   state.jammedEdges.clear();
-  state.doorJams = 1;
+  state.doorJamCharges = 0;
   state.missionType = MISSION_TYPES.ESCAPE;
   state.escapeMode = state.currentNight <= 3 ? "manual" : "fabricate";
   state.stabilizeTargets = [];
@@ -6646,6 +6768,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.specialPickups = new Map();
   state.requiredPickup = null;
   state.toolCollected = new Set();
+  state.deployableUnlocks = { noiseLure: false, doorJam: false };
   state.nightIntroLine = null;
   state.storyQueue = [];
   state.objectiveHoldUntil = 0;
@@ -6693,11 +6816,10 @@ function resetGame({ preserveItems = false } = {}) {
   state.runSummary = "";
   if (preserveItems) {
     savedInventory.forEach((count, item) => state.inventory.set(item, count));
-    savedCraftedItems.forEach((item) => state.craftedItems.add(item));
     savedToolCollected.forEach((item) => state.toolCollected.add(item));
-    savedFoundSchematics.forEach((item) => state.foundSchematics.add(item));
-    state.doorJams = savedDoorJams;
-    state.noiseLures = savedNoiseLures;
+    state.deployableUnlocks = { ...savedDeployableUnlocks };
+    state.doorJamCharges = savedDoorJams;
+    state.noiseLureCharges = savedNoiseLures;
     state.caitFrayedTutorialShown = savedCaitFrayedTutorialShown;
     state.sunlightMemoryShown = savedSunlightMemoryShown;
     state.vista = savedVista;
@@ -7478,6 +7600,16 @@ function updateMap() {
   if (state.requiredPickup && !isRequiredPickupComplete()) {
     objectiveTargets.add(state.requiredPickup.roomId);
   }
+  if (state.objectiveBlocksEscapeConsole &&
+    state.requiredEscapeSchematic &&
+    !state.objectiveItemInstalled &&
+    !state.foundSchematics.has(state.requiredEscapeSchematic)) {
+    rooms.forEach((room) => {
+      if (room.schematic === state.requiredEscapeSchematic) {
+        objectiveTargets.add(room.id);
+      }
+    });
+  }
   if (state.escapeConsoleInspected || state.debugEyes) {
     if (state.missionType === MISSION_TYPES.ESCAPE && state.escapeMode === "manual") {
       state.manualOverrideTargets.forEach((roomId) => {
@@ -7496,6 +7628,14 @@ function updateMap() {
     if (state.missionType === MISSION_TYPES.DATA) {
       rooms.forEach((room) => {
         if (room.schematic && !state.dataFragmentsFound.has(room.id)) {
+          objectiveTargets.add(room.id);
+        }
+      });
+    }
+    if (state.escapeMode === "fabricate" && state.requiredEscapeSchematic && !state.objectiveItemInstalled) {
+      rooms.forEach((room) => {
+        if (room.schematic === state.requiredEscapeSchematic &&
+          !state.foundSchematics.has(state.requiredEscapeSchematic)) {
           objectiveTargets.add(room.id);
         }
       });
@@ -8013,6 +8153,38 @@ function pickTwo(ids) {
   return [first, second];
 }
 
+function installObjectiveItem() {
+  if (!state.objectiveItemCrafted || state.objectiveItemInstalled) return;
+  const itemName = state.objectiveItemName ?? "Objective Item";
+  runLockedAction({
+    label: `Installing ${itemName}…`,
+    steps: 1,
+    onStep: () => {
+      recordMeaningfulAction();
+      pulseActionSignal(state.playerRoom, "trace");
+      state.turn += 1;
+      state.objectiveItemCrafted = false;
+      state.objectiveItemInstalled = true;
+      state.objectiveBlocksEscapeConsole = false;
+      state.completedObjectiveItems.add(itemName);
+      if (state.requiredEscapeSchematic) {
+        state.foundSchematics.delete(state.requiredEscapeSchematic);
+      }
+      const recipe = getObjectiveRecipeByName(itemName);
+      if (recipe?.unlockDeployable) {
+        state.deployableUnlocks[recipe.unlockDeployable] = true;
+        if (recipe.unlockDeployable === "noiseLure") {
+          state.noiseLureCharges += recipe.chargesGranted ?? 0;
+        } else if (recipe.unlockDeployable === "doorJam") {
+          state.doorJamCharges += recipe.chargesGranted ?? 0;
+        }
+      }
+      updateEscapeReadiness();
+      updateUI();
+    },
+  });
+}
+
 function craftItem() {
   if (!state.isAlive || state.hasEscaped) return;
   const craftable = getSelectedSchematic();
@@ -8025,14 +8197,17 @@ function craftItem() {
     );
     return;
   }
-  if (!state.foundSchematics.has(craftable.name)) return;
-  if (craftable.name !== "Door Jam" && state.craftedItems.has(craftable.name)) return;
-  if (craftable.name === "Door Jam" && !state.unlocks.allowDoorJams) {
-    const unlockNight = getNextUnlockNightFromNow("allowDoorJams");
-    pushStatus(
-      unlockNight ? `Door jams unlock on Night ${unlockNight}.` : "Door jams locked.",
-      3
-    );
+  if (!state.foundSchematics.has(craftable.schematic)) return;
+  if (state.objectiveItemInstalled || state.objectiveItemCrafted) {
+    pushStatus("Objective item already assembled.", 3);
+    return;
+  }
+  if (state.completedObjectiveItems.has(craftable.name)) {
+    pushStatus("Objective already completed tonight.", 3);
+    return;
+  }
+  if (state.requiredEscapeSchematic && craftable.schematic !== state.requiredEscapeSchematic) {
+    pushStatus("This schematic isn't tied to tonight's objective.", 3);
     return;
   }
   if (!craftable.parts.every((part) => isMaterial(part))) {
@@ -8046,11 +8221,8 @@ function craftItem() {
   }
   recordMeaningfulAction();
   requiredCounts.forEach((count, part) => removeInventoryItem(part, count));
-  if (craftable.name === "Door Jam") {
-    state.doorJams += 1;
-  } else {
-    state.craftedItems.add(craftable.name);
-  }
+  state.objectiveItemName = craftable.name;
+  state.objectiveItemCrafted = true;
   updateEscapeReadiness();
   const profile = getNightProfile();
   const effects = getPassiveEffects();
@@ -8189,13 +8361,21 @@ function updateUseList() {
   const controlBlocked = state.objectiveBlocked || isActionLocked();
   const options = [];
   const lockedEntries = [];
+  const noiseLureUnlocked = state.unlocks.allowNoiseLure && isDeployableUnlocked("noiseLure");
+  const doorJamUnlocked = state.unlocks.allowDoorJams && isDeployableUnlocked("doorJam");
   if (state.unlocks.allowNoiseLure) {
+    if (!noiseLureUnlocked) {
+      lockedEntries.push("Noise Lure locked. Complete tonight's objective to unlock.");
+    }
     options.push(
       {
-        label: `Noise Lure (${state.noiseLures})`,
+        label: `Noise Lure (${state.noiseLureCharges})`,
         action: () => beginMapTarget("noise"),
         help: "Noise Lure",
-        disabled: state.noiseLures <= 0 || isPlayerTraveling() || state.mapTargetMode,
+        disabled: !noiseLureUnlocked ||
+          state.noiseLureCharges <= 0 ||
+          isPlayerTraveling() ||
+          state.mapTargetMode,
       }
     );
   } else {
@@ -8204,7 +8384,10 @@ function updateUseList() {
       unlockNight ? `Noise Lure locked (Night ${unlockNight})` : "Noise Lure locked."
     );
   }
-  if (state.unlocks.allowDoorJams && state.doorJams > 0) {
+  if (state.unlocks.allowDoorJams) {
+    if (!doorJamUnlocked) {
+      lockedEntries.push("Door Jam locked. Complete tonight's objective to unlock.");
+    }
     const adjacent = roomConnections[state.playerRoom] || [];
     const validTargets = adjacent.filter((roomId) => {
       const disallowed = rooms[roomId].isExit || rooms[state.playerRoom].isExit;
@@ -8212,10 +8395,14 @@ function updateUseList() {
       return !isEdgeJammed(state.playerRoom, roomId);
     });
     options.push({
-      label: `Door Jam (${state.doorJams})`,
+      label: `Door Jam (${state.doorJamCharges})`,
       action: () => beginMapTarget("jam"),
       help: "Door Jam",
-      disabled: validTargets.length === 0 || isPlayerTraveling() || state.mapTargetMode,
+      disabled: !doorJamUnlocked ||
+        state.doorJamCharges <= 0 ||
+        validTargets.length === 0 ||
+        isPlayerTraveling() ||
+        state.mapTargetMode,
     });
   }
   if (hasCollectedTool("Blowtorch")) {
@@ -8227,9 +8414,6 @@ function updateUseList() {
       disabled: blowtorchTargets.size === 0 || isPlayerTraveling() || state.mapTargetMode,
     });
   }
-  state.craftedItems.forEach((item) => {
-    options.push({ label: item, action: () => useCraftedItem(item), help: item });
-  });
 
   if (options.length === 0 && lockedEntries.length === 0) {
     const empty = document.createElement("li");
@@ -8270,35 +8454,6 @@ function updateScannerToggleButton() {
   dom.scannerToggleBtn.classList.toggle("objective-highlight", state.scannerHighlight);
 }
 
-function useCraftedItem(name) {
-  if (!state.craftedItems.has(name)) return;
-  const steps = name === "Signal Scrambler" ? 2 : 1;
-  runLockedAction({
-    label: `Using ${name}…`,
-    steps,
-    onStep: (step, total) => {
-      pulseActionSignal(state.playerRoom, "trace");
-      state.turn += 1;
-      if (step < total) {
-        updateUI();
-        return;
-      }
-      if (name === "Signal Scrambler") {
-        state.roomSignals.clear();
-        state.threat = Math.max(1, state.threat - 0.6);
-      }
-      if (name === "Motion Dampener") {
-        state.robotLinger = Math.max(state.robotLinger, 2);
-      }
-      if (name === "Override Key") {
-        state.threat = Math.max(1, state.threat - 1);
-      }
-      closeUse();
-      updateUI();
-    },
-  });
-}
-
 function pickScannerFocusRoom() {
   if (state.robotPlannedTarget !== null) return state.robotPlannedTarget;
   if (state.robotSweepQueue.length > 0) return state.robotSweepQueue[0];
@@ -8320,7 +8475,8 @@ function jamDurationForNight() {
 }
 
 function deployDoorJam(roomId) {
-  if (state.doorJams <= 0) return;
+  if (!isDeployableUnlocked("doorJam")) return;
+  if (state.doorJamCharges <= 0) return;
   if (!(roomConnections[state.playerRoom] || []).includes(roomId)) return;
   runLockedAction({
     label: "Setting door jam…",
@@ -8336,12 +8492,13 @@ function deployDoorJam(roomId) {
 }
 
 function jamDoorTo(roomId) {
-  if (state.doorJams <= 0) return;
+  if (!isDeployableUnlocked("doorJam")) return;
+  if (state.doorJamCharges <= 0) return;
   if (rooms[state.playerRoom].isExit || rooms[roomId].isExit) return;
   if (isEdgeJammed(state.playerRoom, roomId)) return;
   const duration = jamDurationForNight();
   if (!jamEdge(state.playerRoom, roomId, duration)) return;
-  state.doorJams = Math.max(0, state.doorJams - 1);
+  state.doorJamCharges = Math.max(0, state.doorJamCharges - 1);
   const profile = getNightProfile();
   const effects = getPassiveEffects();
   registerSignal(
