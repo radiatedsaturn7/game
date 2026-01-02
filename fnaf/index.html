@@ -122,22 +122,40 @@
   <div id="menuPanel" class="menu-panel" aria-hidden="true">
     <div class="menu-card">
       <div class="menu-header">
-        <h3>Inventory</h3>
+        <h3>Bag</h3>
       </div>
-      <div class="menu-content">
-        <div>
-          <h4>Schematics</h4>
-          <ul id="schematicInventory" class="list"></ul>
-        </div>
-        <div>
-          <h4>Inventory</h4>
-          <ul id="inventoryList" class="list"></ul>
-        </div>
-        <div>
-          <h4>Required Components</h4>
-          <ul id="schematicList" class="list"></ul>
-          <button id="buildBtn" class="primary" disabled>Build Selected Schematic</button>
-        </div>
+      <div class="menu-tabs" role="tablist" aria-label="Bag tabs">
+        <button id="bagTabSchematics" class="tab-button active" type="button" role="tab" aria-selected="true" data-bag-tab="schematics">Schematics</button>
+        <button id="bagTabItems" class="tab-button" type="button" role="tab" aria-selected="false" data-bag-tab="items">Items</button>
+        <button id="bagTabTools" class="tab-button" type="button" role="tab" aria-selected="false" data-bag-tab="tools">Tools</button>
+      </div>
+      <div class="menu-content bag-content">
+        <section class="bag-tab active" data-bag-panel="schematics" role="tabpanel" aria-labelledby="bagTabSchematics" aria-hidden="false">
+          <div>
+            <h4>Schematics</h4>
+            <ul id="schematicInventory" class="list"></ul>
+          </div>
+          <div>
+            <div class="bag-actions">
+              <button id="componentsBtn" type="button">Required Components</button>
+              <button id="buildBtn" class="primary" disabled>Craft Selected Schematic</button>
+            </div>
+            <h4>Required Components</h4>
+            <ul id="schematicList" class="list"></ul>
+          </div>
+        </section>
+        <section class="bag-tab" data-bag-panel="items" role="tabpanel" aria-labelledby="bagTabItems" aria-hidden="true" hidden>
+          <div>
+            <h4>Items</h4>
+            <ul id="inventoryList" class="list"></ul>
+          </div>
+        </section>
+        <section class="bag-tab" data-bag-panel="tools" role="tabpanel" aria-labelledby="bagTabTools" aria-hidden="true" hidden>
+          <div>
+            <h4>Tools</h4>
+            <ul id="toolsList" class="list"></ul>
+          </div>
+        </section>
       </div>
     </div>
   </div>
