@@ -922,6 +922,7 @@ const dom = {
   godModeBtn: document.getElementById("godModeBtn"),
   eyesBtn: document.getElementById("eyesBtn"),
   selectedRoom: document.getElementById("selectedRoom"),
+  selectedRoomNote: document.getElementById("selectedRoomNote"),
   menuBtn: document.getElementById("menuBtn"),
   mapBtn: document.getElementById("mapBtn"),
   liveBtn: document.getElementById("liveBtn"),
@@ -950,6 +951,7 @@ const dom = {
   ackObjectiveBtn: document.getElementById("ackObjectiveBtn"),
   caitQuietModal: document.getElementById("caitQuietModal"),
   caitQuietText: document.getElementById("caitQuietText"),
+  ackCaitQuietBtn: document.getElementById("ackCaitQuietBtn"),
   robotAlertModal: document.getElementById("robotAlertModal"),
   robotAlertText: document.getElementById("robotAlertText"),
   ackRobotAlertBtn: document.getElementById("ackRobotAlertBtn"),
@@ -1844,6 +1846,12 @@ function attachEvents() {
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
   dom.ackObjectiveBtn.addEventListener("click", acknowledgeObjective);
   dom.ackRobotAlertBtn.addEventListener("click", acknowledgeRobotAlert);
+  if (dom.ackCaitQuietBtn) {
+    dom.ackCaitQuietBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      acknowledgeCaitQuietModal();
+    });
+  }
   dom.bagTabSchematics?.addEventListener("click", () => setBagTab("schematics"));
   dom.bagTabItems?.addEventListener("click", () => setBagTab("items"));
   dom.bagTabTools?.addEventListener("click", () => setBagTab("tools"));
@@ -1933,8 +1941,10 @@ function updateUI() {
   if (dom.nightSelect) {
     dom.nightSelect.value = String(state.currentNight);
   }
+  let selectedMapRoomId = null;
   if (state.mapTargetMode) {
     if (state.mapTargetSelection !== null) {
+      selectedMapRoomId = state.mapTargetSelection;
       dom.selectedRoom.textContent = rooms[state.mapTargetSelection].name;
     } else {
       dom.selectedRoom.textContent = state.mapTargetMode === "noise"
@@ -1944,9 +1954,17 @@ function updateUI() {
           : "Select door to unjam";
     }
   } else {
+    selectedMapRoomId = state.selectedRoom;
     dom.selectedRoom.textContent = state.selectedRoom === null
       ? "None"
       : rooms[state.selectedRoom].name;
+  }
+  if (dom.selectedRoomNote) {
+    const showCaitNote = isNight11() &&
+      selectedMapRoomId !== null &&
+      selectedMapRoomId === state.caitQuietRoomId;
+    dom.selectedRoomNote.textContent = showCaitNote ? "Cait is waiting for you." : "";
+    dom.selectedRoomNote.classList.toggle("hidden", !showCaitNote);
   }
   updateItemList();
   updateSchematicsInventory();
@@ -2195,7 +2213,11 @@ function updateSchematicList() {
     dom.schematicList.appendChild(empty);
     return;
   }
-  selected.parts.forEach((part) => {
+  const requiredCounts = selected.parts.reduce((counts, part) => {
+    counts.set(part, (counts.get(part) ?? 0) + 1);
+    return counts;
+  }, new Map());
+  requiredCounts.forEach((requiredCount, part) => {
     const count = countInventory(part);
     const li = document.createElement("li");
     const label = document.createElement("span");
@@ -2207,7 +2229,7 @@ function updateSchematicList() {
     info.addEventListener("click", () => openComponent(part));
     li.appendChild(info);
     const tally = document.createElement("span");
-    tally.textContent = `${count}x`;
+    tally.textContent = `${count}/${requiredCount}`;
     li.appendChild(tally);
     li.dataset.part = part;
     dom.schematicList.appendChild(li);
