@@ -1341,54 +1341,56 @@ body.night-11 .map-node text {
   position: fixed;
   inset: 0;
   background: rgba(3, 5, 10, 0.85);
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   z-index: 30;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  --panel-duration: 140ms;
+  --panel-ease: ease-in;
+  transition: opacity var(--panel-duration) var(--panel-ease),
+    visibility 0s linear var(--panel-duration);
 }
 
 .menu-panel.modal-panel {
   z-index: 60;
 }
 
-.menu-panel.modal-panel .menu-card {
-  opacity: 0;
-  transform: translateY(18px) scale(0.97);
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-
 .menu-panel.active {
-  display: flex;
-}
-
-.menu-panel.modal-panel.active .menu-card {
   opacity: 1;
-  transform: translateY(0) scale(1);
-}
-
-#objectiveModal .menu-card {
-  opacity: 0;
-  transform: translateY(24px) scale(0.9);
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-#objectiveModal.active .menu-card {
-  opacity: 1;
-  transform: translateY(0) scale(1);
+  visibility: visible;
+  pointer-events: auto;
+  --panel-duration: 180ms;
+  --panel-ease: ease-out;
+  transition: opacity var(--panel-duration) var(--panel-ease), visibility 0s;
 }
 
 .map-panel {
   position: fixed;
   inset: 0;
   background: rgba(3, 5, 10, 0.85);
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   z-index: 25;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  --panel-duration: 140ms;
+  --panel-ease: ease-in;
+  transition: opacity var(--panel-duration) var(--panel-ease),
+    visibility 0s linear var(--panel-duration);
 }
 
 .map-panel.active {
-  display: flex;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  --panel-duration: 180ms;
+  --panel-ease: ease-out;
+  transition: opacity var(--panel-duration) var(--panel-ease), visibility 0s;
 }
 
 .map-card {
@@ -1401,6 +1403,47 @@ body.night-11 .map-node text {
   gap: 16px;
 }
 
+.menu-panel .menu-card,
+.map-panel .map-card {
+  opacity: 0;
+  transform: translateY(10px) scale(0.985);
+  filter: blur(3px);
+  transition: opacity var(--panel-duration) var(--panel-ease),
+    transform var(--panel-duration) var(--panel-ease),
+    filter var(--panel-duration) var(--panel-ease);
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-panel.active .menu-card,
+.map-panel.active .map-card {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  filter: blur(0);
+}
+
+.menu-panel .menu-card::before,
+.map-panel .map-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(138, 169, 255, 0.12),
+    rgba(138, 169, 255, 0.12) 1px,
+    rgba(12, 18, 28, 0) 1px,
+    rgba(12, 18, 28, 0) 4px
+  );
+  opacity: 0;
+  mix-blend-mode: screen;
+}
+
+.menu-panel.active .menu-card::before,
+.map-panel.active .map-card::before {
+  animation: panel-scanline var(--panel-duration) var(--panel-ease);
+}
+
 .menu-card {
   background: rgba(12, 20, 35, 0.95);
   border: 1px solid rgba(140, 169, 255, 0.35);
@@ -1409,6 +1452,45 @@ body.night-11 .map-node text {
   width: min(520px, 90vw);
   display: grid;
   gap: 16px;
+}
+
+@keyframes panel-scanline {
+  0% {
+    opacity: 0;
+  }
+  45% {
+    opacity: 0.14;
+  }
+  100% {
+    opacity: 0.02;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-panel,
+  .map-panel {
+    transition: opacity var(--panel-duration) var(--panel-ease),
+      visibility 0s linear var(--panel-duration);
+  }
+
+  .menu-panel .menu-card,
+  .map-panel .map-card {
+    transform: none;
+    filter: none;
+    transition: opacity var(--panel-duration) var(--panel-ease);
+  }
+
+  .menu-panel.active .menu-card,
+  .map-panel.active .map-card {
+    transform: none;
+    filter: none;
+  }
+
+  .menu-panel .menu-card::before,
+  .map-panel .map-card::before {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 .menu-header {
