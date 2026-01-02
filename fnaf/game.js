@@ -775,6 +775,8 @@ const state = {
   skipNextObjectiveModal: false,
   isAlive: true,
   hasEscaped: false,
+  godMode: false,
+  debugEyes: false,
   robotAlertQueued: false,
   robotAlertText: "",
   pendingObjectiveModal: null,
@@ -911,6 +913,9 @@ const dom = {
   forceEscapeBtn: document.getElementById("forceEscapeBtn"),
   testRunAudioBtn: document.getElementById("testRunAudioBtn"),
   silenceAudioBtn: document.getElementById("silenceAudioBtn"),
+  giveAllBtn: document.getElementById("giveAllBtn"),
+  godModeBtn: document.getElementById("godModeBtn"),
+  eyesBtn: document.getElementById("eyesBtn"),
   selectedRoom: document.getElementById("selectedRoom"),
   menuBtn: document.getElementById("menuBtn"),
   mapBtn: document.getElementById("mapBtn"),
@@ -1812,6 +1817,9 @@ function attachEvents() {
     playRunTestSound();
   });
   dom.silenceAudioBtn.addEventListener("click", silenceAllSound);
+  dom.giveAllBtn.addEventListener("click", giveAllDebugItems);
+  dom.godModeBtn.addEventListener("click", toggleGodMode);
+  dom.eyesBtn.addEventListener("click", toggleDebugEyes);
   dom.goBtn.addEventListener("click", () => moveSelected(false));
   dom.runBtn.addEventListener("click", () => moveSelected(true));
   dom.cancelBtn.addEventListener("click", cancelMovement);
@@ -4756,10 +4764,60 @@ function holdBreath() {
   });
 }
 
+function giveAllDebugItems() {
+  state.unlocks.allowCrafting = true;
+  state.unlocks.allowDoorJams = true;
+  state.unlocks.allowNoiseLure = true;
+  state.unlocks.allowScannerToggle = true;
+  const allParts = Object.keys(ITEM_CLASSES);
+  allParts.forEach((item) => {
+    state.inventory.add(item);
+  });
+  state.toolCollected.add("Pulse Scanner");
+  state.toolCollected.add("Noise Lure");
+  state.toolCollected.add("Blowtorch");
+  state.inventory.add("Pulse Scanner");
+  state.inventory.add("Noise Lure");
+  state.inventory.add("Blowtorch");
+  rooms.forEach((room) => {
+    if (room.schematic) {
+      state.foundSchematics.add(room.schematic);
+    }
+  });
+  craftableItems.forEach((item) => {
+    if (item.name !== "Door Jam") {
+      state.craftedItems.add(item.name);
+    }
+  });
+  state.doorJams = 99;
+  state.noiseLures = 99;
+  updateUI();
+  pushStatus("Debug: inventory packed.", 3);
+}
+
+function toggleGodMode() {
+  state.godMode = !state.godMode;
+  updateDebugUI();
+  pushStatus(`God mode ${state.godMode ? "enabled" : "disabled"}.`, 2);
+}
+
+function toggleDebugEyes() {
+  state.debugEyes = !state.debugEyes;
+  updateDebugUI();
+  updateMap();
+  pushStatus(`Eyes ${state.debugEyes ? "opened" : "closed"}.`, 2);
+}
+
 function updateDebugUI() {
   const debugLabel = dom.nightSelect?.closest(".night-debug");
   if (debugLabel) {
     debugLabel.classList.toggle("hidden", !DEBUG_UI);
+  }
+  if (dom.godModeBtn) {
+    dom.godModeBtn.textContent = `God Mode: ${state.godMode ? "ON" : "OFF"}`;
+  }
+  if (dom.eyesBtn) {
+    dom.eyesBtn.textContent = `Eyes: ${state.debugEyes ? "ON" : "OFF"}`;
   }
 }
 
@@ -6036,6 +6094,10 @@ function attemptKill() {
 }
 
 function triggerDeath() {
+  if (state.godMode) {
+    pushStatus("God mode: robot kill blocked.", 3);
+    return;
+  }
   state.isAlive = false;
   clearActionLock();
   closeMap();
@@ -7172,20 +7234,27 @@ function updateMap() {
         poi.classList.remove("poi-item", "poi-schematic", "poi-exit", "poi-blink", "poi-exit-ready");
       } else {
       const room = rooms[roomId];
-      const discoveriesEnabled = state.escapeConsoleInspected;
+      const discoveriesEnabled = state.escapeConsoleInspected || state.debugEyes;
       const isExit = isEscapeRoom;
       const canShowDiscoveries = isIntroEscapeHighlight ? isExit : discoveriesEnabled || isExit;
       const hasItem = discoveriesEnabled && Boolean(room.item) && !state.inventory.has(room.item);
       const allowSchematicMarkers = state.unlocks.allowCrafting ||
-        state.missionType === MISSION_TYPES.DATA;
+        state.missionType === MISSION_TYPES.DATA ||
+        state.debugEyes;
       const hasSchematic = discoveriesEnabled &&
         allowSchematicMarkers &&
         Boolean(room.schematic) &&
         !state.foundSchematics.has(room.schematic);
+      const specialPickup = state.specialPickups.get(roomId);
+      const hasSpecialPickup = discoveriesEnabled &&
+        Boolean(specialPickup) &&
+        !hasCollectedTool(specialPickup);
       let marker = "";
       if (canShowDiscoveries) {
         if (isExit) {
           marker = "⎋";
+        } else if (hasSpecialPickup) {
+          marker = "★";
         } else if (hasSchematic) {
           marker = "◇";
         } else if (hasItem) {
@@ -7193,7 +7262,10 @@ function updateMap() {
         }
       }
       poi.textContent = marker;
-      poi.classList.toggle("poi-item", hasItem && !isExit && !hasSchematic);
+      poi.classList.toggle(
+        "poi-item",
+        (hasItem || hasSpecialPickup) && !isExit && !hasSchematic
+      );
       poi.classList.toggle("poi-schematic", hasSchematic && !isExit);
       poi.classList.toggle("poi-exit", isExit);
       const allowBlink = !state.objectiveBlocked && canShowDiscoveries;
