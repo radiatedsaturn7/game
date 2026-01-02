@@ -700,6 +700,7 @@ const state = {
   robotRoom: 0,
   hidden: false,
   hiddenSpot: null,
+  pendingHide: null,
   learnedHidingSpots: new Set(),
   hideHistory: new Map(),
   threat: 1,
@@ -3648,6 +3649,9 @@ function triggerPowerSurge(roomId) {
   showObjectiveModal("Cait: Power surge. That room just blew open.");
   if (isAlarmCapable(roomId)) {
     state.triggeredAlarms.add(roomId);
+    if (roomId === state.playerRoom) {
+      onAlarmTriggered(roomId);
+    }
   }
   state.runMoments.push("A sudden power surge forced you into the open.");
   if (firstSurge) {
@@ -4288,6 +4292,31 @@ function disableAlarm(roomId) {
   });
 }
 
+function onAlarmTriggered(roomId) {
+  if (state.robotDisabled) return;
+  const night = state.currentNight;
+  const profile = getNightProfile();
+  if (night <= 3) {
+    registerSignal(roomId, 0.12 * profile.signalStrength.device, {
+      type: "alarm",
+      lastKnownChance: 0.12,
+    });
+    return;
+  }
+  const threatBoost = night >= 6 ? 0.35 : 0.22;
+  state.threat = Math.min(5, state.threat + threatBoost);
+  setRobotFocus(roomId, { reason: "alarm", ttl: night >= 6 ? ROBOT_FOCUS_TTL + 1 : ROBOT_FOCUS_TTL });
+  registerSignal(roomId, 0.22 * profile.signalStrength.device, {
+    type: "alarm",
+    forceLastKnown: true,
+    lastKnownChance: 0.2,
+  });
+  if (state.robotDormant > 0) {
+    const reduction = night >= 6 ? 2 : 1;
+    state.robotDormant = Math.max(0, state.robotDormant - reduction);
+  }
+}
+
 function updateRoomActions() {
   dom.roomActions.innerHTML = "";
   const room = rooms[state.playerRoom];
@@ -4481,13 +4510,30 @@ function updateRoomActions() {
     }
   }
 
+  const isRobotSearchingHere = state.robotRoom === room.id && state.robotSearchTurns > 0;
   room.hideSpots.forEach((spot) => {
-    const burned = state.burnedHidingSpots.has(`${room.id}:${spot}`);
+    const key = hideSpotKey(room.id, spot);
+    const burned = state.burnedHidingSpots.has(key);
+    const used = isHideSpotUsed(room.id, spot);
+    const searching = isRobotSearchingHere && state.robotSearchSpot === spot;
+    const tags = [];
+    if (used) {
+      tags.push({ label: "USED", className: "tag-used" });
+    }
+    if (searching) {
+      tags.push({ label: "SEARCHING", className: "tag-searching" });
+    }
     actions.push({
       label: `Hide: ${spot}`,
       onClick: () => startHideAction(spot),
       disabled: blocked || (state.hidden && state.hiddenSpot === spot),
       risk: burned ? "Risky" : "Quiet",
+      className: [
+        "hide-action",
+        used ? "hide-used" : "",
+        searching ? "hide-searching" : "",
+      ].filter(Boolean),
+      tags,
     });
   });
 
@@ -4525,13 +4571,30 @@ function updateRoomActions() {
     label.textContent = action.label;
     button.appendChild(label);
     if (action.className) {
-      button.classList.add(action.className);
+      const classes = Array.isArray(action.className)
+        ? action.className
+        : String(action.className).split(" ");
+      button.classList.add(...classes.filter(Boolean));
     }
     if (action.risk) {
       const risk = document.createElement("span");
       risk.textContent = action.risk;
       risk.classList.add("risk-hint");
       button.appendChild(risk);
+    }
+    if (action.tags && action.tags.length > 0) {
+      const tagWrap = document.createElement("div");
+      tagWrap.classList.add("action-tags");
+      action.tags.forEach((tag) => {
+        const tagNode = document.createElement("span");
+        tagNode.textContent = tag.label;
+        tagNode.classList.add("action-tag");
+        if (tag.className) {
+          tagNode.classList.add(tag.className);
+        }
+        tagWrap.appendChild(tagNode);
+      });
+      button.appendChild(tagWrap);
     }
     button.disabled = action.disabled;
     if (action.highlight) {
@@ -5653,6 +5716,48 @@ function startAlignManualOverride(roomId) {
   });
 }
 
+function hideSpotKey(roomId, spot) {
+  return `${roomId}:${spot}`;
+}
+
+function isHideSpotUsed(roomId, spot) {
+  return (state.hideHistory.get(hideSpotKey(roomId, spot)) || 0) > 0;
+}
+
+function isHideSpotLearned(roomId, spot) {
+  if (!spot) return false;
+  return state.learnedHidingSpots.has(hideSpotKey(roomId, spot));
+}
+
+function recordHideSuccess(roomId, spot) {
+  const key = hideSpotKey(roomId, spot);
+  const hideCount = state.hideHistory.get(key) || 0;
+  const nextCount = hideCount + 1;
+  state.hideHistory.set(key, nextCount);
+  if (nextCount >= 3 && !state.learnedHidingSpots.has(key)) {
+    state.learnedHidingSpots.add(key);
+    pushStatus("The robot hesitates… then checks the console.", 4);
+    state.burnedHidingSpots.add(key);
+    state.runMoments.push("The robot adapted to your hiding habits.");
+  }
+}
+
+function resolvePendingHide() {
+  const pending = state.pendingHide;
+  if (!pending) return;
+  if (!state.hidden ||
+    state.hiddenSpot !== pending.spot ||
+    state.playerRoom !== pending.roomId) {
+    state.pendingHide = null;
+    return;
+  }
+  const adjacent = roomConnections[state.playerRoom] || [];
+  const robotAdjacent = adjacent.includes(state.robotRoom);
+  if (state.robotRoom === state.playerRoom || robotAdjacent) return;
+  recordHideSuccess(pending.roomId, pending.spot);
+  state.pendingHide = null;
+}
+
 function setHidden(spot, { force = false } = {}) {
   if (!state.isAlive || state.hasEscaped) return;
   if (isActionLocked() && !force) return;
@@ -5661,23 +5766,19 @@ function setHidden(spot, { force = false } = {}) {
     state.hiddenSpot = null;
     state.sawPlayerHide = false;
     state.hiddenTurns = 0;
+    state.pendingHide = null;
     updateUI();
     return;
   }
   state.hidden = true;
   state.hiddenSpot = spot;
   state.hiddenTurns = 0;
-  state.sawPlayerHide = state.robotRoom === state.playerRoom && state.robotLookTurns > 0;
-  const hideCount = state.hideHistory.get(state.playerRoom) || 0;
-  const nextCount = hideCount + 1;
-  state.hideHistory.set(state.playerRoom, nextCount);
-  if (nextCount >= 3 && !state.learnedHidingSpots.has(state.playerRoom)) {
-    state.learnedHidingSpots.add(state.playerRoom);
-    pushStatus("The robot hesitates… then checks the console.", 4);
-    const burnedSpot = `${state.playerRoom}:${spot}`;
-    state.burnedHidingSpots.add(burnedSpot);
-    state.runMoments.push("The robot adapted to your hiding habits.");
+  if (!state.pendingHide ||
+    state.pendingHide.roomId !== state.playerRoom ||
+    state.pendingHide.spot !== spot) {
+    state.pendingHide = { roomId: state.playerRoom, spot, startedTurn: state.turn };
   }
+  state.sawPlayerHide = state.robotRoom === state.playerRoom && state.robotLookTurns > 0;
   if (state.burnedHidingSpots.has(`${state.playerRoom}:${spot}`)) {
     registerSignal(state.playerRoom, 0.25, { type: "hide", lastKnownChance: 0.2 });
   }
@@ -5832,6 +5933,18 @@ function useDevice(type, targetRoom = null) {
       state.persistentSignals.set(diversion, lingerDuration);
     }
     state.robotFocusLinger = Math.max(state.robotFocusLinger, 2 - durationPenalty);
+    if (state.currentNight >= 5 && fatigueLevel > 0) {
+      const agitation = state.currentNight >= 7 ? 0.25 : 0.15;
+      state.threat = Math.min(5, state.threat + agitation);
+      const moodChance = state.currentNight >= 7 ? 0.55 : 0.35;
+      if (Math.random() < moodChance) {
+        setRobotMood("irritated", 3);
+      }
+      if (state.robotDormant > 0) {
+        const reduction = state.currentNight >= 7 ? 2 : 1;
+        state.robotDormant = Math.max(0, state.robotDormant - reduction);
+      }
+    }
   }
 }
 
@@ -5932,7 +6045,7 @@ function advanceRobot() {
   if (state.robotSearchTurns > 0) {
     state.robotSearchTurns -= 1;
     if (Math.random() < 0.25) {
-      state.robotSearchSpot = pickSearchSpot();
+      updateRobotSearchSpot(pickSearchSpot());
     }
     if (state.robotSearchTurns === 0) {
       applyRobotPause("failed");
@@ -6058,7 +6171,7 @@ function checkThreat() {
     return;
   }
 
-  const learned = state.learnedHidingSpots.has(state.playerRoom);
+  const learned = state.hidden && isHideSpotLearned(state.playerRoom, state.hiddenSpot);
   const signal = state.roomSignals.get(state.playerRoom) || 0;
   const baseChance = state.hidden ? (learned ? 0.55 : 0.35) : 0.75;
   const profile = getNightProfile();
@@ -6077,7 +6190,7 @@ function checkThreat() {
 }
 
 function attemptKill() {
-  const learned = state.learnedHidingSpots.has(state.playerRoom);
+  const learned = state.hidden && isHideSpotLearned(state.playerRoom, state.hiddenSpot);
   const signal = state.roomSignals.get(state.playerRoom) || 0;
   const baseChance = state.hidden
     ? (state.sawPlayerHide ? (learned ? 0.5 : 0.3) : 0.05)
@@ -6191,6 +6304,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.robotRoom = 0;
   state.hidden = false;
   state.hiddenSpot = null;
+  state.pendingHide = null;
   state.learnedHidingSpots.clear();
   state.hideHistory.clear();
   state.threat = 1;
@@ -6838,8 +6952,16 @@ function getRoomConfidence(roomId) {
 
 function startSearchCycle() {
   state.robotSearchTurns = Math.floor(Math.random() * 4) + 5;
-  state.robotSearchSpot = pickSearchSpot();
+  updateRobotSearchSpot(pickSearchSpot());
   setRobotMode("search");
+}
+
+function updateRobotSearchSpot(spot) {
+  if (state.robotSearchSpot === spot) return;
+  state.robotSearchSpot = spot;
+  if (state.robotRoom === state.playerRoom && state.robotSearchTurns > 0 && spot) {
+    pushStatus(`It checks the ${spot}…`, 2);
+  }
 }
 
 function pickSearchSpot() {
@@ -7784,6 +7906,7 @@ function startGameLoop() {
     tickJammedEdges();
     maybeExpireLastKnown();
     advanceRobot();
+    resolvePendingHide();
     checkThreat();
     tickRobotMemory();
     maybeTriggerCaitFrayedTutorial();
@@ -8102,6 +8225,7 @@ function tickPlayerTravel() {
   if (isAlarmCapable(nextRoom) && !isAlarmTriggered(nextRoom)) {
     state.triggeredAlarms.add(nextRoom);
     showObjectiveModal("Cait: …that room just lit up. Move.");
+    onAlarmTriggered(nextRoom);
   }
   if (state.requiredPickup &&
     state.requiredPickup.caitWarnLine &&
