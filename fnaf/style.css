@@ -1629,6 +1629,12 @@ body.night-11 .map-node text {
   pointer-events: none;
 }
 
+.objective-icon {
+  display: inline-block;
+  vertical-align: -4px;
+  margin: 0 6px 0 4px;
+}
+
 .craft-token:active {
   cursor: grabbing;
 }
