@@ -4125,14 +4125,34 @@ function pulseActionSignal(roomId, type) {
   }
 }
 
+const PANEL_CLOSE_DURATION = 140;
+const panelCloseTimers = new WeakMap();
+
+function clearPanelCloseTimer(panel) {
+  const timer = panelCloseTimers.get(panel);
+  if (!timer) return;
+  window.clearTimeout(timer);
+  panelCloseTimers.delete(panel);
+}
+
 function openPanel(panel) {
-  panel.classList.add("active");
+  if (!panel) return;
+  clearPanelCloseTimer(panel);
   panel.setAttribute("aria-hidden", "false");
+  window.requestAnimationFrame(() => {
+    panel.classList.add("active");
+  });
 }
 
 function closePanel(panel) {
+  if (!panel) return;
+  clearPanelCloseTimer(panel);
   panel.classList.remove("active");
-  panel.setAttribute("aria-hidden", "true");
+  const timer = window.setTimeout(() => {
+    panel.setAttribute("aria-hidden", "true");
+    panelCloseTimers.delete(panel);
+  }, PANEL_CLOSE_DURATION);
+  panelCloseTimers.set(panel, timer);
 }
 
 function closePanels() {
@@ -4293,8 +4313,7 @@ function showObjectiveModal(text) {
   }
   clearThought();
   dom.objectiveModalText.textContent = formatCaitModalText(text);
-  dom.objectiveModal.classList.add("active");
-  dom.objectiveModal.setAttribute("aria-hidden", "false");
+  openPanel(dom.objectiveModal);
   state.objectiveBlocked = true;
 }
 
@@ -4308,8 +4327,7 @@ function queueObjectiveModal(text) {
 }
 
 function acknowledgeObjective() {
-  dom.objectiveModal.classList.remove("active");
-  dom.objectiveModal.setAttribute("aria-hidden", "true");
+  closePanel(dom.objectiveModal);
   state.objectiveBlocked = false;
   if (state.startRevealPending && state.introStep === "intro-modal") {
     revealIntroMap();
@@ -4330,14 +4348,12 @@ function showRobotAlert() {
   state.robotAlertQueued = false;
   clearThought();
   dom.robotAlertText.textContent = state.robotAlertText || "Warning: Robot online.";
-  dom.robotAlertModal.classList.add("active");
-  dom.robotAlertModal.setAttribute("aria-hidden", "false");
+  openPanel(dom.robotAlertModal);
   state.objectiveBlocked = true;
 }
 
 function acknowledgeRobotAlert() {
-  dom.robotAlertModal.classList.remove("active");
-  dom.robotAlertModal.setAttribute("aria-hidden", "true");
+  closePanel(dom.robotAlertModal);
   state.objectiveBlocked = false;
   flushPendingModals();
 }
@@ -4346,15 +4362,13 @@ function showCaitQuietModal() {
   if (!dom.caitQuietModal) return;
   clearThought();
   dom.caitQuietText.textContent = "Ready to go?";
-  dom.caitQuietModal.classList.add("active");
-  dom.caitQuietModal.setAttribute("aria-hidden", "false");
+  openPanel(dom.caitQuietModal);
   state.objectiveBlocked = true;
 }
 
 function acknowledgeCaitQuietModal() {
   if (!dom.caitQuietModal) return;
-  dom.caitQuietModal.classList.remove("active");
-  dom.caitQuietModal.setAttribute("aria-hidden", "true");
+  closePanel(dom.caitQuietModal);
   state.objectiveBlocked = false;
   flushPendingModals();
 }
@@ -6843,11 +6857,9 @@ function resetGame({ preserveItems = false } = {}) {
   dom.deathScreen.setAttribute("aria-hidden", "true");
   dom.victoryScreen.classList.remove("active");
   dom.victoryScreen.setAttribute("aria-hidden", "true");
-  dom.robotAlertModal.classList.remove("active");
-  dom.robotAlertModal.setAttribute("aria-hidden", "true");
+  closePanel(dom.robotAlertModal);
   if (dom.caitQuietModal) {
-    dom.caitQuietModal.classList.remove("active");
-    dom.caitQuietModal.setAttribute("aria-hidden", "true");
+    closePanel(dom.caitQuietModal);
   }
   if (dom.creditsScreen) {
     dom.creditsScreen.classList.remove("active", "rolling");
