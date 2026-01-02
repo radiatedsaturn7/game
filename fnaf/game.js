@@ -217,6 +217,49 @@ let roomConnections = {
   13: [9, 12],
 };
 
+const NIGHT_11 = 11;
+const NIGHT_11_THEME = "linear-gradient(135deg, rgba(88, 138, 88, 0.7), rgba(10, 18, 12, 0.92))";
+const NIGHT_11_DESCRIPTION = "Open grass sways under an empty sky.";
+const NIGHT_11_CONNECTIONS = {
+  0: [1, 2, 3],
+  1: [0, 4, 5],
+  2: [0, 5, 6],
+  3: [0, 6, 7],
+  4: [1, 8],
+  5: [1, 2, 8, 9],
+  6: [2, 3, 9, 10],
+  7: [3, 10],
+  8: [4, 5, 11],
+  9: [5, 6, 11, 12],
+  10: [6, 7, 12, 13],
+  11: [8, 9],
+  12: [9, 10],
+  13: [10],
+};
+const NIGHT_11_POSITIONS = {
+  0: { x: 80, y: 80 },
+  1: { x: 200, y: 60 },
+  2: { x: 320, y: 60 },
+  3: { x: 440, y: 80 },
+  4: { x: 140, y: 160 },
+  5: { x: 260, y: 160 },
+  6: { x: 380, y: 160 },
+  7: { x: 480, y: 180 },
+  8: { x: 140, y: 260 },
+  9: { x: 260, y: 260 },
+  10: { x: 380, y: 260 },
+  11: { x: 140, y: 360 },
+  12: { x: 260, y: 360 },
+  13: { x: 380, y: 360 },
+};
+
+const BASE_ROOMS = rooms.map((room) => ({
+  ...room,
+  hideSpots: [...room.hideSpots],
+}));
+const BASE_ROOM_CONNECTIONS = JSON.parse(JSON.stringify(roomConnections));
+const BASE_MAP_POSITIONS = JSON.parse(JSON.stringify(mapPositions));
+
 const TICK_MS = 1200;
 const DEBUG_AI = false;
 const DEBUG_UI = true;
@@ -378,6 +421,18 @@ const NIGHT_UNLOCKS = {
     allowDoorJams: true,
     showRobotIntelOnMap: true,
     allowAlarmedRooms: true,
+  },
+  11: {
+    showMap: true,
+    robotActive: false,
+    allowSirens: false,
+    allowSlowRewire: false,
+    allowScannerToggle: false,
+    allowNoiseLure: false,
+    allowCrafting: false,
+    allowDoorJams: false,
+    showRobotIntelOnMap: false,
+    allowAlarmedRooms: false,
   },
 };
 
@@ -620,6 +675,24 @@ const NIGHT_PROFILES = {
     deviceFatigue: 1.25,
     sneakLastKnownScale: 0.55,
   },
+  11: {
+    signalStrength: { sneak: 0.95, run: 1.35, device: 1.25 },
+    signalDecay: 0.065,
+    lastKnownChance: 0.9,
+    confidenceGain: 1.25,
+    confidenceDecay: 0.7,
+    trailStaleness: 4,
+    investigateTurns: { min: 5, max: 7 },
+    sweepDepth: { low: 3, mid: 5, high: 5 },
+    sweepCooldown: 2,
+    prediction: { enabled: true, chance: 0.5, cooldown: 3, confidence: 0.62, signal: 0.55 },
+    moodChance: { irritated: 0.65, cautious: 0.1, confident: 0.65 },
+    killAggression: 1.3,
+    sneakBreakRooms: 4,
+    sneakDecayBoost: 0.02,
+    deviceFatigue: 1.25,
+    sneakLastKnownScale: 0.55,
+  },
 };
 
 const state = {
@@ -769,6 +842,9 @@ const state = {
   caitFrayedTutorialShown: false,
   caitCooldown: 0,
   caitTalkCount: 0,
+  caitQuietRoomId: null,
+  caitQuietSeen: false,
+  night11CreditsRolling: false,
   runMoments: [],
   runSummary: "",
   mapTargetMode: null,
@@ -858,6 +934,8 @@ const dom = {
   objectiveModal: document.getElementById("objectiveModal"),
   objectiveModalText: document.getElementById("objectiveModalText"),
   ackObjectiveBtn: document.getElementById("ackObjectiveBtn"),
+  caitQuietModal: document.getElementById("caitQuietModal"),
+  caitQuietText: document.getElementById("caitQuietText"),
   robotAlertModal: document.getElementById("robotAlertModal"),
   robotAlertText: document.getElementById("robotAlertText"),
   ackRobotAlertBtn: document.getElementById("ackRobotAlertBtn"),
@@ -878,6 +956,9 @@ const dom = {
   actionLockLabel: document.getElementById("actionLockLabel"),
   nightSelect: document.getElementById("nightSelect"),
   debugLog: document.getElementById("debugLog"),
+  creditsScreen: document.getElementById("creditsScreen"),
+  creditsScroll: document.getElementById("creditsScroll"),
+  creditsText: document.getElementById("creditsText"),
 };
 
 const audioBuses = {
@@ -957,6 +1038,7 @@ let titleSyncAnimationId = null;
 let canStartAmbience = false;
 let audioLoopsPrimed = false;
 const audioPlayFailureLogged = new Map();
+let creditsTextPromise = null;
 const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
 const debugLogBuffer = [];
 
@@ -1343,19 +1425,24 @@ function init() {
   flushDebugLogBuffer();
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
+  applyNightLayout();
   renderMap();
   setupMissionForNight();
-  assignRoomFinds();
-  announceWeather();
-  updateWeatherAmbience({ forceRestart: true });
-  configureRobotStart();
+  if (!isNight11()) {
+    assignRoomFinds();
+    announceWeather();
+    updateWeatherAmbience({ forceRestart: true });
+    configureRobotStart();
+  }
   updateSchematicList();
   updatePlayerTrail(state.playerRoom);
   updateUI();
   attachEvents();
   setupDebugPanel();
   startGameLoop();
-  showObjectiveModal(getInitialObjectiveModalText());
+  if (!isNight11()) {
+    showObjectiveModal(getInitialObjectiveModalText());
+  }
 }
 
 function initHorrorFX() {
@@ -1740,6 +1827,9 @@ function attachEvents() {
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
   dom.ackObjectiveBtn.addEventListener("click", acknowledgeObjective);
   dom.ackRobotAlertBtn.addEventListener("click", acknowledgeRobotAlert);
+  if (dom.caitQuietModal) {
+    dom.caitQuietModal.addEventListener("click", acknowledgeCaitQuietModal);
+  }
   dom.nightSelect.addEventListener("change", (event) => {
     const next = Number(event.target.value);
     setCurrentNight(next);
@@ -1779,6 +1869,7 @@ function attachEvents() {
 }
 
 function updateUI() {
+  document.body.classList.toggle("night-11", isNight11());
   const room = rooms[state.playerRoom];
   const playerAdjacents = new Set(roomConnections[state.playerRoom] || []);
   const dangerRoom = !state.robotDisabled &&
@@ -1885,7 +1976,7 @@ function updateUI() {
 }
 
 function getFxLevel() {
-  if (state.currentNight < 4) {
+  if (state.currentNight < 4 || isNight11()) {
     return 0;
   }
   return clamp(1 - state.sanity, 0, 1);
@@ -1906,8 +1997,8 @@ function updateHorrorFX() {
   root.style.setProperty("--fx-grain", grain.toFixed(3));
   root.style.setProperty("--fx-lines", lines.toFixed(3));
   root.style.setProperty("--fx-vignette", vignette.toFixed(3));
-  const frayed = state.currentNight >= 4 && state.sanity < 0.4;
-  const critical = state.currentNight >= 4 && state.sanity < 0.2;
+  const frayed = !isNight11() && state.currentNight >= 4 && state.sanity < 0.4;
+  const critical = !isNight11() && state.currentNight >= 4 && state.sanity < 0.2;
   document.body.classList.toggle("fx-frayed", frayed);
   document.body.classList.toggle("fx-critical", critical);
   fxState.jitterEnabled = frayed;
@@ -2366,6 +2457,10 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function isNight11(night = state.currentNight) {
+  return night === NIGHT_11;
+}
+
 function getWeatherModifiers() {
   return state.weather?.modifiers ?? {
     signalStrength: 1,
@@ -2377,7 +2472,7 @@ function getWeatherModifiers() {
 }
 
 function adjustSanity(amount, reason) {
-  if (state.currentNight < 4) return;
+  if (state.currentNight < 4 || isNight11()) return;
   const prev = state.sanity;
   state.sanity = clamp(state.sanity + amount, 0, 1);
   state.minSanity = Math.min(state.minSanity, state.sanity);
@@ -2413,7 +2508,7 @@ function sanityBand() {
 }
 
 function sanityPressurePhrase() {
-  if (state.currentNight < 4) return "";
+  if (state.currentNight < 4 || isNight11()) return "";
   const band = sanityBand();
   if (band === "strained") {
     return "Too close.";
@@ -2567,7 +2662,92 @@ function pickMissionForNight(night) {
   ]);
 }
 
+function applyNight11Rooms() {
+  rooms.forEach((room, index) => {
+    room.name = index === 0 ? "Entrance" : "Grassy Field";
+    room.description = NIGHT_11_DESCRIPTION;
+    room.theme = NIGHT_11_THEME;
+    room.hideSpots = [];
+    room.isExit = false;
+    room.item = undefined;
+    room.schematic = undefined;
+    room.noiseRisk = 0;
+  });
+}
+
+function restoreDefaultRooms() {
+  BASE_ROOMS.forEach((base, index) => {
+    rooms[index] = {
+      ...rooms[index],
+      ...base,
+      hideSpots: [...base.hideSpots],
+    };
+  });
+}
+
+function applyNightLayout() {
+  if (isNight11()) {
+    applyNight11Rooms();
+    roomConnections = JSON.parse(JSON.stringify(NIGHT_11_CONNECTIONS));
+    Object.keys(NIGHT_11_POSITIONS).forEach((key) => {
+      mapPositions[key] = { ...NIGHT_11_POSITIONS[key] };
+    });
+    return;
+  }
+  restoreDefaultRooms();
+  roomConnections = JSON.parse(JSON.stringify(BASE_ROOM_CONNECTIONS));
+  Object.keys(BASE_MAP_POSITIONS).forEach((key) => {
+    mapPositions[key] = { ...BASE_MAP_POSITIONS[key] };
+  });
+}
+
+function setupNight11State() {
+  state.missionType = MISSION_TYPES.ESCAPE;
+  state.escapeMode = "manual";
+  resetGoofingState();
+  state.escapeReady = false;
+  state.escapeConsoleInspected = false;
+  state.tasksAcknowledgedNightOne = false;
+  state.stabilizeTargets = [];
+  state.stabilizedTargets = new Set();
+  state.dataFragmentsNeeded = 0;
+  state.dataFragmentsFound = new Set();
+  state.manualOverrideNeeded = 0;
+  state.manualOverrideTargets = new Set();
+  state.manualOverridesDone = new Set();
+  state.alarmedRooms = new Set();
+  state.triggeredAlarms = new Set();
+  state.disabledAlarmedRooms = new Set();
+  state.alarmDisableProgress = new Map();
+  state.alarmedRoomsRequired = 0;
+  state.activeLures = new Map();
+  state.sunlitRooms = new Set(rooms.map((room) => room.id));
+  state.specialPickups = new Map();
+  state.requiredPickup = null;
+  state.nightIntroLine = null;
+  state.storyQueue = [];
+  state.objectiveHoldUntil = 0;
+  state.containmentLineShown = false;
+  state.permaJammedEdges = new Set();
+  state.surgeCountdown = null;
+  state.surgeForeshadowed = false;
+  state.surgeTargetRoom = null;
+  state.surgeCharges = 0;
+  state.weather = WEATHER_TYPES.find((entry) => entry.type === "Clear") ?? WEATHER_TYPES[0];
+  state.weatherAnnounced = true;
+  updateWeatherAmbience({ forceRestart: true });
+  state.robotDisabled = true;
+  state.robotDormant = 0;
+  state.robotRoom = state.playerRoom;
+  state.caitQuietRoomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
+  state.caitQuietSeen = false;
+}
+
 function setupMissionForNight() {
+  if (isNight11()) {
+    setupNight11State();
+    return;
+  }
   state.missionType = pickMissionForNight(state.currentNight);
   state.escapeMode = state.currentNight <= 3 ? "manual" : "fabricate";
   resetGoofingState();
@@ -2623,6 +2803,13 @@ function setupEnvironmentForNight() {
 }
 
 function setupWeatherForNight() {
+  if (isNight11()) {
+    state.weather = WEATHER_TYPES.find((entry) => entry.type === "Clear") ?? WEATHER_TYPES[0];
+    state.weatherAnnounced = true;
+    state.surgeCharges = 0;
+    updateWeatherAmbience({ forceRestart: true });
+    return;
+  }
   const scriptedWeather = {
     1: "Rain",
     2: "Rain",
@@ -3216,10 +3403,11 @@ function updateMovementAudioState() {
 }
 
 function setCurrentNight(night) {
-  const next = clamp(Math.floor(night), 1, 10);
+  const next = clamp(Math.floor(night), 1, 11);
   state.currentNight = next;
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
+  applyNightLayout();
   if (!state.unlocks.robotActive) {
     state.robotDisabled = true;
   }
@@ -3303,6 +3491,7 @@ function tickAlarmedRooms() {
 
 function tickSunlitRooms() {
   if (state.sunlitRooms.size === 0) return;
+  if (isNight11()) return;
   const profile = getNightProfile();
   const base = 0.04 * profile.signalStrength.device;
   const bleed = 0.02 * profile.signalStrength.device;
@@ -3410,6 +3599,7 @@ function schedulePowerSurge() {
   if (state.surgeCountdown !== null) return;
   if (state.ohShitTriggered && state.surgeCharges <= 0) return;
   if (state.robotDisabled) return;
+  if (isNight11()) return;
   const minTurns = state.currentNight <= 3 ? 6 : state.currentNight <= 6 ? 4 : 3;
   const maxTurns = state.currentNight <= 3 ? 9 : state.currentNight <= 6 ? 7 : 6;
   const weatherMods = getWeatherModifiers();
@@ -3464,6 +3654,7 @@ function triggerPowerSurge(roomId) {
 function tickPowerSurge() {
   if (state.surgeCountdown === null) return;
   if (state.robotDisabled) return;
+  if (isNight11()) return;
   state.surgeCountdown -= 1;
   if (!state.surgeForeshadowed && state.surgeCountdown <= 2) {
     state.surgeForeshadowed = true;
@@ -3842,6 +4033,118 @@ function acknowledgeRobotAlert() {
   flushPendingModals();
 }
 
+function showCaitQuietModal() {
+  if (!dom.caitQuietModal) return;
+  clearThought();
+  dom.caitQuietText.textContent = "Ready to go?";
+  dom.caitQuietModal.classList.add("active");
+  dom.caitQuietModal.setAttribute("aria-hidden", "false");
+  state.objectiveBlocked = true;
+}
+
+function acknowledgeCaitQuietModal() {
+  if (!dom.caitQuietModal) return;
+  dom.caitQuietModal.classList.remove("active");
+  dom.caitQuietModal.setAttribute("aria-hidden", "true");
+  state.objectiveBlocked = false;
+  flushPendingModals();
+}
+
+async function loadCreditsText() {
+  if (!creditsTextPromise) {
+    creditsTextPromise = fetch("credits.txt")
+      .then((response) => (response.ok ? response.text() : ""))
+      .catch(() => "");
+  }
+  const text = await creditsTextPromise;
+  return text || "Thank you for playing.";
+}
+
+function stopGameLoop() {
+  if (gameLoopId) {
+    clearInterval(gameLoopId);
+    gameLoopId = null;
+  }
+}
+
+async function startNight11Credits() {
+  if (state.night11CreditsRolling) return;
+  state.night11CreditsRolling = true;
+  state.isAlive = false;
+  state.hasEscaped = true;
+  state.objectiveBlocked = true;
+  clearActionLock();
+  closePanels();
+  closeMap();
+  fadeTrackTo("rain", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("sunny", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
+  fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
+  stopGameLoop();
+  const creditsText = await loadCreditsText();
+  if (dom.creditsText) {
+    dom.creditsText.textContent = creditsText.trim();
+  }
+  const lineCount = creditsText.trim().split("\n").filter(Boolean).length;
+  const duration = Math.max(22, lineCount * 2.4);
+  if (dom.creditsScreen) {
+    dom.creditsScreen.style.setProperty("--credits-duration", `${duration}s`);
+    dom.creditsScreen.classList.add("active");
+    dom.creditsScreen.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(() => {
+      dom.creditsScreen?.classList.add("rolling");
+    });
+  }
+  if (dom.creditsScroll) {
+    dom.creditsScroll.addEventListener("animationend", finishNight11Credits, { once: true });
+  }
+}
+
+function finishNight11Credits() {
+  if (dom.creditsScreen) {
+    dom.creditsScreen.classList.remove("rolling");
+    dom.creditsScreen.classList.remove("active");
+    dom.creditsScreen.setAttribute("aria-hidden", "true");
+  }
+  state.night11CreditsRolling = false;
+  returnToTitleScreen();
+}
+
+function returnToTitleScreen() {
+  hasStartedGame = false;
+  canStartAmbience = false;
+  state.objectiveBlocked = false;
+  if (dom.titleAudio) {
+    dom.titleAudio.pause();
+    dom.titleAudio.currentTime = 0;
+  }
+  dom.titleVideos.forEach((video) => {
+    video.pause();
+    video.currentTime = 0;
+  });
+  if (dom.app) {
+    dom.app.classList.add("is-hidden");
+  }
+  if (dom.titleScreen) {
+    dom.titleScreen.setAttribute("aria-hidden", "false");
+    dom.titleScreen.classList.remove("title-fade-out");
+    dom.titleScreen.classList.add("title-visible");
+    if (audioUnlockedOnce) {
+      dom.titleScreen.classList.add("title-video-visible");
+    }
+  }
+  if (dom.titleStartBtn) {
+    dom.titleStartBtn.disabled = false;
+    dom.titleStartBtn.classList.remove("is-locked");
+  }
+  if (dom.audioGate) {
+    dom.audioGate.setAttribute("aria-hidden", "true");
+  }
+  document.body.classList.add("title-active");
+  document.body.classList.remove("night-11");
+  startTitleSyncLoop();
+}
+
 function flushPendingModals() {
   if (state.objectiveBlocked || isActionLocked()) return;
   if (state.pendingObjectiveModal) {
@@ -3984,7 +4287,15 @@ function updateRoomActions() {
   const blocked = state.objectiveBlocked || isActionLocked();
   const canEscape = state.escapeReady && room.isExit && state.isAlive;
 
-  if (canEscape) {
+  if (isNight11()) {
+    actions.push({
+      label: "Leave",
+      onClick: () => startNight11Credits(),
+      disabled: false,
+      highlight: true,
+      className: "escape-button",
+    });
+  } else if (canEscape) {
     actions.push({
       label: "Escape",
       onClick: () => handleEscape(),
@@ -3992,6 +4303,27 @@ function updateRoomActions() {
       highlight: true,
       className: "escape-button",
     });
+  }
+
+  if (isNight11()) {
+    actions.forEach((action) => {
+      const button = document.createElement("button");
+      const label = document.createElement("span");
+      label.textContent = action.label;
+      button.appendChild(label);
+      if (action.className) {
+        button.classList.add(action.className);
+      }
+      button.disabled = action.disabled;
+      if (action.highlight) {
+        button.classList.add("objective-highlight");
+      }
+      if (action.onClick) {
+        button.addEventListener("click", action.onClick);
+      }
+      dom.roomActions.appendChild(button);
+    });
+    return;
   }
 
   if (state.hidden) {
@@ -4737,6 +5069,9 @@ function alarmObjectiveText() {
 
 function getObjectiveText() {
   let objective = "";
+  if (isNight11()) {
+    return "Leave";
+  }
   if (state.objectiveHoldUntil > 0 && state.turn < state.objectiveHoldUntil) {
     objective = "Keep moving. Listen for Cait.";
   } else if (state.requiredPickup && !isRequiredPickupComplete()) {
@@ -5947,6 +6282,9 @@ function resetGame({ preserveItems = false } = {}) {
   state.caitFrayedTutorialShown = false;
   state.caitCooldown = 0;
   state.caitTalkCount = 0;
+  state.caitQuietRoomId = null;
+  state.caitQuietSeen = false;
+  state.night11CreditsRolling = false;
   state.runMoments = [];
   state.runSummary = "";
   if (preserveItems) {
@@ -5960,16 +6298,30 @@ function resetGame({ preserveItems = false } = {}) {
     state.sunlightMemoryShown = savedSunlightMemoryShown;
     state.vista = savedVista;
   }
+  applyNightLayout();
+  renderMap();
   setupMissionForNight();
-  assignRoomFinds();
-  announceWeather();
-  configureRobotStart();
+  if (!isNight11()) {
+    assignRoomFinds();
+    announceWeather();
+    configureRobotStart();
+  } else {
+    state.skipNextObjectiveModal = true;
+  }
   dom.deathScreen.classList.remove("active");
   dom.deathScreen.setAttribute("aria-hidden", "true");
   dom.victoryScreen.classList.remove("active");
   dom.victoryScreen.setAttribute("aria-hidden", "true");
   dom.robotAlertModal.classList.remove("active");
   dom.robotAlertModal.setAttribute("aria-hidden", "true");
+  if (dom.caitQuietModal) {
+    dom.caitQuietModal.classList.remove("active");
+    dom.caitQuietModal.setAttribute("aria-hidden", "true");
+  }
+  if (dom.creditsScreen) {
+    dom.creditsScreen.classList.remove("active", "rolling");
+    dom.creditsScreen.setAttribute("aria-hidden", "true");
+  }
   updateUI();
   if (!state.skipNextObjectiveModal) {
     showObjectiveModal(getInitialObjectiveModalText());
@@ -6763,6 +7115,7 @@ function updateMap() {
     (state.robotRoom === state.playerRoom || playerAdjacents.has(state.robotRoom));
   const showRobotVision = state.robotDormant === 0 && state.robotLookTurns > 0;
   const robotAdjacents = showRobotVision ? new Set(roomConnections[state.robotRoom]) : new Set();
+  const night11 = isNight11();
   dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
     const roomId = Number(node.getAttribute("data-room-id"));
     const isEscapeRoom = roomId === escapeRoomId;
@@ -6772,6 +7125,10 @@ function updateMap() {
     if (ring) {
       let opacity = pressure > 0.05 ? 0.15 + pressure * 0.55 : 0;
       let radius = 24 + pressure * 10;
+      if (night11) {
+        opacity = 0;
+        radius = 24;
+      }
       if (state.scanPulseTicks > 0 && roomId === state.scanFocusRoom) {
         opacity = Math.max(opacity, 0.6);
         radius += 4;
@@ -6810,6 +7167,10 @@ function updateMap() {
     const poi = node.querySelector(".map-poi");
     const hazard = node.querySelector(".map-hazard");
     if (poi) {
+      if (night11) {
+        poi.textContent = "";
+        poi.classList.remove("poi-item", "poi-schematic", "poi-exit", "poi-blink", "poi-exit-ready");
+      } else {
       const room = rooms[roomId];
       const discoveriesEnabled = state.escapeConsoleInspected;
       const isExit = isEscapeRoom;
@@ -6842,8 +7203,15 @@ function updateMap() {
       }
       poi.classList.toggle("poi-blink", shouldBlink);
       poi.classList.toggle("poi-exit-ready", isExit && state.escapeReady);
+      }
     }
     if (hazard) {
+      if (night11) {
+        hazard.textContent = "";
+        hazard.style.opacity = "0";
+        hazard.classList.remove("hazard-dormant", "hazard-triggered", "hazard-sun", "hazard-alarm");
+        return;
+      }
       const alarmTriggered = isAlarmTriggered(roomId);
       const alarmCapable = isAlarmCapable(roomId);
       const sunlit = state.sunlitRooms.has(roomId);
@@ -7270,7 +7638,7 @@ function startGameLoop() {
     } else {
       state.hiddenTurns = 0;
     }
-    if (state.currentNight >= 4 &&
+    if (!isNight11() && state.currentNight >= 4 &&
       state.sanity < 0.4 &&
       state.sanityGlitchCooldown <= 0 &&
       !state.phantomCueShown) {
@@ -7296,6 +7664,7 @@ function startGameLoop() {
       }
     }
     if (
+      !isNight11() &&
       state.currentNight >= 4 &&
       state.hidden &&
       getRobotDistance() !== null &&
@@ -7306,7 +7675,7 @@ function startGameLoop() {
         adjustSanity(-0.02, "hiding");
       }
     }
-    if (state.currentNight >= 4 && state.scannerOn && state.sunlitRooms.has(state.playerRoom)) {
+    if (!isNight11() && state.currentNight >= 4 && state.scannerOn && state.sunlitRooms.has(state.playerRoom)) {
       adjustSanity(-0.01, "sunlight");
     }
     if (state.scannerOn) {
@@ -7561,6 +7930,7 @@ function handleEscape() {
 }
 
 function canTriggerSunlightMemory(roomId) {
+  if (isNight11()) return false;
   if (state.sunlightMemoryShown) return false;
   if (state.currentNight <= 4) return false;
   if (state.vista <= 3) return false;
@@ -7600,6 +7970,10 @@ function tickPlayerTravel() {
   state.hidden = false;
   state.hiddenSpot = null;
   state.hiddenTurns = 0;
+  if (isNight11() && state.caitQuietRoomId === nextRoom && !state.caitQuietSeen) {
+    state.caitQuietSeen = true;
+    showCaitQuietModal();
+  }
   if (state.introStep === "highlight-run" && rooms[nextRoom].isExit && !state.introEscapeVisited) {
     state.introEscapeVisited = true;
     state.introStep = "highlight-live";

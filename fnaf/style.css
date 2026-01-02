@@ -541,6 +541,25 @@ main {
   white-space: pre-line;
 }
 
+.quiet-modal .menu-card {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.quiet-modal .menu-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.quiet-text {
+  font-size: 1.2rem;
+  color: #e8f0ff;
+  letter-spacing: 0.02em;
+}
+
 .escape-button {
   background: linear-gradient(135deg, rgba(107, 255, 159, 0.95), rgba(40, 188, 106, 0.95));
   color: #04110a;
@@ -1048,6 +1067,24 @@ main {
   stroke: rgba(190, 190, 190, 0.8);
 }
 
+body.night-11 .map-link {
+  stroke: rgba(120, 180, 120, 0.4);
+}
+
+body.night-11 .map-node circle {
+  fill: rgba(36, 56, 36, 0.95);
+  stroke: rgba(120, 200, 140, 0.65);
+}
+
+body.night-11 .map-node.active circle {
+  fill: rgba(80, 120, 80, 0.95);
+  stroke: rgba(160, 230, 180, 0.85);
+}
+
+body.night-11 .map-node text {
+  fill: rgba(210, 235, 210, 0.9);
+}
+
 .route-info {
   margin: 12px 0 0;
   font-size: 0.85rem;
@@ -1551,6 +1588,60 @@ button.objective-highlight {
   max-width: 420px;
   display: grid;
   gap: 18px;
+}
+
+.credits-screen {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  color: #fff;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1200ms ease;
+  z-index: 120;
+}
+
+.credits-screen.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.credits-scroll {
+  width: min(70vw, 520px);
+  text-align: center;
+  white-space: pre-line;
+  line-height: 1.7;
+  padding: 40vh 0 40vh;
+  transform: translateY(100%);
+}
+
+.credits-screen.rolling .credits-scroll {
+  animation: creditsRoll var(--credits-duration, 36s) linear forwards;
+}
+
+.credits-title {
+  font-size: 1.6rem;
+  font-weight: 600;
+  margin-bottom: 24px;
+  letter-spacing: 0.08em;
+}
+
+.credits-text {
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+@keyframes creditsRoll {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(-100%);
+  }
 }
 
 @media (max-width: 960px) {
