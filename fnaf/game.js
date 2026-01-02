@@ -134,6 +134,8 @@ const ITEM_CLASSES = {
   "Main Fuse (30A)": "POWER_ACCESS",
 };
 
+const TOOL_ITEMS = new Set(["Pulse Scanner", "Noise Lure", "Blowtorch", "Door Jam"]);
+
 function isMaterial(item) {
   return ITEM_CLASSES[item] === "MATERIAL";
 }
@@ -708,6 +710,7 @@ const state = {
   inventory: new Set(),
   foundSchematics: new Set(),
   craftedItems: new Set(),
+  bagTab: "schematics",
   usedDevices: new Map(),
   robotFocus: null,
   robotFocusTTL: 0,
@@ -908,6 +911,7 @@ const dom = {
   inventoryList: document.getElementById("inventoryList"),
   schematicInventory: document.getElementById("schematicInventory"),
   schematicList: document.getElementById("schematicList"),
+  toolsList: document.getElementById("toolsList"),
   floorplanMap: document.getElementById("floorplanMap"),
   mapWeatherLabel: document.getElementById("mapWeatherLabel"),
   randomizeBtn: document.getElementById("randomizeBtn"),
@@ -926,6 +930,10 @@ const dom = {
   debugBtn: document.getElementById("debugBtn"),
   toggleRobotBtn: document.getElementById("toggleRobotBtn"),
   menuPanel: document.getElementById("menuPanel"),
+  bagTabSchematics: document.getElementById("bagTabSchematics"),
+  bagTabItems: document.getElementById("bagTabItems"),
+  bagTabTools: document.getElementById("bagTabTools"),
+  componentsBtn: document.getElementById("componentsBtn"),
   mapPanel: document.getElementById("mapPanel"),
   usePanel: document.getElementById("usePanel"),
   debugPanel: document.getElementById("debugPanel"),
@@ -1836,6 +1844,10 @@ function attachEvents() {
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
   dom.ackObjectiveBtn.addEventListener("click", acknowledgeObjective);
   dom.ackRobotAlertBtn.addEventListener("click", acknowledgeRobotAlert);
+  dom.bagTabSchematics?.addEventListener("click", () => setBagTab("schematics"));
+  dom.bagTabItems?.addEventListener("click", () => setBagTab("items"));
+  dom.bagTabTools?.addEventListener("click", () => setBagTab("tools"));
+  dom.componentsBtn?.addEventListener("click", focusRequiredComponents);
   if (dom.caitQuietModal) {
     dom.caitQuietModal.addEventListener("click", acknowledgeCaitQuietModal);
   }
@@ -1936,13 +1948,15 @@ function updateUI() {
       ? "None"
       : rooms[state.selectedRoom].name;
   }
-  updateInventoryList();
+  updateItemList();
   updateSchematicsInventory();
+  updateToolsList();
   updateRequiredComponents();
   updateUseList();
   updateScannerToggleButton();
   updateRoomActions();
   updatePanels();
+  updateBagTabs();
   updateMap();
   ensureTravelAnimation();
   updateBuildButton();
@@ -2032,7 +2046,37 @@ function animateTravel() {
   travelAnimationId = requestAnimationFrame(animateTravel);
 }
 
-function updateInventoryList() {
+function createInspectButton(item) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "Inspect";
+  button.classList.add("inspect-button");
+  button.addEventListener("click", () => openComponent(item));
+  return button;
+}
+
+function appendListHeader(list, label) {
+  const header = document.createElement("li");
+  header.classList.add("list-header");
+  header.textContent = label;
+  list.appendChild(header);
+}
+
+function appendItemRow(list, item) {
+  const li = document.createElement("li");
+  li.classList.add("list-row");
+  const label = document.createElement("span");
+  label.classList.add("item-label");
+  label.textContent = item;
+  const actions = document.createElement("div");
+  actions.classList.add("item-actions");
+  actions.appendChild(createInspectButton(item));
+  li.appendChild(label);
+  li.appendChild(actions);
+  list.appendChild(li);
+}
+
+function updateItemList() {
   dom.inventoryList.innerHTML = "";
   if (state.inventory.size === 0) {
     const empty = document.createElement("li");
@@ -2044,6 +2088,9 @@ function updateInventoryList() {
   const powerAccess = [];
   const other = [];
   state.inventory.forEach((item) => {
+    if (TOOL_ITEMS.has(item)) {
+      return;
+    }
     if (isMaterial(item)) {
       materials.push(item);
     } else if (isPowerAccess(item)) {
@@ -2052,22 +2099,42 @@ function updateInventoryList() {
       other.push(item);
     }
   });
+  const hasItems = materials.length + powerAccess.length + other.length > 0;
+  if (!hasItems) {
+    const empty = document.createElement("li");
+    empty.textContent = "No items collected yet.";
+    dom.inventoryList.appendChild(empty);
+    return;
+  }
   const addGroup = (label, items) => {
     if (items.length === 0) return;
-    const header = document.createElement("li");
-    const strong = document.createElement("strong");
-    strong.textContent = label;
-    header.appendChild(strong);
-    dom.inventoryList.appendChild(header);
-    items.forEach((item) => {
-      const li = document.createElement("li");
-      li.textContent = item;
-      dom.inventoryList.appendChild(li);
-    });
+    appendListHeader(dom.inventoryList, label);
+    items.forEach((item) => appendItemRow(dom.inventoryList, item));
   };
   addGroup("Materials", materials);
   addGroup("Power & Access", powerAccess);
-  addGroup("Tools & Devices", other);
+  addGroup("Misc Items", other);
+}
+
+function updateToolsList() {
+  if (!dom.toolsList) return;
+  dom.toolsList.innerHTML = "";
+  const collectedTools = [...state.toolCollected].sort();
+  const craftedTools = [...state.craftedItems].sort();
+  if (collectedTools.length === 0 && craftedTools.length === 0) {
+    const empty = document.createElement("li");
+    empty.textContent = "No tools collected yet.";
+    dom.toolsList.appendChild(empty);
+    return;
+  }
+  if (collectedTools.length > 0) {
+    appendListHeader(dom.toolsList, "Collected Tools");
+    collectedTools.forEach((item) => appendItemRow(dom.toolsList, item));
+  }
+  if (craftedTools.length > 0) {
+    appendListHeader(dom.toolsList, "Crafted Gear");
+    craftedTools.forEach((item) => appendItemRow(dom.toolsList, item));
+  }
 }
 
 function updateSchematicsInventory() {
@@ -2090,8 +2157,10 @@ function updateSchematicsInventory() {
   }
   schematics.forEach((item) => {
     const li = document.createElement("li");
+    li.classList.add("list-row");
     const button = document.createElement("button");
     button.textContent = item;
+    button.classList.add("item-select");
     button.addEventListener("click", () => selectSchematic(item));
     if (state.selectedSchematic === item) {
       button.classList.add("primary");
@@ -2099,7 +2168,11 @@ function updateSchematicsInventory() {
     if (state.requiredEscapeSchematic === item) {
       button.classList.add("objective-highlight");
     }
+    const actions = document.createElement("div");
+    actions.classList.add("item-actions");
+    actions.appendChild(createInspectButton(item));
     li.appendChild(button);
+    li.appendChild(actions);
     dom.schematicInventory.appendChild(li);
   });
 }
@@ -2130,7 +2203,7 @@ function updateSchematicList() {
     li.appendChild(label);
     const info = document.createElement("button");
     info.type = "button";
-    info.textContent = "Help";
+    info.textContent = "Inspect";
     info.addEventListener("click", () => openComponent(part));
     li.appendChild(info);
     const tally = document.createElement("span");
@@ -2168,7 +2241,7 @@ function updateBuildButton() {
   const hasAllParts = selected.parts.every((part) => state.inventory.has(part));
   dom.buildBtn.disabled = !(matchesEscape && hasAllParts && state.isAlive && !state.hasEscaped);
   dom.buildBtn.textContent = hasAllParts
-    ? `Build ${selected.name}`
+    ? `Craft ${selected.name}`
     : "Need More Components";
   dom.buildBtn.classList.toggle("objective-highlight", matchesEscape);
 }
@@ -3917,11 +3990,52 @@ function togglePanel(panel) {
 }
 
 function openMenu() {
+  setBagTab("schematics");
   togglePanel(dom.menuPanel);
 }
 
 function closeMenu() {
   closePanel(dom.menuPanel);
+}
+
+const bagTabPanels = {
+  schematics: document.querySelector('[data-bag-panel="schematics"]'),
+  items: document.querySelector('[data-bag-panel="items"]'),
+  tools: document.querySelector('[data-bag-panel="tools"]'),
+};
+
+function setBagTab(tab) {
+  if (!tab) return;
+  state.bagTab = tab;
+  updateBagTabs();
+}
+
+function updateBagTabs() {
+  const tabs = [
+    { name: "schematics", button: dom.bagTabSchematics, panel: bagTabPanels.schematics },
+    { name: "items", button: dom.bagTabItems, panel: bagTabPanels.items },
+    { name: "tools", button: dom.bagTabTools, panel: bagTabPanels.tools },
+  ];
+  tabs.forEach(({ name, button, panel }) => {
+    const isActive = state.bagTab === name;
+    if (button) {
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-selected", String(isActive));
+    }
+    if (panel) {
+      panel.classList.toggle("active", isActive);
+      panel.setAttribute("aria-hidden", String(!isActive));
+    }
+  });
+}
+
+function focusRequiredComponents() {
+  if (!dom.schematicList) return;
+  dom.schematicList.classList.add("attention");
+  dom.schematicList.scrollIntoView({ behavior: "smooth", block: "center" });
+  window.setTimeout(() => {
+    dom.schematicList?.classList.remove("attention");
+  }, 900);
 }
 
 function openMap() {
@@ -3967,7 +4081,7 @@ function openComponent(part) {
   closePanels();
   dom.componentTitle.textContent = part;
   dom.componentDetails.textContent = componentDescriptions[part] || "Critical component.";
-  dom.componentCount.textContent = `You have ${countInventory(part)}.`;
+  dom.componentCount.textContent = `You have ${countOwnedItem(part)}.`;
   openPanel(dom.componentPanel);
 }
 
@@ -4924,6 +5038,17 @@ function countInventory(item) {
   state.inventory.forEach((entry) => {
     if (entry === item) count += 1;
   });
+  return count;
+}
+
+function countOwnedItem(item) {
+  let count = countInventory(item);
+  if (state.craftedItems.has(item)) {
+    count += 1;
+  }
+  if (state.toolCollected.has(item) && !state.inventory.has(item)) {
+    count += 1;
+  }
   return count;
 }
 
@@ -7982,7 +8107,7 @@ function updateUseList() {
     button.addEventListener("click", item.action);
     li.appendChild(button);
     const help = document.createElement("button");
-    help.textContent = "Help";
+    help.textContent = "Inspect";
     help.disabled = controlBlocked;
     help.addEventListener("click", () => openComponent(item.help));
     li.appendChild(help);
