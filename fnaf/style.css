@@ -1472,6 +1472,25 @@ body.night-11 .map-node text {
   grid-column: span 1;
 }
 
+.bag-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.bag-selector h4 {
+  margin: 0;
+  text-align: center;
+  flex: 1;
+}
+
+.selector-button {
+  min-width: 34px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
 .menu-content h4 {
   margin: 0 0 6px;
   font-size: 0.85rem;

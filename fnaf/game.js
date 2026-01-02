@@ -711,6 +711,7 @@ const state = {
   foundSchematics: new Set(),
   craftedItems: new Set(),
   bagTab: "schematics",
+  inventoryView: "items",
   usedDevices: new Map(),
   robotFocus: null,
   robotFocusTTL: 0,
@@ -886,6 +887,10 @@ let typingAudioTimeoutId = null;
 const SUNLIGHT_MEMORY_TEXT = "You remember sunlight on a chipped mug.\nIt mattered then.";
 const SUNLIGHT_MEMORY_CHANCE = 0.28;
 const SUNLIGHT_MEMORY_TICKS = 3;
+const INVENTORY_VIEWS = [
+  { key: "items", label: "Items" },
+  { key: "power", label: "Power & Access" },
+];
 
 const dom = {
   audioGate: document.getElementById("audioGate"),
@@ -909,6 +914,9 @@ const dom = {
   travelStatus: document.getElementById("travelStatus"),
   roomActions: document.getElementById("roomActions"),
   inventoryList: document.getElementById("inventoryList"),
+  itemsPrevBtn: document.getElementById("itemsPrevBtn"),
+  itemsNextBtn: document.getElementById("itemsNextBtn"),
+  itemsCategoryLabel: document.getElementById("itemsCategoryLabel"),
   schematicInventory: document.getElementById("schematicInventory"),
   schematicList: document.getElementById("schematicList"),
   toolsList: document.getElementById("toolsList"),
@@ -1855,6 +1863,8 @@ function attachEvents() {
   dom.bagTabSchematics?.addEventListener("click", () => setBagTab("schematics"));
   dom.bagTabItems?.addEventListener("click", () => setBagTab("items"));
   dom.bagTabTools?.addEventListener("click", () => setBagTab("tools"));
+  dom.itemsPrevBtn?.addEventListener("click", () => cycleInventoryView(-1));
+  dom.itemsNextBtn?.addEventListener("click", () => cycleInventoryView(1));
   dom.componentsBtn?.addEventListener("click", focusRequiredComponents);
   if (dom.caitQuietModal) {
     dom.caitQuietModal.addEventListener("click", acknowledgeCaitQuietModal);
@@ -2100,6 +2110,33 @@ function appendItemRow(list, item) {
   list.appendChild(li);
 }
 
+function getInventoryViewIndex() {
+  const index = INVENTORY_VIEWS.findIndex((view) => view.key === state.inventoryView);
+  return index === -1 ? 0 : index;
+}
+
+function setInventoryView(viewKey) {
+  const view = INVENTORY_VIEWS.find((entry) => entry.key === viewKey);
+  if (!view) return;
+  state.inventoryView = view.key;
+  updateInventorySelector();
+  updateItemList();
+}
+
+function cycleInventoryView(direction) {
+  const count = INVENTORY_VIEWS.length;
+  if (count === 0) return;
+  const currentIndex = getInventoryViewIndex();
+  const nextIndex = (currentIndex + direction + count) % count;
+  setInventoryView(INVENTORY_VIEWS[nextIndex].key);
+}
+
+function updateInventorySelector() {
+  if (!dom.itemsCategoryLabel) return;
+  const view = INVENTORY_VIEWS[getInventoryViewIndex()];
+  dom.itemsCategoryLabel.textContent = view.label;
+}
+
 function updateItemList() {
   dom.inventoryList.innerHTML = "";
   if (state.inventory.size === 0) {
@@ -2108,36 +2145,30 @@ function updateItemList() {
     dom.inventoryList.appendChild(empty);
     return;
   }
-  const materials = [];
+  const items = [];
   const powerAccess = [];
-  const other = [];
   state.inventory.forEach((count, item) => {
     if (TOOL_ITEMS.has(item)) {
       return;
     }
-    if (isMaterial(item)) {
-      materials.push({ name: item, count });
-    } else if (isPowerAccess(item)) {
+    if (isPowerAccess(item)) {
       powerAccess.push({ name: item, count });
     } else {
-      other.push({ name: item, count });
+      items.push({ name: item, count });
     }
   });
-  const hasItems = materials.length + powerAccess.length + other.length > 0;
-  if (!hasItems) {
+  const viewKey = state.inventoryView;
+  updateInventorySelector();
+  const visibleItems = viewKey === "power" ? powerAccess : items;
+  if (visibleItems.length === 0) {
     const empty = document.createElement("li");
-    empty.textContent = "No items collected yet.";
+    empty.textContent = viewKey === "power"
+      ? "No power & access items collected yet."
+      : "No items collected yet.";
     dom.inventoryList.appendChild(empty);
     return;
   }
-  const addGroup = (label, items) => {
-    if (items.length === 0) return;
-    appendListHeader(dom.inventoryList, label);
-    items.forEach((item) => appendItemRow(dom.inventoryList, item));
-  };
-  addGroup("Materials", materials);
-  addGroup("Power & Access", powerAccess);
-  addGroup("Misc Items", other);
+  visibleItems.forEach((item) => appendItemRow(dom.inventoryList, item));
 }
 
 function updateToolsList() {
