@@ -5092,7 +5092,10 @@ Only turn it on when you need eyes.`);
   }
   if (itemName === "Noise Lure") {
     state.noiseLures = Math.max(state.noiseLures, 3);
-    showObjectiveModal(`Cait: Just... be careful all right? It might give you away...`);
+    showObjectiveModal(`Cait: Don’t assume it’s a distraction.
+
+Sometimes they leave a path
+because they want to see who takes it.`);
   }
   if (itemName === "Door Jam") {
     state.doorJams = Math.max(state.doorJams, 1);
