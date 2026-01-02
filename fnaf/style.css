@@ -870,6 +870,7 @@ main {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
   padding: 8px 12px;
   border-radius: 12px;
   background: rgba(9, 14, 26, 0.85);
@@ -899,6 +900,14 @@ main {
 .map-selected strong {
   color: #f4f4f4;
   font-size: 1rem;
+}
+
+.map-selected-note {
+  flex-basis: 100%;
+  margin: 2px 0 0;
+  font-size: 0.75rem;
+  text-transform: none;
+  color: #9fb2de;
 }
 
 .map-link {
