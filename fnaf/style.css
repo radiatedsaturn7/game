@@ -1247,6 +1247,25 @@ body.night-11 .map-node text {
   color: #9fb2de;
 }
 
+.debug-sanity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9fb2de;
+}
+
+.debug-sanity strong {
+  color: #e3ebff;
+  font-weight: 600;
+}
+
+.debug-sanity input[type="range"] {
+  width: 100%;
+}
+
 .night-debug select {
   background: rgba(10, 16, 28, 0.8);
   color: #e3ebff;
