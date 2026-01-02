@@ -1454,6 +1454,199 @@ body.night-11 .map-node text {
   gap: 16px;
 }
 
+.craft-mini-game {
+  background: rgba(4, 7, 14, 0.92);
+}
+
+.craft-mini-game-card {
+  width: min(760px, 94vw);
+  border-color: rgba(120, 220, 200, 0.25);
+  box-shadow: 0 0 24px rgba(80, 200, 190, 0.08);
+}
+
+.craft-mini-game-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(120, 220, 200, 0.08),
+    rgba(120, 220, 200, 0.08) 1px,
+    rgba(5, 10, 18, 0) 1px,
+    rgba(5, 10, 18, 0) 5px
+  );
+  opacity: 0.12;
+  mix-blend-mode: screen;
+}
+
+.craft-mini-game.active .craft-mini-game-card {
+  animation: craft-mini-flicker 360ms ease-out;
+}
+
+.craft-mini-game-heading h3 {
+  margin: 0;
+  letter-spacing: 0.18em;
+}
+
+.craft-mini-game-subtitle {
+  margin: 6px 0 0;
+  color: rgba(190, 220, 255, 0.8);
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.craft-mini-game-content {
+  display: grid;
+  gap: 18px;
+}
+
+.craft-mini-game-board {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  border: 1px solid rgba(120, 220, 200, 0.2);
+  border-radius: 16px;
+  padding: 18px;
+  background: rgba(6, 12, 20, 0.92);
+  box-shadow: inset 0 0 18px rgba(80, 200, 190, 0.08);
+}
+
+.craft-slot {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(120, 220, 200, 0.25);
+  border-radius: 12px;
+  background: rgba(8, 16, 26, 0.9);
+  position: relative;
+  min-height: 94px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.craft-slot-label {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(220, 240, 255, 0.85);
+}
+
+.craft-slot-placeholder {
+  border: 1px dashed rgba(120, 220, 200, 0.3);
+  border-radius: 10px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(120, 220, 200, 0.5);
+  font-size: 1.1rem;
+}
+
+.craft-slot.has-token .craft-slot-placeholder {
+  border-style: solid;
+  color: rgba(220, 250, 255, 0.92);
+  box-shadow: 0 0 10px rgba(120, 220, 200, 0.2);
+}
+
+.craft-slot.is-correct {
+  border-color: rgba(120, 240, 200, 0.7);
+  box-shadow: 0 0 12px rgba(120, 240, 200, 0.2);
+}
+
+.craft-slot.is-selected {
+  border-color: rgba(140, 200, 255, 0.7);
+  box-shadow: 0 0 10px rgba(140, 200, 255, 0.2);
+}
+
+.craft-slot.is-error {
+  border-color: rgba(255, 120, 120, 0.7);
+  animation: craft-slot-error 260ms ease-in-out;
+}
+
+.craft-mini-game-tray-wrapper {
+  border-radius: 16px;
+  border: 1px solid rgba(120, 220, 200, 0.18);
+  padding: 16px;
+  background: rgba(7, 14, 22, 0.92);
+}
+
+.craft-mini-game-tray-label {
+  font-size: 0.8rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(140, 200, 255, 0.6);
+  margin-bottom: 12px;
+}
+
+.craft-mini-game-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.craft-token {
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(140, 200, 255, 0.35);
+  background: rgba(12, 22, 34, 0.9);
+  color: rgba(230, 250, 255, 0.95);
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  cursor: grab;
+  user-select: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.craft-token:active {
+  cursor: grabbing;
+}
+
+.craft-token.is-selected {
+  border-color: rgba(160, 220, 255, 0.85);
+  box-shadow: 0 0 12px rgba(140, 200, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+.craft-mini-game-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+@keyframes craft-mini-flicker {
+  0% {
+    opacity: 0.7;
+    filter: brightness(1.2);
+  }
+  45% {
+    opacity: 1;
+    filter: brightness(1.05);
+  }
+  100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+
+@keyframes craft-slot-error {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
 @keyframes panel-scanline {
   0% {
     opacity: 0;
@@ -1490,6 +1683,14 @@ body.night-11 .map-node text {
   .map-panel .map-card::before {
     animation: none;
     opacity: 0;
+  }
+
+  .craft-mini-game.active .craft-mini-game-card {
+    animation: none;
+  }
+
+  .craft-slot.is-error {
+    animation: none;
   }
 }
 

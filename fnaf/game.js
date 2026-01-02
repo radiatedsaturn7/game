@@ -787,6 +787,8 @@ const state = {
   escapeReady: false,
   alertTicks: 0,
   objectiveBlocked: false,
+  craftMiniGameActive: false,
+  craftMiniGame: null,
   actionLock: null,
   escapeConsoleInspected: false,
   tasksAcknowledgedNightOne: false,
@@ -1010,6 +1012,12 @@ const dom = {
   objectiveModal: document.getElementById("objectiveModal"),
   objectiveModalText: document.getElementById("objectiveModalText"),
   ackObjectiveBtn: document.getElementById("ackObjectiveBtn"),
+  craftMiniGame: document.getElementById("craftMiniGame"),
+  craftMiniGameSubtitle: document.getElementById("craftMiniGameSubtitle"),
+  craftMiniGameBoard: document.getElementById("craftMiniGameBoard"),
+  craftMiniGameTray: document.getElementById("craftMiniGameTray"),
+  craftMiniGameCancelBtn: document.getElementById("craftMiniGameCancelBtn"),
+  craftMiniGameCommitBtn: document.getElementById("craftMiniGameCommitBtn"),
   caitQuietModal: document.getElementById("caitQuietModal"),
   caitQuietText: document.getElementById("caitQuietText"),
   ackCaitQuietBtn: document.getElementById("ackCaitQuietBtn"),
@@ -1879,6 +1887,8 @@ function startGameFromTitle() {
 
 function attachEvents() {
   dom.buildBtn.addEventListener("click", craftItem);
+  dom.craftMiniGameCancelBtn.addEventListener("click", cancelCraftMiniGame);
+  dom.craftMiniGameCommitBtn.addEventListener("click", commitCraftMiniGame);
   dom.retryBtn.addEventListener("click", resetGame);
   dom.nextNightBtn.addEventListener("click", advanceNight);
   dom.randomizeBtn.addEventListener("click", randomizeLayout);
@@ -2343,6 +2353,11 @@ function updateBuildButton() {
   if (!selected) {
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = "Select a Schematic";
+    return;
+  }
+  if (state.craftMiniGameActive) {
+    dom.buildBtn.disabled = true;
+    dom.buildBtn.textContent = "Assembly board active";
     return;
   }
   const matchesEscape = Boolean(state.requiredEscapeSchematic) &&
@@ -6645,6 +6660,7 @@ function resetGame({ preserveItems = false } = {}) {
   const savedSunlightMemoryShown = preserveItems ? state.sunlightMemoryShown : null;
   const savedVista = preserveItems ? state.vista : null;
   clearActionLock();
+  closePanel(dom.craftMiniGame);
   if (pendingMoveTimeoutId) {
     clearTimeout(pendingMoveTimeoutId);
     pendingMoveTimeoutId = null;
@@ -6681,6 +6697,8 @@ function resetGame({ preserveItems = false } = {}) {
   state.objectiveItemInstalled = false;
   state.objectiveBlocksEscapeConsole = false;
   state.completedObjectiveItems = new Set();
+  state.craftMiniGameActive = false;
+  state.craftMiniGame = null;
   state.usedDevices.clear();
   state.robotFocus = null;
   state.robotFocusTTL = 0;
@@ -8202,8 +8220,239 @@ function installObjectiveItem() {
   });
 }
 
+const COMPONENT_SYMBOLS = {
+  Resistors: "／\\/\\／",
+  Capacitors: "|‖|",
+  "Copper Wire": "────",
+  Microcontroller: "[µ]",
+  "Servo Motor": "(⟲)",
+};
+
+function getComponentSymbol(partName) {
+  return COMPONENT_SYMBOLS[partName] ?? "◇";
+}
+
+function openCraftMiniGame(craftable) {
+  if (!craftable || state.craftMiniGameActive) return;
+  const requiredParts = [...craftable.parts];
+  const shuffledParts = [...requiredParts];
+  for (let i = shuffledParts.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffledParts[i], shuffledParts[j]] = [shuffledParts[j], shuffledParts[i]];
+  }
+  state.craftMiniGame = {
+    craftable,
+    schematicName: craftable.schematic,
+    requiredParts,
+    placements: new Map(),
+    tray: new Set(shuffledParts),
+    selectedToken: null,
+  };
+  state.craftMiniGameActive = true;
+  state.objectiveBlocked = true;
+  renderCraftMiniGame();
+  openPanel(dom.craftMiniGame);
+  updateUI();
+}
+
+function closeCraftMiniGame() {
+  if (!state.craftMiniGameActive) return;
+  state.craftMiniGameActive = false;
+  state.craftMiniGame = null;
+  state.objectiveBlocked = false;
+  closePanel(dom.craftMiniGame);
+  updateUI();
+}
+
+function cancelCraftMiniGame() {
+  if (!state.craftMiniGameActive) return;
+  closeCraftMiniGame();
+}
+
+function commitCraftMiniGame() {
+  if (!state.craftMiniGameActive || !state.craftMiniGame) return;
+  if (!isCraftMiniGameComplete()) return;
+  const { craftable } = state.craftMiniGame;
+  closeCraftMiniGame();
+  completeCraftItem(craftable);
+}
+
+function isCraftMiniGameComplete() {
+  const game = state.craftMiniGame;
+  if (!game) return false;
+  return game.placements.size === game.requiredParts.length;
+}
+
+function selectCraftToken(partName) {
+  const game = state.craftMiniGame;
+  if (!game) return;
+  if (!game.tray.has(partName)) return;
+  game.selectedToken = game.selectedToken === partName ? null : partName;
+  refreshCraftMiniGameSelection();
+}
+
+function returnCraftTokenFromSlot(slotIndex) {
+  const game = state.craftMiniGame;
+  if (!game) return;
+  const placed = game.placements.get(slotIndex);
+  if (!placed) return;
+  game.placements.delete(slotIndex);
+  game.tray.add(placed);
+  game.selectedToken = null;
+  renderCraftMiniGame();
+}
+
+function showCraftSlotError(slotEl) {
+  if (!slotEl) return;
+  slotEl.classList.remove("is-error");
+  void slotEl.offsetWidth;
+  slotEl.classList.add("is-error");
+}
+
+function placeCraftToken(partName, slotIndex, slotEl) {
+  const game = state.craftMiniGame;
+  if (!game) return;
+  const expected = game.requiredParts[slotIndex];
+  if (partName !== expected) {
+    showCraftSlotError(slotEl);
+    game.selectedToken = null;
+    refreshCraftMiniGameSelection();
+    return;
+  }
+  game.placements.forEach((placedPart, index) => {
+    if (placedPart === partName && index !== slotIndex) {
+      game.placements.delete(index);
+    }
+  });
+  const existing = game.placements.get(slotIndex);
+  if (existing && existing !== partName) {
+    game.tray.add(existing);
+  }
+  game.placements.set(slotIndex, partName);
+  game.tray.delete(partName);
+  game.selectedToken = null;
+  renderCraftMiniGame();
+}
+
+function handleCraftSlotClick(event) {
+  const game = state.craftMiniGame;
+  if (!game) return;
+  const slotEl = event.currentTarget;
+  const slotIndex = Number(slotEl.dataset.slotIndex);
+  if (Number.isNaN(slotIndex)) return;
+  const selected = game.selectedToken;
+  if (selected) {
+    placeCraftToken(selected, slotIndex, slotEl);
+    return;
+  }
+  returnCraftTokenFromSlot(slotIndex);
+}
+
+function handleCraftSlotDrop(event) {
+  const slotEl = event.currentTarget;
+  const slotIndex = Number(slotEl.dataset.slotIndex);
+  if (Number.isNaN(slotIndex)) return;
+  const partName = event.dataTransfer?.getData("text/plain");
+  if (!partName) return;
+  event.preventDefault();
+  placeCraftToken(partName, slotIndex, slotEl);
+}
+
+function renderCraftMiniGame() {
+  const game = state.craftMiniGame;
+  if (!game || !dom.craftMiniGameBoard || !dom.craftMiniGameTray) return;
+  dom.craftMiniGameSubtitle.textContent = game.schematicName;
+  dom.craftMiniGameBoard.innerHTML = "";
+  dom.craftMiniGameTray.innerHTML = "";
+  game.requiredParts.forEach((part, index) => {
+    const slot = document.createElement("div");
+    slot.className = "craft-slot";
+    slot.dataset.slotIndex = String(index);
+    slot.addEventListener("click", handleCraftSlotClick);
+    slot.addEventListener("dragover", (event) => {
+      event.preventDefault();
+    });
+    slot.addEventListener("drop", handleCraftSlotDrop);
+    const label = document.createElement("div");
+    label.className = "craft-slot-label";
+    label.textContent = part;
+    const placeholder = document.createElement("div");
+    placeholder.className = "craft-slot-placeholder";
+    placeholder.textContent = "Drop symbol";
+    const placed = game.placements.get(index);
+    if (placed) {
+      const token = createCraftToken(placed);
+      token.classList.add("in-slot");
+      placeholder.textContent = "";
+      placeholder.appendChild(token);
+      slot.classList.add("has-token", "is-correct");
+    }
+    slot.appendChild(label);
+    slot.appendChild(placeholder);
+    dom.craftMiniGameBoard.appendChild(slot);
+  });
+
+  game.tray.forEach((partName) => {
+    const token = createCraftToken(partName);
+    if (game.selectedToken === partName) {
+      token.classList.add("is-selected");
+    }
+    dom.craftMiniGameTray.appendChild(token);
+  });
+
+  dom.craftMiniGameCommitBtn.disabled = !isCraftMiniGameComplete();
+}
+
+function createCraftToken(partName) {
+  const token = document.createElement("div");
+  token.className = "craft-token";
+  token.textContent = getComponentSymbol(partName);
+  token.dataset.partName = partName;
+  token.setAttribute("role", "button");
+  token.setAttribute("aria-label", partName);
+  token.draggable = true;
+  token.addEventListener("dragstart", (event) => {
+    event.dataTransfer?.setData("text/plain", partName);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+    }
+  });
+  token.addEventListener("click", () => {
+    selectCraftToken(partName);
+  });
+  return token;
+}
+
+function refreshCraftMiniGameSelection() {
+  if (!state.craftMiniGame) return;
+  const selected = state.craftMiniGame.selectedToken;
+  dom.craftMiniGameTray?.querySelectorAll(".craft-token").forEach((token) => {
+    token.classList.toggle("is-selected", token.dataset.partName === selected);
+  });
+}
+
+function completeCraftItem(craftable) {
+  const requiredCounts = getRequiredPartCounts(craftable.parts);
+  recordMeaningfulAction();
+  requiredCounts.forEach((count, part) => removeInventoryItem(part, count));
+  state.objectiveItemName = craftable.name;
+  state.objectiveItemCrafted = true;
+  updateEscapeReadiness();
+  const profile = getNightProfile();
+  const effects = getPassiveEffects();
+  registerSignal(
+    state.playerRoom,
+    0.28 * profile.signalStrength.device * effects.signalSpike,
+    { type: "build", lastKnownChance: 0.18, bleed: false }
+  );
+  applyRoomStress(state.playerRoom);
+  updateUI();
+}
+
 function craftItem() {
   if (!state.isAlive || state.hasEscaped) return;
+  if (state.craftMiniGameActive) return;
+  if (state.objectiveBlocked) return;
   const craftable = getSelectedSchematic();
   if (!craftable) return;
   if (!state.unlocks.allowCrafting) {
@@ -8236,20 +8485,7 @@ function craftItem() {
   if (![...requiredCounts.entries()].every(([part, count]) => hasInventoryItem(part, count))) {
     return;
   }
-  recordMeaningfulAction();
-  requiredCounts.forEach((count, part) => removeInventoryItem(part, count));
-  state.objectiveItemName = craftable.name;
-  state.objectiveItemCrafted = true;
-  updateEscapeReadiness();
-  const profile = getNightProfile();
-  const effects = getPassiveEffects();
-  registerSignal(
-    state.playerRoom,
-    0.28 * profile.signalStrength.device * effects.signalSpike,
-    { type: "build", lastKnownChance: 0.18, bleed: false }
-  );
-  applyRoomStress(state.playerRoom);
-  updateUI();
+  openCraftMiniGame(craftable);
 }
 
 /*
