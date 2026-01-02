@@ -5451,9 +5451,6 @@ But it can make you harder to pin down— for a moment.`);
   }
   if (state.unlocks.robotActive) {
     state.robotDisabled = false;
-    if (state.currentNight >= 2) {
-      showRobotActivationDialog();
-    }
   } else {
     state.robotDisabled = true;
   }
