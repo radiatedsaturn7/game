@@ -359,7 +359,7 @@ const NIGHT_UNLOCKS = {
     allowSlowRewire: false,
     allowScannerToggle: false,
     allowNoiseLure: false,
-    allowCrafting: false,
+    allowCrafting: true,
     allowDoorJams: false,
     showRobotIntelOnMap: false,
     allowAlarmedRooms: false,
@@ -371,7 +371,7 @@ const NIGHT_UNLOCKS = {
     allowSlowRewire: false,
     allowScannerToggle: false,
     allowNoiseLure: false,
-    allowCrafting: false,
+    allowCrafting: true,
     allowDoorJams: false,
     showRobotIntelOnMap: false,
     allowAlarmedRooms: false,
@@ -383,7 +383,7 @@ const NIGHT_UNLOCKS = {
     allowSlowRewire: true,
     allowScannerToggle: false,
     allowNoiseLure: false,
-    allowCrafting: false,
+    allowCrafting: true,
     allowDoorJams: false,
     showRobotIntelOnMap: false,
     allowAlarmedRooms: true,
@@ -395,7 +395,7 @@ const NIGHT_UNLOCKS = {
     allowSlowRewire: true,
     allowScannerToggle: true,
     allowNoiseLure: false,
-    allowCrafting: false,
+    allowCrafting: true,
     allowDoorJams: false,
     showRobotIntelOnMap: true,
     allowAlarmedRooms: true,
@@ -479,7 +479,7 @@ const NIGHT_UNLOCKS = {
     allowSlowRewire: false,
     allowScannerToggle: false,
     allowNoiseLure: false,
-    allowCrafting: false,
+    allowCrafting: true,
     allowDoorJams: false,
     showRobotIntelOnMap: false,
     allowAlarmedRooms: false,
@@ -984,6 +984,8 @@ const dom = {
   giveAllBtn: document.getElementById("giveAllBtn"),
   godModeBtn: document.getElementById("godModeBtn"),
   eyesBtn: document.getElementById("eyesBtn"),
+  debugSanityInput: document.getElementById("debugSanity"),
+  debugSanityValue: document.getElementById("debugSanityValue"),
   selectedRoom: document.getElementById("selectedRoom"),
   selectedRoomNote: document.getElementById("selectedRoomNote"),
   menuBtn: document.getElementById("menuBtn"),
@@ -1902,6 +1904,16 @@ function attachEvents() {
   dom.giveAllBtn.addEventListener("click", giveAllDebugItems);
   dom.godModeBtn.addEventListener("click", toggleGodMode);
   dom.eyesBtn.addEventListener("click", toggleDebugEyes);
+  if (dom.debugSanityInput) {
+    dom.debugSanityInput.addEventListener("input", (event) => {
+      const next = clamp(Number(event.target.value) / 100, 0, 1);
+      if (Number.isNaN(next)) return;
+      state.sanity = next;
+      state.minSanity = Math.min(state.minSanity, state.sanity);
+      updateHorrorFX();
+      updateUI();
+    });
+  }
   dom.goBtn.addEventListener("click", () => moveSelected(false));
   dom.runBtn.addEventListener("click", () => moveSelected(true));
   dom.cancelBtn.addEventListener("click", cancelMovement);
@@ -2237,28 +2249,39 @@ function updateToolsList() {
   if (!dom.toolsList) return;
   dom.toolsList.innerHTML = "";
   const collectedTools = [...state.toolCollected].sort();
-  const deployables = [
-    { name: "Noise Lure", count: state.noiseLureCharges },
-    { name: "Door Jam", count: state.doorJamCharges },
-  ];
+  const deployables = [];
+  if (isDeployableUnlocked("noiseLure")) {
+    deployables.push({ name: "Noise Lure", count: state.noiseLureCharges });
+  }
+  if (isDeployableUnlocked("doorJam")) {
+    deployables.push({ name: "Door Jam", count: state.doorJamCharges });
+  }
+  if (collectedTools.length === 0 && deployables.length === 0) {
+    const empty = document.createElement("li");
+    empty.textContent = "None";
+    dom.toolsList.appendChild(empty);
+    return;
+  }
   if (collectedTools.length > 0) {
     appendListHeader(dom.toolsList, "Collected Tools");
     collectedTools.forEach((item) => appendItemRow(dom.toolsList, item));
   }
-  appendListHeader(dom.toolsList, "Deployables");
-  deployables.forEach((item) => {
-    const li = document.createElement("li");
-    li.classList.add("list-row");
-    const label = document.createElement("span");
-    label.classList.add("item-label");
-    label.textContent = `${item.name}: ${item.count}`;
-    const actions = document.createElement("div");
-    actions.classList.add("item-actions");
-    actions.appendChild(createInspectButton(item.name));
-    li.appendChild(label);
-    li.appendChild(actions);
-    dom.toolsList.appendChild(li);
-  });
+  if (deployables.length > 0) {
+    appendListHeader(dom.toolsList, "Deployables");
+    deployables.forEach((item) => {
+      const li = document.createElement("li");
+      li.classList.add("list-row");
+      const label = document.createElement("span");
+      label.classList.add("item-label");
+      label.textContent = `${item.name}: ${item.count}`;
+      const actions = document.createElement("div");
+      actions.classList.add("item-actions");
+      actions.appendChild(createInspectButton(item.name));
+      li.appendChild(label);
+      li.appendChild(actions);
+      dom.toolsList.appendChild(li);
+    });
+  }
 }
 
 function updateSchematicsInventory() {
@@ -5220,6 +5243,13 @@ function toggleDebugEyes() {
   pushStatus(`Eyes ${state.debugEyes ? "opened" : "closed"}.`, 2);
 }
 
+function updateDebugSanityUI() {
+  if (!dom.debugSanityInput || !dom.debugSanityValue) return;
+  const percent = Math.round(state.sanity * 100);
+  dom.debugSanityInput.value = String(percent);
+  dom.debugSanityValue.textContent = `${percent}%`;
+}
+
 function updateDebugUI() {
   const debugLabel = dom.nightSelect?.closest(".night-debug");
   if (debugLabel) {
@@ -5231,6 +5261,7 @@ function updateDebugUI() {
   if (dom.eyesBtn) {
     dom.eyesBtn.textContent = `Eyes: ${state.debugEyes ? "ON" : "OFF"}`;
   }
+  updateDebugSanityUI();
 }
 
 function forceEscape() {
@@ -8634,11 +8665,6 @@ function updateUseList() {
           isPlayerTraveling() ||
           state.mapTargetMode,
       }
-    );
-  } else {
-    const unlockNight = getNextUnlockNightFromNow("allowNoiseLure");
-    lockedEntries.push(
-      unlockNight ? `Noise Lure locked (Night ${unlockNight})` : "Noise Lure locked."
     );
   }
   if (state.unlocks.allowDoorJams) {
