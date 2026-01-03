@@ -847,7 +847,7 @@ main {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  pointer-events: none;
+  pointer-events: auto;
   z-index: 2;
 }
 
