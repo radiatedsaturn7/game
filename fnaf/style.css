@@ -906,8 +906,10 @@ main {
 }
 
 .overlay-footer {
-  position: relative;
-  align-self: center;
+  position: fixed;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
   display: flex;
   gap: 12px;
   padding: 8px 12px;
@@ -915,7 +917,7 @@ main {
   background: rgba(8, 12, 20, 0.75);
   border: 1px solid rgba(140, 169, 255, 0.25);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  margin-bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 40;
 }
 
 .action-lock {
@@ -1045,6 +1047,18 @@ main {
   display: grid;
   grid-template-columns: repeat(3, minmax(110px, 1fr));
   gap: 8px;
+}
+
+.map-panel .deploy-action {
+  display: none;
+}
+
+.map-panel.deploy-mode .move-action {
+  display: none;
+}
+
+.map-panel.deploy-mode .deploy-action {
+  display: flex;
 }
 
 .quick-buttons button {
