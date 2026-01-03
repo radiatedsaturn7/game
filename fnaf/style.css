@@ -1055,11 +1055,11 @@ main {
 }
 
 .map-panel.deploy-mode .move-action {
-  display: none;
+  display: flex;
 }
 
 .map-panel.deploy-mode .deploy-action {
-  display: flex;
+  display: none;
 }
 
 .quick-buttons button {
@@ -1372,6 +1372,10 @@ main {
 .map-node.action-selected circle {
   stroke: rgba(255, 232, 140, 0.9);
   stroke-width: 3;
+}
+
+.map-node.action-disabled {
+  opacity: 0.35;
 }
 
 .map-node.intro-escape-target circle {

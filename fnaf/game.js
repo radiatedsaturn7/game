@@ -2733,12 +2733,30 @@ function updateMoveButtons() {
     getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
   const isMoving = isPlayerTraveling();
   const controlBlocked = state.objectiveBlocked || state.actionLock;
-  const blockMove = controlBlocked || state.mapTargetMode || !canMove;
+  const isDeployMode = Boolean(state.mapTargetMode);
+  const blockMove = controlBlocked || isDeployMode || !canMove;
   const canCancel = isMoving || state.mapTargetMode || hasSelection;
   dom.cancelBtn.disabled = !canCancel || controlBlocked;
   if (dom.sneakBtn && dom.runBtn) {
-    dom.sneakBtn.disabled = blockMove;
-    dom.runBtn.disabled = blockMove;
+    const sneakLabel = dom.sneakBtn.querySelector(".quick-label");
+    const sneakSub = dom.sneakBtn.querySelector(".quick-sub");
+    const runLabel = dom.runBtn.querySelector(".quick-label");
+    const runSub = dom.runBtn.querySelector(".quick-sub");
+    if (isDeployMode) {
+      if (sneakLabel) sneakLabel.textContent = "Deploy";
+      if (sneakSub) sneakSub.textContent = "Confirm";
+      if (runLabel) runLabel.textContent = "Cancel";
+      if (runSub) runSub.textContent = "Back";
+      dom.sneakBtn.disabled = controlBlocked || state.mapTargetSelection === null;
+      dom.runBtn.disabled = controlBlocked;
+    } else {
+      if (sneakLabel) sneakLabel.textContent = "Sneak";
+      if (sneakSub) sneakSub.textContent = "Quiet";
+      if (runLabel) runLabel.textContent = "Run";
+      if (runSub) runSub.textContent = "Motion";
+      dom.sneakBtn.disabled = blockMove;
+      dom.runBtn.disabled = blockMove;
+    }
   }
 }
 
@@ -6447,7 +6465,8 @@ function handleMapSelection(roomId) {
   if (state.mapTargetMode) {
     const targets = getMapTargetCandidates();
     if (!targets || !targets.has(roomId)) return;
-    executeMapTargetAction(roomId, state.mapTargetMode);
+    state.mapTargetSelection = roomId;
+    updateUI();
     return;
   }
   setRoutePreview(roomId);
@@ -6468,7 +6487,29 @@ function executeMapTargetAction(target, mode) {
 }
 
 function handleMapMove(isRun) {
-  if (state.mapTargetMode) return;
+  if (state.mapTargetMode) {
+    if (isRun) {
+      closeMap();
+      return;
+    }
+    if (state.mapTargetSelection === null) {
+      pushStatus("Select a deployment target first.", 2);
+      return;
+    }
+    const target = state.mapTargetSelection;
+    let confirmMessage = "";
+    if (state.mapTargetMode === "noise") {
+      confirmMessage = `Deploy Noise Lure in ${rooms[target].name}?`;
+    } else if (state.mapTargetMode === "jam") {
+      const sourceId = state.mapTargetSourceRoom ?? state.playerRoom;
+      confirmMessage = `Deploy Door Jam between ${rooms[sourceId].name} and ${rooms[target].name}?`;
+    }
+    if (confirmMessage && !window.confirm(confirmMessage)) {
+      return;
+    }
+    executeMapTargetAction(target, state.mapTargetMode);
+    return;
+  }
   moveSelected(isRun);
 }
 
@@ -8384,6 +8425,13 @@ function updateMap() {
     node.classList.toggle("preview", roomId === state.routePreviewRoom);
     node.classList.toggle("adjacent", !isIntroEscapeHighlight && playerAdjacents.has(roomId));
     node.classList.toggle("action-target", !isIntroEscapeHighlight && Boolean(actionTargets?.has(roomId)));
+    node.classList.toggle(
+      "action-disabled",
+      !isIntroEscapeHighlight &&
+        state.mapTargetMode !== null &&
+        Boolean(actionTargets) &&
+        !actionTargets.has(roomId)
+    );
     node.classList.toggle("action-selected", !isIntroEscapeHighlight && roomId === state.mapTargetSelection);
     node.classList.toggle(
       "robot-adjacent",
