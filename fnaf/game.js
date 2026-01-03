@@ -2375,6 +2375,9 @@ function updateUI() {
   updateBuildButton();
   updateMoveButtons();
   updateDeployButton();
+  if (dom.mapPanel) {
+    dom.mapPanel.classList.toggle("deploy-mode", state.mapTargetMode !== null);
+  }
   if (dom.toggleRobotBtn) {
     dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
   }
