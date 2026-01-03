@@ -163,11 +163,6 @@ const OBJECTIVE_RECIPES = [
     parts: ["Microcontroller", "Copper Wire"],
   },
   {
-    name: "Door Unjam Kit",
-    schematic: "Door Unjam Kit",
-    parts: ["Servo Motor", "Resistors", "Copper Wire"],
-  },
-  {
     name: "Power Bypass Module",
     schematic: "Power Bypass Module",
     parts: ["Capacitors", "Microcontroller", "Small Fuse (5A)"],
@@ -214,7 +209,6 @@ const componentDescriptions = {
   "24V Power Pack": "Industrial power source for doors, machinery, and system startup.",
   "Main Fuse (30A)": "Heavy fuse rated for core systems and facility infrastructure.",
   "Override Key": "Overrides local locks and reduces the robot's alertness.",
-  "Door Unjam Kit": "Cracked joints and torsion pins to release jammed door actuators.",
   "Power Bypass Module": "Bridges power nodes to force critical systems online.",
   "Lock Override Module": "Rewrites access logic for sealed exit controls.",
   "Noise Lure Schematic": "Blueprint for a decoy emitter built from spare components.",
@@ -234,13 +228,13 @@ const deviceTypes = {
 };
 
 const mapPositions = {
-  0: { x: 70, y: 60 },
-  1: { x: 190, y: 50 },
-  2: { x: 320, y: 60 },
-  3: { x: 70, y: 160 },
+  0: { x: 70, y: 45 },
+  1: { x: 190, y: 40 },
+  2: { x: 320, y: 45 },
+  3: { x: 70, y: 145 },
   4: { x: 190, y: 160 },
   5: { x: 320, y: 150 },
-  6: { x: 430, y: 150 },
+  6: { x: 430, y: 135 },
   7: { x: 120, y: 260 },
   8: { x: 240, y: 260 },
   9: { x: 360, y: 240 },
@@ -287,7 +281,7 @@ const NIGHT_11_CONNECTIONS = {
   13: [10],
 };
 const NIGHT_11_POSITIONS = {
-  0: { x: 80, y: 80 },
+  0: { x: 260, y: 40 },
   1: { x: 200, y: 60 },
   2: { x: 320, y: 60 },
   3: { x: 440, y: 80 },
@@ -873,6 +867,7 @@ const state = {
   disabledAlarmedRooms: new Set(),
   alarmDisableProgress: new Map(),
   alarmedRoomsRequired: 0,
+  alarmAlertShown: false,
   activeLures: new Map(),
   sunlitRooms: new Set(),
   specialPickups: new Map(),
@@ -889,6 +884,13 @@ const state = {
   surgeForeshadowed: false,
   surgeTargetRoom: null,
   surgeCharges: 0,
+  surgeWarningActive: false,
+  surgeWarningRoom: null,
+  surgeWarningEndsAt: 0,
+  surgeWarningLineShown: false,
+  surgeMapFlashRoom: null,
+  surgeMapFlashActive: false,
+  surgeAlertShown: false,
   vista: 0,
   sunlightMemoryShown: false,
   hiddenTurns: 0,
@@ -1031,12 +1033,9 @@ const dom = {
   robotAlertText: document.getElementById("robotAlertText"),
   ackRobotAlertBtn: document.getElementById("ackRobotAlertBtn"),
   buildBtn: document.getElementById("buildBtn"),
-  goBtn: document.getElementById("goBtn"),
-  runBtn: document.getElementById("runBtn"),
   cancelBtn: document.getElementById("cancelBtn"),
   mapConfirmBtn: document.getElementById("mapConfirmBtn"),
   scannerToggleBtn: document.getElementById("scannerToggleBtn"),
-  movementControls: document.getElementById("movementControls"),
   deathScreen: document.getElementById("deathScreen"),
   victoryScreen: document.getElementById("victoryScreen"),
   retryBtn: document.getElementById("retryBtn"),
@@ -1121,6 +1120,19 @@ const fxState = {
   nextJitterTime: 0,
   level: 0,
 };
+
+const fxAudioState = {
+  alarmGain: null,
+  alarmFilter: null,
+  alarmOscillators: [],
+  alarmLfo: null,
+  alarmLfoGain: null,
+  noiseBuffer: null,
+};
+
+let alarmFxActive = false;
+let surgeWarningTimeoutId = null;
+let surgeMapFlashTimeoutId = null;
 
 let gameLoopId = null;
 let hasStartedGame = false;
@@ -1503,6 +1515,226 @@ const AudioManager = {
       return source;
     }
     return null;
+  },
+};
+
+function getFxAudioContext() {
+  if (!audioUnlockedOnce) return null;
+  if (!AudioManager.ctx) return null;
+  return AudioManager.ctx;
+}
+
+function getNoiseBuffer(ctx) {
+  if (fxAudioState.noiseBuffer) return fxAudioState.noiseBuffer;
+  const length = Math.floor(ctx.sampleRate * 1);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i += 1) {
+    data[i] = Math.random() * 2 - 1;
+  }
+  fxAudioState.noiseBuffer = buffer;
+  return buffer;
+}
+
+function playTone({
+  frequency = 440,
+  durationMs = 120,
+  volume = 0.5,
+  type = "sine",
+  bus = "sfx",
+} = {}) {
+  const ctx = getFxAudioContext();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const now = ctx.currentTime;
+  osc.type = type;
+  osc.frequency.setValueAtTime(frequency, now);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(volume, now + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + durationMs / 1000);
+  osc.connect(gain);
+  gain.connect(AudioManager.getBus(bus));
+  osc.start(now);
+  osc.stop(now + durationMs / 1000 + 0.05);
+}
+
+function playNoiseBurst({
+  durationMs = 120,
+  volume = 0.6,
+  filterType = "highpass",
+  frequency = 900,
+  bus = "sfx",
+} = {}) {
+  const ctx = getFxAudioContext();
+  if (!ctx) return;
+  const source = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  const now = ctx.currentTime;
+  source.buffer = getNoiseBuffer(ctx);
+  filter.type = filterType;
+  filter.frequency.setValueAtTime(frequency, now);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(volume, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + durationMs / 1000);
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(AudioManager.getBus(bus));
+  source.start(now);
+  source.stop(now + durationMs / 1000 + 0.05);
+}
+
+function startAlarmDrone(volume = 0.16) {
+  const ctx = getFxAudioContext();
+  if (!ctx || fxAudioState.alarmGain) return;
+  const now = ctx.currentTime;
+  const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  const osc1 = ctx.createOscillator();
+  const osc2 = ctx.createOscillator();
+  const lfo = ctx.createOscillator();
+  const lfoGain = ctx.createGain();
+  gain.gain.setValueAtTime(0, now);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(180, now);
+  osc1.type = "sawtooth";
+  osc1.frequency.setValueAtTime(52, now);
+  osc2.type = "triangle";
+  osc2.frequency.setValueAtTime(67, now);
+  lfo.type = "sine";
+  lfo.frequency.setValueAtTime(0.5, now);
+  lfoGain.gain.setValueAtTime(0.08, now);
+  lfo.connect(lfoGain);
+  lfoGain.connect(gain.gain);
+  osc1.connect(filter);
+  osc2.connect(filter);
+  filter.connect(gain);
+  gain.connect(AudioManager.getBus("ambience"));
+  osc1.start(now);
+  osc2.start(now);
+  lfo.start(now);
+  gain.gain.linearRampToValueAtTime(volume, now + 0.6);
+  fxAudioState.alarmGain = gain;
+  fxAudioState.alarmFilter = filter;
+  fxAudioState.alarmOscillators = [osc1, osc2];
+  fxAudioState.alarmLfo = lfo;
+  fxAudioState.alarmLfoGain = lfoGain;
+}
+
+function stopAlarmDrone() {
+  const ctx = getFxAudioContext();
+  if (!ctx || !fxAudioState.alarmGain) return;
+  const now = ctx.currentTime;
+  fxAudioState.alarmGain.gain.cancelScheduledValues(now);
+  fxAudioState.alarmGain.gain.setValueAtTime(fxAudioState.alarmGain.gain.value, now);
+  fxAudioState.alarmGain.gain.linearRampToValueAtTime(0.001, now + 0.4);
+  const stopAt = now + 0.45;
+  fxAudioState.alarmOscillators.forEach((osc) => osc.stop(stopAt));
+  fxAudioState.alarmLfo?.stop(stopAt);
+  fxAudioState.alarmGain = null;
+  fxAudioState.alarmFilter = null;
+  fxAudioState.alarmOscillators = [];
+  fxAudioState.alarmLfo = null;
+  fxAudioState.alarmLfoGain = null;
+}
+
+function playAlarmChirp(volume = 0.5) {
+  const ctx = getFxAudioContext();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const now = ctx.currentTime;
+  osc.type = "square";
+  osc.frequency.setValueAtTime(1200, now);
+  osc.frequency.exponentialRampToValueAtTime(760, now + 0.08);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(volume, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+  osc.connect(gain);
+  gain.connect(AudioManager.getBus("sfx"));
+  osc.start(now);
+  osc.stop(now + 0.18);
+}
+
+function playSurgePop(volume = 0.9) {
+  playTone({ frequency: 90, durationMs: 120, volume: volume * 0.6, type: "sine" });
+  playNoiseBurst({ durationMs: 140, volume: volume * 0.7, frequency: 750 });
+}
+
+function playSurgeCrack(volume = 0.8) {
+  playNoiseBurst({ durationMs: 160, volume: volume * 0.8, frequency: 1200 });
+  playTone({ frequency: 220, durationMs: 90, volume: volume * 0.4, type: "triangle" });
+}
+
+function playSurgeBuzz(volume = 0.5) {
+  const ctx = getFxAudioContext();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
+  const now = ctx.currentTime;
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(140, now);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(600, now);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(volume, now + 0.05);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(AudioManager.getBus("sfx"));
+  osc.start(now);
+  osc.stop(now + 0.5);
+}
+
+const fxController = {
+  classTimers: new Map(),
+  toggleRootClass(className, durationMs) {
+    if (!dom.app) return;
+    dom.app.classList.add(className);
+    if (!durationMs) return;
+    const existing = this.classTimers.get(className);
+    if (existing) {
+      clearTimeout(existing);
+    }
+    const timer = window.setTimeout(() => {
+      dom.app?.classList.remove(className);
+      this.classTimers.delete(className);
+    }, durationMs);
+    this.classTimers.set(className, timer);
+  },
+  clearRootClass(className) {
+    if (!dom.app) return;
+    dom.app.classList.remove(className);
+    const existing = this.classTimers.get(className);
+    if (existing) {
+      clearTimeout(existing);
+      this.classTimers.delete(className);
+    }
+  },
+  playSfx(name, volume = 1, { inRoom = false } = {}) {
+    switch (name) {
+      case "alarm-chirp":
+        playAlarmChirp(volume);
+        break;
+      case "surge-pop":
+        playSurgePop(volume);
+        if (inRoom) {
+          playSurgeCrack(volume * 0.9);
+        }
+        break;
+      case "surge-buzz":
+        playSurgeBuzz(volume);
+        break;
+      default:
+        break;
+    }
+  },
+  showHudLine(text, durationMs = 2400) {
+    if (!text) return;
+    const ticks = Math.max(1, Math.round(durationMs / TICK_MS));
+    pushBanner(text, ticks);
   },
 };
 
@@ -1951,8 +2183,6 @@ function attachEvents() {
       updateUI();
     });
   }
-  dom.goBtn.addEventListener("click", () => moveSelected(false));
-  dom.runBtn.addEventListener("click", () => moveSelected(true));
   dom.cancelBtn.addEventListener("click", cancelMovement);
   dom.mapConfirmBtn.addEventListener("click", confirmMapTarget);
   dom.scannerToggleBtn.addEventListener("click", () => handleAction("scan-toggle"));
@@ -2018,9 +2248,47 @@ function attachEvents() {
   });
 }
 
+function updateAlarmFx(isActive) {
+  if (isActive) {
+    fxController.toggleRootClass("alarm-active");
+    startAlarmDrone();
+    if (!alarmFxActive) {
+      fxController.playSfx("alarm-chirp", 0.6);
+    }
+  } else {
+    fxController.clearRootClass("alarm-active");
+    if (alarmFxActive) {
+      stopAlarmDrone();
+    }
+  }
+  alarmFxActive = isActive;
+}
+
 function updateUI() {
   document.body.classList.toggle("night-11", isNight11());
   const room = rooms[state.playerRoom];
+  const alarmActive = isAlarmTriggered(room.id);
+  const sunlitRoom = state.sunlitRooms.has(room.id);
+  room.alarmActive = alarmActive;
+  updateAlarmFx(alarmActive);
+  dom.roomMedia.classList.toggle("sunlit", sunlitRoom);
+  if (state.surgeWarningActive) {
+    const remaining = state.surgeWarningEndsAt - performance.now();
+    if (state.playerRoom === state.surgeWarningRoom && remaining > 0) {
+      if (dom.app && !dom.app.classList.contains("surge-warning")) {
+        dom.app.style.setProperty("--surge-warning-duration", `${remaining}ms`);
+        fxController.toggleRootClass("surge-warning", remaining);
+      }
+      if (!state.surgeWarningLineShown) {
+        fxController.showHudLine("The lights tighten. Something is about to snap.", 1800);
+        state.surgeWarningLineShown = true;
+      }
+    } else {
+      fxController.clearRootClass("surge-warning");
+    }
+  } else {
+    fxController.clearRootClass("surge-warning");
+  }
   const playerAdjacents = new Set(roomConnections[state.playerRoom] || []);
   const dangerRoom = !state.robotDisabled &&
     (state.robotRoom === state.playerRoom || playerAdjacents.has(state.robotRoom));
@@ -2455,22 +2723,9 @@ function updateMoveButtons() {
   const canMove = hasSelection &&
     getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
   const isMoving = isPlayerTraveling();
-  const blocked = !canMove ||
-    !state.isAlive ||
-    state.hasEscaped ||
-    isMoving ||
-    state.objectiveBlocked ||
-    state.actionLock ||
-    state.mapTargetMode;
-  dom.movementControls.classList.toggle("hidden", isMoving);
-  dom.cancelBtn.classList.toggle("hidden", !isMoving);
-  const actionBand = state.currentNight >= 4 && state.sanity < 0.4;
-  setButtonLabel(dom.goBtn, actionBand ? "Try" : "Sneak", "Quiet");
-  setButtonLabel(dom.runBtn, actionBand ? "Panic" : "Run", "Trace");
-  dom.goBtn.disabled = blocked;
-  dom.runBtn.disabled = blocked;
-  dom.cancelBtn.disabled = !isMoving;
-  dom.runBtn.classList.toggle("objective-highlight", state.introStep === "highlight-run");
+  const controlBlocked = state.objectiveBlocked || state.actionLock;
+  const canCancel = isMoving || state.mapTargetMode || hasSelection;
+  dom.cancelBtn.disabled = !canCancel || controlBlocked;
 }
 
 function setButtonLabel(button, text, risk) {
@@ -2491,21 +2746,26 @@ function updateMapActionControls() {
   const controlBlocked = state.objectiveBlocked || isActionLocked();
   const active = Boolean(state.mapTargetMode);
   const hasSelection = state.mapTargetSelection !== null;
-  dom.mapConfirmBtn.classList.toggle("hidden", !active || !hasSelection);
-  dom.mapConfirmBtn.disabled = !hasSelection || controlBlocked;
+  const canMove = state.selectedRoom !== null &&
+    getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
+  const shouldShow = (active && hasSelection) || (!active && canMove);
+  dom.mapConfirmBtn.classList.toggle("hidden", !shouldShow);
+  dom.mapConfirmBtn.disabled = controlBlocked || (active && !hasSelection) || (!active && !canMove);
   if (state.mapTargetMode === "noise") {
     dom.mapConfirmBtn.textContent = "Deploy Noise Lure here";
   } else if (state.mapTargetMode === "jam") {
     dom.mapConfirmBtn.textContent = "Deploy Door Jam here";
   } else if (state.mapTargetMode === "unjam") {
     dom.mapConfirmBtn.textContent = "Use Blowtorch here";
+  } else if (canMove) {
+    dom.mapConfirmBtn.textContent = "Move here";
   } else {
     dom.mapConfirmBtn.textContent = "Confirm";
   }
 }
 
 function updatePanels() {
-  dom.movementControls.classList.toggle("hidden", isPlayerTraveling());
+  return;
 }
 
 function stripCaitPrefix(message) {
@@ -3055,6 +3315,7 @@ function setupNight11State() {
   state.disabledAlarmedRooms = new Set();
   state.alarmDisableProgress = new Map();
   state.alarmedRoomsRequired = 0;
+  state.alarmAlertShown = false;
   state.activeLures = new Map();
   state.sunlitRooms = new Set(rooms.map((room) => room.id));
   state.specialPickups = new Map();
@@ -3068,6 +3329,13 @@ function setupNight11State() {
   state.surgeForeshadowed = false;
   state.surgeTargetRoom = null;
   state.surgeCharges = 0;
+  state.surgeWarningActive = false;
+  state.surgeWarningRoom = null;
+  state.surgeWarningEndsAt = 0;
+  state.surgeWarningLineShown = false;
+  state.surgeMapFlashRoom = null;
+  state.surgeMapFlashActive = false;
+  state.surgeAlertShown = false;
   state.weather = WEATHER_TYPES.find((entry) => entry.type === "Clear") ?? WEATHER_TYPES[0];
   state.weatherAnnounced = true;
   updateWeatherAmbience({ forceRestart: true });
@@ -3959,8 +4227,43 @@ function pickSurgeRoom() {
   return weighted[weighted.length - 1].roomId;
 }
 
+function clearSurgeWarning() {
+  state.surgeWarningActive = false;
+  state.surgeWarningRoom = null;
+  state.surgeWarningEndsAt = 0;
+  state.surgeWarningLineShown = false;
+  if (surgeWarningTimeoutId) {
+    clearTimeout(surgeWarningTimeoutId);
+    surgeWarningTimeoutId = null;
+  }
+  fxController.clearRootClass("surge-warning");
+}
+
+function startSurgeWarning(roomId) {
+  if (state.surgeWarningActive) return;
+  const duration = 1500 + Math.random() * 1500;
+  state.surgeWarningActive = true;
+  state.surgeWarningRoom = roomId;
+  state.surgeWarningEndsAt = performance.now() + duration;
+  state.surgeWarningLineShown = false;
+  if (surgeWarningTimeoutId) {
+    clearTimeout(surgeWarningTimeoutId);
+  }
+  surgeWarningTimeoutId = setTimeout(() => {
+    clearSurgeWarning();
+    updateUI();
+  }, duration);
+  if (roomId === state.playerRoom && dom.app) {
+    dom.app.style.setProperty("--surge-warning-duration", `${duration}ms`);
+    fxController.toggleRootClass("surge-warning", duration);
+    fxController.showHudLine("The lights tighten. Something is about to snap.", 1800);
+    state.surgeWarningLineShown = true;
+  }
+}
+
 function triggerPowerSurge(roomId) {
   if (roomId === null || roomId === undefined) return;
+  clearSurgeWarning();
   const firstSurge = !state.ohShitTriggered;
   state.ohShitTriggered = true;
   setRobotFocus(roomId, { reason: "surge" });
@@ -3968,7 +4271,21 @@ function triggerPowerSurge(roomId) {
   registerSignal(roomId, 0.85, { type: "surge", forceLastKnown: true, bleed: true });
   const effects = getPassiveEffects();
   state.persistentSignals.set(roomId, 3 + effects.persistentBonus);
-  showObjectiveModal("Cait: Power surge. That room just blew open.");
+  fxController.toggleRootClass("surge-zap", 260);
+  const inSurgeRoom = roomId === state.playerRoom;
+  if (inSurgeRoom) {
+    fxController.showHudLine("The lights snap. Your teeth hum.", 2400);
+  } else {
+    fxController.showHudLine("Somewhere nearby, something pops—hard.", 2200);
+  }
+  fxController.playSfx("surge-pop", inSurgeRoom ? 1 : 0.85, { inRoom: inSurgeRoom });
+  if (inSurgeRoom) {
+    fxController.playSfx("surge-buzz", 0.7);
+  }
+  if (!state.surgeAlertShown) {
+    showObjectiveModal("Cait: Lightning's been hammering the grid. That's why the surges keep popping.");
+    state.surgeAlertShown = true;
+  }
   if (isAlarmCapable(roomId)) {
     state.triggeredAlarms.add(roomId);
     if (roomId === state.playerRoom) {
@@ -3983,6 +4300,22 @@ function triggerPowerSurge(roomId) {
     state.surgeCharges -= 1;
     schedulePowerSurge();
   }
+  if (
+    roomId !== state.playerRoom &&
+    dom.mapPanel?.classList.contains("active") &&
+    (roomConnections[state.playerRoom] || []).includes(roomId)
+  ) {
+    state.surgeMapFlashRoom = roomId;
+    state.surgeMapFlashActive = true;
+    if (surgeMapFlashTimeoutId) {
+      clearTimeout(surgeMapFlashTimeoutId);
+    }
+    surgeMapFlashTimeoutId = setTimeout(() => {
+      state.surgeMapFlashActive = false;
+      state.surgeMapFlashRoom = null;
+      updateUI();
+    }, 500);
+  }
 }
 
 function tickPowerSurge() {
@@ -3992,7 +4325,8 @@ function tickPowerSurge() {
   state.surgeCountdown -= 1;
   if (!state.surgeForeshadowed && state.surgeCountdown <= 2) {
     state.surgeForeshadowed = true;
-    pushStatus("Power flickers somewhere in the facility.", 3);
+    const targetRoom = state.surgeTargetRoom ?? pickSurgeRoom();
+    startSurgeWarning(targetRoom);
   }
   if (state.surgeCountdown <= 0) {
     const roomId = state.surgeTargetRoom ?? pickSurgeRoom();
@@ -4252,6 +4586,10 @@ function togglePanel(panel) {
     return;
   }
   const shouldOpen = !panel.classList.contains("active");
+  if (panel !== dom.mapPanel && state.mapTargetMode) {
+    clearMapTarget();
+    state.selectedRoom = null;
+  }
   closePanels();
   if (shouldOpen) {
     openPanel(panel);
@@ -4523,6 +4861,7 @@ function returnToTitleScreen() {
   });
   if (dom.app) {
     dom.app.classList.add("is-hidden");
+    dom.app.classList.remove("alarm-active", "surge-warning", "surge-zap");
   }
   if (dom.titleScreen) {
     dom.titleScreen.setAttribute("aria-hidden", "false");
@@ -4541,6 +4880,7 @@ function returnToTitleScreen() {
   }
   document.body.classList.add("title-active");
   document.body.classList.remove("night-11");
+  document.body.style.removeProperty("--room-theme");
   startTitleSyncLoop();
 }
 
@@ -4681,6 +5021,10 @@ function disableAlarm(roomId) {
 
 function onAlarmTriggered(roomId) {
   if (state.robotDisabled) return;
+  if (!state.alarmAlertShown) {
+    showObjectiveModal("Cait: Alarm tripped. Lightning's been messing with the lines.");
+    state.alarmAlertShown = true;
+  }
   const night = state.currentNight;
   const profile = getNightProfile();
   if (night <= 3) {
@@ -4886,21 +5230,6 @@ function updateRoomActions() {
       disabled: state.hidden || blocked,
       highlight: state.alarmedRoomsRequired > 0,
       risk: "Trace",
-    });
-    if (isAlarmTriggered(room.id)) {
-      actions.push({
-        label: "An alarm drones here. Sneaking won’t help.",
-        disabled: true,
-        info: true,
-      });
-    }
-  }
-
-  if (state.sunlitRooms.has(room.id)) {
-    actions.push({
-      label: "Sunlight spills across the floor. It doesn’t care how quiet you are.",
-      disabled: true,
-      info: true,
     });
   }
 
@@ -5995,18 +6324,23 @@ function handleMapSelection(roomId) {
 }
 
 function confirmMapTarget() {
-  if (!state.mapTargetMode || state.mapTargetSelection === null) return;
   if (state.objectiveBlocked || isActionLocked()) return;
-  const target = state.mapTargetSelection;
-  const mode = state.mapTargetMode;
-  clearMapTarget();
-  closeMap();
-  if (mode === "noise") {
-    deployNoiseLure(target);
-  } else if (mode === "jam") {
-    deployDoorJam(target);
-  } else if (mode === "unjam") {
-    useBlowtorch(target);
+  if (state.mapTargetMode && state.mapTargetSelection !== null) {
+    const target = state.mapTargetSelection;
+    const mode = state.mapTargetMode;
+    clearMapTarget();
+    closeMap();
+    if (mode === "noise") {
+      deployNoiseLure(target);
+    } else if (mode === "jam") {
+      deployDoorJam(target);
+    } else if (mode === "unjam") {
+      useBlowtorch(target);
+    }
+    return;
+  }
+  if (state.selectedRoom !== null) {
+    moveSelected(false);
   }
 }
 
@@ -6926,7 +7260,9 @@ function resetGame({ preserveItems = false } = {}) {
   state.specialPickups = new Map();
   state.requiredPickup = null;
   state.toolCollected = new Set();
+  state.alarmAlertShown = false;
   state.deployableUnlocks = { noiseLure: false, doorJam: false };
+  state.surgeAlertShown = false;
   state.nightIntroLine = null;
   state.storyQueue = [];
   state.objectiveHoldUntil = 0;
@@ -6937,6 +7273,12 @@ function resetGame({ preserveItems = false } = {}) {
   state.surgeForeshadowed = false;
   state.surgeTargetRoom = null;
   state.surgeCharges = 0;
+  state.surgeWarningActive = false;
+  state.surgeWarningRoom = null;
+  state.surgeWarningEndsAt = 0;
+  state.surgeWarningLineShown = false;
+  state.surgeMapFlashRoom = null;
+  state.surgeMapFlashActive = false;
   state.vista = 0;
   state.sunlightMemoryShown = false;
   state.hiddenTurns = 0;
@@ -7740,6 +8082,7 @@ function getRoutePlanningOrigin() {
 
 function updateMap() {
   const isIntroEscapeHighlight = state.introStep === "highlight-escape";
+  const night11 = isNight11();
   const escapeRoomId = rooms.find((room) => room.isExit)?.id ?? null;
   const robotPath = state.robotPlannedTarget === null
     ? []
@@ -7797,9 +8140,12 @@ function updateMap() {
       });
     }
   }
-  const plannedPath = state.routePreviewRoom !== null
+  let plannedPath = state.routePreviewRoom !== null
     ? getShortestPath(planningOrigin, state.routePreviewRoom)
     : [];
+  if (night11 && plannedPath.length === 0 && state.playerPath.length > 0) {
+    plannedPath = [state.playerRoom, ...state.playerPath];
+  }
   const showPlannedPath = plannedPath.length > 1;
   const plannedEdges = new Set();
   for (let i = 0; i < plannedPath.length - 1; i += 1) {
@@ -7850,7 +8196,6 @@ function updateMap() {
     (state.robotRoom === state.playerRoom || playerAdjacents.has(state.robotRoom));
   const showRobotVision = state.robotDormant === 0 && state.robotLookTurns > 0;
   const robotAdjacents = showRobotVision ? new Set(roomConnections[state.robotRoom]) : new Set();
-  const night11 = isNight11();
   dom.floorplanMap.querySelectorAll(".map-node").forEach((node) => {
     const roomId = Number(node.getAttribute("data-room-id"));
     const isEscapeRoom = roomId === escapeRoomId;
@@ -7899,6 +8244,10 @@ function updateMap() {
     node.classList.toggle("robot-target", showRobotIntel && roomId === state.robotPlannedTarget);
     node.classList.toggle("robot-sweep", showRobotIntel && state.robotSweepQueue.includes(roomId));
     node.classList.toggle("scan-focus", state.scanPulseTicks > 0 && roomId === state.scanFocusRoom);
+    node.classList.toggle(
+      "surge-flash",
+      state.surgeMapFlashActive && roomId === state.surgeMapFlashRoom
+    );
     const poi = node.querySelector(".map-poi");
     const hazard = node.querySelector(".map-hazard");
     if (poi) {
