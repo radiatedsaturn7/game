@@ -89,19 +89,19 @@
           <div class="room-actions-overlay">
             <div id="roomActions" class="actions overlay-actions"></div>
           </div>
-          <div class="overlay-footer">
-            <button id="menuBtn">Bag</button>
-            <button id="mapBtn">Map</button>
-            <button id="liveBtn" class="primary">Live</button>
-            <button id="tasksBtn">Tasks</button>
-            <button id="useBtn">Use</button>
-          </div>
           <div id="actionLock" class="action-lock hidden" aria-live="polite">
             <p id="actionLockLabel"></p>
             <div class="action-bar">
               <span></span>
             </div>
           </div>
+        </div>
+        <div class="overlay-footer">
+          <button id="menuBtn">Bag</button>
+          <button id="mapBtn">Map</button>
+          <button id="liveBtn" class="primary">Live</button>
+          <button id="tasksBtn">Tasks</button>
+          <button id="useBtn">Use</button>
         </div>
       </section>
     </main>
@@ -187,9 +187,22 @@
       <div class="map-controls">
         <div class="quick-actions compact">
           <div class="quick-buttons">
-            <button id="sneakBtn" type="button">Sneak</button>
-            <button id="runBtn" type="button">Run</button>
-            <button id="scannerToggleBtn">Motion Sensor: OFF</button>
+            <button id="sneakBtn" type="button">
+              <span class="quick-label">Sneak</span>
+              <span class="quick-sub">Quiet</span>
+            </button>
+            <button id="runBtn" type="button">
+              <span class="quick-label">Run</span>
+              <span class="quick-sub">Trace</span>
+            </button>
+            <button id="scannerToggleBtn" type="button">
+              <span class="quick-label">Motion Sensor</span>
+              <span id="scannerToggleStatus" class="quick-sub">OFF</span>
+            </button>
+            <button id="deployBtn" type="button">
+              <span class="quick-label">Deploy</span>
+              <span id="deployStatus" class="quick-sub">Jam / Lure</span>
+            </button>
             <button id="cancelBtn">Cancel</button>
           </div>
         </div>
