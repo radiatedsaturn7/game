@@ -2738,6 +2738,7 @@ function setTravelMode(mode) {
   const nextMode = mode === "run" ? "run" : "sneak";
   state.playerTravelMode = nextMode;
   updateTravelModeButtons();
+  updateMapActionControls();
 }
 
 function updateTravelModeButtons() {
