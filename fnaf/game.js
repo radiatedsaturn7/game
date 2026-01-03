@@ -1036,7 +1036,10 @@ const dom = {
   ackRobotAlertBtn: document.getElementById("ackRobotAlertBtn"),
   buildBtn: document.getElementById("buildBtn"),
   cancelBtn: document.getElementById("cancelBtn"),
+  deployBtn: document.getElementById("deployBtn"),
+  deployStatus: document.getElementById("deployStatus"),
   scannerToggleBtn: document.getElementById("scannerToggleBtn"),
+  scannerToggleStatus: document.getElementById("scannerToggleStatus"),
   deathScreen: document.getElementById("deathScreen"),
   victoryScreen: document.getElementById("victoryScreen"),
   retryBtn: document.getElementById("retryBtn"),
@@ -2188,6 +2191,7 @@ function attachEvents() {
   dom.scannerToggleBtn.addEventListener("click", () => handleAction("scan-toggle"));
   dom.sneakBtn?.addEventListener("click", () => handleMapMove(false));
   dom.runBtn?.addEventListener("click", () => handleMapMove(true));
+  dom.deployBtn?.addEventListener("click", handleDeployAction);
   dom.menuBtn.addEventListener("click", openMenu);
   dom.mapBtn.addEventListener("click", openMap);
   dom.liveBtn.addEventListener("click", returnToRoom);
@@ -2370,6 +2374,7 @@ function updateUI() {
   ensureTravelAnimation();
   updateBuildButton();
   updateMoveButtons();
+  updateDeployButton();
   if (dom.toggleRobotBtn) {
     dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
   }
@@ -2731,6 +2736,58 @@ function updateMoveButtons() {
   if (dom.sneakBtn && dom.runBtn) {
     dom.sneakBtn.disabled = blockMove;
     dom.runBtn.disabled = blockMove;
+  }
+}
+
+function getDeployableAvailability() {
+  const canNoise = state.unlocks.allowNoiseLure &&
+    isDeployableUnlocked("noiseLure") &&
+    state.noiseLureCharges > 0;
+  if (!state.unlocks.allowDoorJams || !isDeployableUnlocked("doorJam")) {
+    return { canNoise, canJam: false };
+  }
+  if (state.doorJamCharges <= 0) {
+    return { canNoise, canJam: false };
+  }
+  const adjacent = roomConnections[state.playerRoom] || [];
+  const validTargets = adjacent.filter((roomId) => {
+    const disallowed = rooms[roomId].isExit || rooms[state.playerRoom].isExit;
+    if (disallowed) return false;
+    return !isEdgeJammed(state.playerRoom, roomId);
+  });
+  return { canNoise, canJam: validTargets.length > 0 };
+}
+
+function updateDeployButton() {
+  if (!dom.deployBtn) return;
+  const controlBlocked = state.objectiveBlocked || isActionLocked();
+  const isBusy = isPlayerTraveling() || state.mapTargetMode;
+  const { canNoise, canJam } = getDeployableAvailability();
+  dom.deployBtn.disabled = controlBlocked || isBusy || (!canNoise && !canJam);
+  if (dom.deployStatus) {
+    dom.deployStatus.textContent = canNoise && canJam
+      ? "Jam / Lure"
+      : canJam
+        ? "Jam"
+        : canNoise
+          ? "Lure"
+          : "Jam / Lure";
+  }
+}
+
+function handleDeployAction() {
+  if (state.objectiveBlocked || isActionLocked()) return;
+  const { canNoise, canJam } = getDeployableAvailability();
+  if (canNoise && canJam) {
+    openUse();
+    return;
+  }
+  if (canNoise) {
+    beginMapTarget("noise");
+    return;
+  }
+  if (canJam) {
+    beginMapTarget("jam");
   }
 }
 
@@ -9296,7 +9353,13 @@ function updateScannerToggleButton() {
   const showScanner = canUseScanner();
   dom.scannerToggleBtn.classList.toggle("hidden", !showScanner);
   if (!showScanner) return;
-  dom.scannerToggleBtn.textContent = state.scannerOn ? "Motion Sensor: ON" : "Motion Sensor: OFF";
+  const status = state.scannerOn ? "ON" : "OFF";
+  if (dom.scannerToggleStatus) {
+    dom.scannerToggleStatus.textContent = status;
+  } else {
+    dom.scannerToggleBtn.textContent = `Motion Sensor: ${status}`;
+  }
+  dom.scannerToggleBtn.setAttribute("aria-label", `Motion Sensor: ${status}`);
   dom.scannerToggleBtn.disabled = controlBlocked;
   dom.scannerToggleBtn.classList.toggle("objective-highlight", state.scannerHighlight);
 }
