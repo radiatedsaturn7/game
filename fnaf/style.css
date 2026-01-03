@@ -1653,21 +1653,6 @@ body.night-11 .map-node text {
     visibility 0s linear var(--panel-duration);
 }
 
-#menuPanel {
-  position: relative;
-  inset: auto;
-  background: transparent;
-  z-index: 10;
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  display: none;
-}
-
-#menuPanel.active {
-  display: flex;
-}
-
 .menu-panel.modal-panel {
   z-index: 60;
 }
@@ -1712,7 +1697,7 @@ body.night-11 .map-node text {
   border: 1px solid rgba(140, 169, 255, 0.35);
   border-radius: 20px;
   padding: 24px;
-  width: min(720px, 92vw);
+  width: min(640px, 92vw);
   display: grid;
   gap: 16px;
 }
