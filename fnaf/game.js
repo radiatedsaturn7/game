@@ -1001,6 +1001,8 @@ const dom = {
   useBtn: document.getElementById("useBtn"),
   debugBtn: document.getElementById("debugBtn"),
   toggleRobotBtn: document.getElementById("toggleRobotBtn"),
+  sneakBtn: document.getElementById("sneakBtn"),
+  runBtn: document.getElementById("runBtn"),
   menuPanel: document.getElementById("menuPanel"),
   bagTabSchematics: document.getElementById("bagTabSchematics"),
   bagTabItems: document.getElementById("bagTabItems"),
@@ -2186,6 +2188,8 @@ function attachEvents() {
   dom.cancelBtn.addEventListener("click", cancelMovement);
   dom.mapConfirmBtn.addEventListener("click", confirmMapTarget);
   dom.scannerToggleBtn.addEventListener("click", () => handleAction("scan-toggle"));
+  dom.sneakBtn?.addEventListener("click", () => setTravelMode("sneak"));
+  dom.runBtn?.addEventListener("click", () => setTravelMode("run"));
   dom.menuBtn.addEventListener("click", openMenu);
   dom.mapBtn.addEventListener("click", openMap);
   dom.liveBtn.addEventListener("click", returnToRoom);
@@ -2368,6 +2372,7 @@ function updateUI() {
   ensureTravelAnimation();
   updateBuildButton();
   updateMoveButtons();
+  updateTravelModeButtons();
   updateMapActionControls();
   if (dom.toggleRobotBtn) {
     dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
@@ -2728,6 +2733,23 @@ function updateMoveButtons() {
   dom.cancelBtn.disabled = !canCancel || controlBlocked;
 }
 
+function setTravelMode(mode) {
+  if (!mode) return;
+  const nextMode = mode === "run" ? "run" : "sneak";
+  state.playerTravelMode = nextMode;
+  updateTravelModeButtons();
+}
+
+function updateTravelModeButtons() {
+  if (!dom.sneakBtn || !dom.runBtn) return;
+  const controlBlocked = state.objectiveBlocked || state.actionLock;
+  const isRun = state.playerTravelMode === "run";
+  dom.runBtn.classList.toggle("primary", isRun);
+  dom.sneakBtn.classList.toggle("primary", !isRun);
+  dom.runBtn.disabled = controlBlocked;
+  dom.sneakBtn.disabled = controlBlocked;
+}
+
 function setButtonLabel(button, text, risk) {
   button.innerHTML = "";
   const label = document.createElement("span");
@@ -2758,7 +2780,7 @@ function updateMapActionControls() {
   } else if (state.mapTargetMode === "unjam") {
     dom.mapConfirmBtn.textContent = "Use Blowtorch here";
   } else if (canMove) {
-    dom.mapConfirmBtn.textContent = "Move here";
+    dom.mapConfirmBtn.textContent = state.playerTravelMode === "run" ? "Run here" : "Sneak here";
   } else {
     dom.mapConfirmBtn.textContent = "Confirm";
   }
@@ -5232,24 +5254,13 @@ function updateRoomActions() {
       state.requiredEscapeSchematic &&
       !state.objectiveItemInstalled &&
       !state.foundSchematics.has(state.requiredEscapeSchematic);
-    if (requiredBlocked || objectiveBlocked) {
-      const pickupName = requiredBlocked
-        ? state.requiredPickup?.itemName ?? "tool"
-        : state.requiredEscapeSchematic ?? "objective schematic";
-      actions.push({
-        label: `Get the ${pickupName} first. The console can wait.`,
-        disabled: true,
-        info: true,
-      });
-    } else {
-      actions.push({
-        label: "Inspect Escape Console",
-        onClick: () => startEscapeConsoleInspect(),
-        disabled: state.hidden || blocked,
-        highlight: true,
-        risk: "Exposed",
-      });
-    }
+    actions.push({
+      label: "Inspect Escape Console",
+      onClick: () => startEscapeConsoleInspect(),
+      disabled: state.hidden || blocked,
+      highlight: !(requiredBlocked || objectiveBlocked),
+      risk: "Exposed",
+    });
   }
 
   if (room.isExit && state.escapeConsoleInspected &&
@@ -6440,7 +6451,7 @@ function confirmMapTarget() {
     return;
   }
   if (state.selectedRoom !== null) {
-    moveSelected(false);
+    moveSelected(state.playerTravelMode === "run");
   }
 }
 
