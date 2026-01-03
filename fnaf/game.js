@@ -3580,16 +3580,39 @@ Go pick it up. It’s in ${rooms[roomId].name}.`,
   }
 
   if (state.currentNight === 5) {
-    state.nightIntroLine = `I keep thinking about something you once told me—
+    const introLine = `Cait: Geist…
+
+Out here, they don’t rush.
+They don’t corner things.
+
+They leave space.
+
+I keep thinking about something you once told me—
 that the surest way to break someone
 is to leave them an exit they believe in.
 
-We need the Noise Lure Schematic tonight.
-Scan it, build the decoy emitter, then install it at the escape console.`;
+One of them left something behind.
+A noise lure.
+
+Not hidden.
+Not damaged.
+
+Just… placed.
+
+Take it.
+But remember—
+
+hope keeps you moving.
+And movement keeps you visible.`;
+    state.nightIntroLine = introLine;
+    if (state.requiredPickup) {
+      state.requiredPickup.caitIntroLine = introLine;
+    }
   }
 
   if (state.currentNight === 6) {
-    state.nightIntroLine = `Cait: Robtergeist? Are you there?
+    const roomId = state.requiredPickup?.roomId ?? PICKUP_START_ROOM;
+    const introLine = `Cait: Robtergeist? Are you there?
 
 I can’t hear you. What happened?
 
@@ -3597,10 +3620,15 @@ I can’t hear you. What happened?
 
 I think they know.
 
-Find the Door Jam Schematic, build the wedge clamp,
-and install it at the escape console.
+If you can hear me— get the door jam.
+It’s in ${rooms[roomId].name}.
 
 Please.`;
+    state.nightIntroLine = introLine;
+    if (state.requiredPickup) {
+      state.requiredPickup.caitIntroLine = introLine;
+      state.requiredPickup.caitWarnLine = "Cait: …there— <static> …don’t— <static> …stay— <static>";
+    }
   }
 
   if (state.currentNight === 7) {
@@ -3622,6 +3650,46 @@ I’m so sorry.`;
       type: "night7-lockdown",
       roomId,
     });
+  }
+
+  if (state.currentNight === 8) {
+    state.nightIntroLine = `Cait: Geist…
+
+Something’s different tonight.
+
+It’s not pushing you.
+It’s not correcting you.
+
+It’s just… letting things happen.
+
+That’s worse.`;
+  }
+
+  if (state.currentNight === 9) {
+    state.nightIntroLine = `Cait: Geist… listen to me.
+
+If something tonight feels familiar—
+too familiar—
+
+don’t trust that feeling.
+
+I don’t think I’m the only thing
+that knows how you move anymore.`;
+  }
+
+  if (state.currentNight === 10) {
+    state.nightIntroLine = `Cait: Geist…
+
+I don’t think this ends
+with both of us in the same place.
+
+Whatever’s out here—
+it’s closer to me than it is to you.
+
+That doesn’t mean I’m leaving.
+
+It just means
+you might have to finish this without my voice.`;
   }
 
   if (!state.nightIntroLine && state.currentNight === 1) {
@@ -4171,7 +4239,7 @@ I’m so sorry.`);
 I… I found a blowtorch.
 It’s in ${rooms[roomId].name}.
 
-Try it on the door jams.
+Try it on the permanent door jams.
 
 I don’t know if this helps.
 
@@ -6122,6 +6190,14 @@ Why now?`,
   3: {
     robotActivation: "Cait: One more thing. Watch out. I think its following you.",
   },
+  4: {
+    objectiveComplete: `Cait: Stay with me.
+
+If you need eyes, use the scanner.
+If you need air, go quiet.
+
+Then move.`,
+  },
   5: {
     objectiveComplete: `Cait: It didn’t rush the sound.
 
@@ -6139,6 +6215,30 @@ Oh fuck— your back.
 I can’t…
 
 I just can’t.`,
+  },
+  7: {
+    objectiveComplete: `Cait: Keep moving.
+
+Please.`,
+  },
+  8: {
+    objectiveComplete: `Cait: Don’t stop.
+
+Quiet is not safety.
+It’s timing.`,
+  },
+  9: {
+    objectiveComplete: `Cait: If something feels familiar—
+
+don’t trust it.`,
+  },
+  10: {
+    objectiveComplete: `Cait: That’s it.
+
+Go.`,
+    escapeReady: `Cait: If I go quiet now—
+
+it means you made it.`,
   },
 };
 
@@ -6413,12 +6513,33 @@ But it’s loud.
 Every time you use it, the factory will hear you.
 Only turn it on when you need eyes.`);
   }
+  if (itemName === "Noise Lure") {
+    showObjectiveModal(`Cait: When you use it—
+
+don’t think of it as pulling them away.
+
+Think of it as being shown
+where you’re allowed to go.`);
+  }
+  if (itemName === "Door Jam") {
+    showObjectiveModal(`Cait: …<static>… my eyes… <static>…
+
+…burning…
+
+…<static>… I can’t— I can’t hold it— <static>`);
+  }
   if (itemName === "Blowtorch") {
-    showObjectiveModal(`Cait: Okay— listen.
+    showObjectiveModal(`Cait: Okay…
 
-Try it on the jams. If it doesn’t work…
+If it works, it buys you a way through.
 
-It... It might be better than the alternative...`);
+If it doesn’t—
+
+…
+
+I don’t want to finish that thought.
+
+Just— pick the door carefully.`);
   }
   updateUI();
 }
