@@ -1036,7 +1036,6 @@ const dom = {
   ackRobotAlertBtn: document.getElementById("ackRobotAlertBtn"),
   buildBtn: document.getElementById("buildBtn"),
   cancelBtn: document.getElementById("cancelBtn"),
-  mapConfirmBtn: document.getElementById("mapConfirmBtn"),
   scannerToggleBtn: document.getElementById("scannerToggleBtn"),
   deathScreen: document.getElementById("deathScreen"),
   victoryScreen: document.getElementById("victoryScreen"),
@@ -2186,10 +2185,9 @@ function attachEvents() {
     });
   }
   dom.cancelBtn.addEventListener("click", cancelMovement);
-  dom.mapConfirmBtn.addEventListener("click", confirmMapTarget);
   dom.scannerToggleBtn.addEventListener("click", () => handleAction("scan-toggle"));
-  dom.sneakBtn?.addEventListener("click", () => setTravelMode("sneak"));
-  dom.runBtn?.addEventListener("click", () => setTravelMode("run"));
+  dom.sneakBtn?.addEventListener("click", () => handleMapMove(false));
+  dom.runBtn?.addEventListener("click", () => handleMapMove(true));
   dom.menuBtn.addEventListener("click", openMenu);
   dom.mapBtn.addEventListener("click", openMap);
   dom.liveBtn.addEventListener("click", returnToRoom);
@@ -2372,8 +2370,6 @@ function updateUI() {
   ensureTravelAnimation();
   updateBuildButton();
   updateMoveButtons();
-  updateTravelModeButtons();
-  updateMapActionControls();
   if (dom.toggleRobotBtn) {
     dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
   }
@@ -2729,26 +2725,13 @@ function updateMoveButtons() {
     getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
   const isMoving = isPlayerTraveling();
   const controlBlocked = state.objectiveBlocked || state.actionLock;
+  const blockMove = controlBlocked || state.mapTargetMode || !canMove;
   const canCancel = isMoving || state.mapTargetMode || hasSelection;
   dom.cancelBtn.disabled = !canCancel || controlBlocked;
-}
-
-function setTravelMode(mode) {
-  if (!mode) return;
-  const nextMode = mode === "run" ? "run" : "sneak";
-  state.playerTravelMode = nextMode;
-  updateTravelModeButtons();
-  updateMapActionControls();
-}
-
-function updateTravelModeButtons() {
-  if (!dom.sneakBtn || !dom.runBtn) return;
-  const controlBlocked = state.objectiveBlocked || state.actionLock;
-  const isRun = state.playerTravelMode === "run";
-  dom.runBtn.classList.toggle("primary", isRun);
-  dom.sneakBtn.classList.toggle("primary", !isRun);
-  dom.runBtn.disabled = controlBlocked;
-  dom.sneakBtn.disabled = controlBlocked;
+  if (dom.sneakBtn && dom.runBtn) {
+    dom.sneakBtn.disabled = blockMove;
+    dom.runBtn.disabled = blockMove;
+  }
 }
 
 function setButtonLabel(button, text, risk) {
@@ -2761,29 +2744,6 @@ function setButtonLabel(button, text, risk) {
     hint.textContent = risk;
     hint.classList.add("risk-hint");
     button.appendChild(hint);
-  }
-}
-
-function updateMapActionControls() {
-  if (!dom.mapConfirmBtn) return;
-  const controlBlocked = state.objectiveBlocked || isActionLocked();
-  const active = Boolean(state.mapTargetMode);
-  const hasSelection = state.mapTargetSelection !== null;
-  const canMove = state.selectedRoom !== null &&
-    getShortestPath(state.playerRoom, state.selectedRoom).length > 1;
-  const shouldShow = (active && hasSelection) || (!active && canMove);
-  dom.mapConfirmBtn.classList.toggle("hidden", !shouldShow);
-  dom.mapConfirmBtn.disabled = controlBlocked || (active && !hasSelection) || (!active && !canMove);
-  if (state.mapTargetMode === "noise") {
-    dom.mapConfirmBtn.textContent = "Deploy Noise Lure here";
-  } else if (state.mapTargetMode === "jam") {
-    dom.mapConfirmBtn.textContent = "Deploy Door Jam here";
-  } else if (state.mapTargetMode === "unjam") {
-    dom.mapConfirmBtn.textContent = "Use Blowtorch here";
-  } else if (canMove) {
-    dom.mapConfirmBtn.textContent = state.playerTravelMode === "run" ? "Run here" : "Sneak here";
-  } else {
-    dom.mapConfirmBtn.textContent = "Confirm";
   }
 }
 
@@ -6427,33 +6387,29 @@ function handleMapSelection(roomId) {
   if (state.mapTargetMode) {
     const targets = getMapTargetCandidates();
     if (!targets || !targets.has(roomId)) return;
-    state.mapTargetSelection = roomId;
-    updateUI();
+    executeMapTargetAction(roomId, state.mapTargetMode);
     return;
   }
   setRoutePreview(roomId);
   setSelectedRoom(roomId);
 }
 
-function confirmMapTarget() {
+function executeMapTargetAction(target, mode) {
   if (state.objectiveBlocked || isActionLocked()) return;
-  if (state.mapTargetMode && state.mapTargetSelection !== null) {
-    const target = state.mapTargetSelection;
-    const mode = state.mapTargetMode;
-    clearMapTarget();
-    closeMap();
-    if (mode === "noise") {
-      deployNoiseLure(target);
-    } else if (mode === "jam") {
-      deployDoorJam(target);
-    } else if (mode === "unjam") {
-      useBlowtorch(target);
-    }
-    return;
+  clearMapTarget();
+  closeMap();
+  if (mode === "noise") {
+    deployNoiseLure(target);
+  } else if (mode === "jam") {
+    deployDoorJam(target);
+  } else if (mode === "unjam") {
+    useBlowtorch(target);
   }
-  if (state.selectedRoom !== null) {
-    moveSelected(state.playerTravelMode === "run");
-  }
+}
+
+function handleMapMove(isRun) {
+  if (state.mapTargetMode) return;
+  moveSelected(isRun);
 }
 
 function cancelMovement() {

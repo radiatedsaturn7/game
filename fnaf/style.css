@@ -1129,6 +1129,10 @@ main {
   margin-right: auto;
 }
 
+.map-controls .quick-buttons {
+  flex-wrap: wrap;
+}
+
 .map-selected strong {
   color: #f4f4f4;
   font-size: 1rem;
@@ -1615,6 +1619,21 @@ body.night-11 .map-node text {
   --panel-ease: ease-in;
   transition: opacity var(--panel-duration) var(--panel-ease),
     visibility 0s linear var(--panel-duration);
+}
+
+#menuPanel {
+  position: relative;
+  inset: auto;
+  background: transparent;
+  z-index: 10;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  display: none;
+}
+
+#menuPanel.active {
+  display: flex;
 }
 
 .menu-panel.modal-panel {
