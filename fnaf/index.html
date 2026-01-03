@@ -74,6 +74,7 @@
     <main>
       <section class="room-view">
         <div class="room-hud">
+          <div class="alarm-indicator" role="img" aria-label="Alarm active"></div>
           <p class="robot-status"><span></span></p>
           <button id="debugBtn">Debug</button>
         </div>
@@ -184,16 +185,12 @@
         </div>
       </div>
       <div class="map-controls">
-        <div class="movement-controls hidden" id="movementControls">
-          <div class="quick-actions compact">
-            <div class="quick-buttons">
-              <button id="goBtn">Sneak</button>
-              <button id="runBtn">Run</button>
-            </div>
+        <div class="quick-actions compact">
+          <div class="quick-buttons">
+            <button id="mapConfirmBtn" class="primary hidden">Confirm</button>
+            <button id="cancelBtn">Cancel</button>
           </div>
         </div>
-        <button id="cancelBtn">Cancel</button>
-        <button id="mapConfirmBtn" class="primary hidden">Confirm</button>
         <button id="scannerToggleBtn">Motion Sensor: OFF</button>
       </div>
     </div>
