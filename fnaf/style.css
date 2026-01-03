@@ -1046,7 +1046,7 @@ main {
 
 .quick-buttons {
   display: grid;
-  grid-template-columns: minmax(110px, 1fr) minmax(110px, 1fr) minmax(180px, 2fr);
+  grid-template-columns: 1fr 1fr 2fr;
   gap: 8px;
 }
 
@@ -1698,7 +1698,7 @@ body.night-11 .map-node text {
   border: 1px solid rgba(140, 169, 255, 0.35);
   border-radius: 20px;
   padding: 24px;
-  width: min(560px, 92vw);
+  width: min(500px, 92vw);
   display: grid;
   gap: 16px;
 }

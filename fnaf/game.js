@@ -9356,11 +9356,25 @@ function updateScannerToggleButton() {
   const showScanner = canUseScanner();
   dom.scannerToggleBtn.classList.toggle("hidden", !showScanner);
   if (!showScanner) return;
-  const status = state.scannerOn ? "ON" : "OFF";
+  const status = state.scannerOn ? "On" : "Off";
   if (dom.scannerToggleStatus) {
     dom.scannerToggleStatus.textContent = status;
   } else {
-    dom.scannerToggleBtn.textContent = `Scanner: ${status}`;
+    const label = dom.scannerToggleBtn.querySelector(".quick-label");
+    const statusSpan = document.createElement("span");
+    statusSpan.className = "quick-sub";
+    statusSpan.id = "scannerToggleStatus";
+    statusSpan.textContent = status;
+    if (label) {
+      dom.scannerToggleBtn.appendChild(statusSpan);
+    } else {
+      dom.scannerToggleBtn.textContent = "";
+      const labelSpan = document.createElement("span");
+      labelSpan.className = "quick-label";
+      labelSpan.textContent = "Scanner";
+      dom.scannerToggleBtn.append(labelSpan, statusSpan);
+    }
+    dom.scannerToggleStatus = statusSpan;
   }
   dom.scannerToggleBtn.setAttribute("aria-label", `Scanner: ${status}`);
   dom.scannerToggleBtn.disabled = controlBlocked;
