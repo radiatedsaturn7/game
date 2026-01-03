@@ -1122,8 +1122,10 @@ main {
 
 #floorplanMap {
   width: 100%;
+  max-width: 480px;
   height: 265px;
   display: block;
+  margin: 0 auto;
 }
 
 .map-selected {
@@ -1159,6 +1161,7 @@ main {
 
 .map-controls .quick-buttons {
   align-items: stretch;
+  grid-template-columns: minmax(110px, 1fr) minmax(110px, 1fr) minmax(200px, 2fr);
 }
 
 .map-controls #scannerToggleBtn {
@@ -1698,7 +1701,7 @@ body.night-11 .map-node text {
   border: 1px solid rgba(140, 169, 255, 0.35);
   border-radius: 20px;
   padding: 24px;
-  width: min(640px, 92vw);
+  width: min(520px, 90vw);
   display: grid;
   gap: 16px;
 }

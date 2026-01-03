@@ -9360,9 +9360,9 @@ function updateScannerToggleButton() {
   if (dom.scannerToggleStatus) {
     dom.scannerToggleStatus.textContent = status;
   } else {
-    dom.scannerToggleBtn.textContent = `Motion Sensor: ${status}`;
+    dom.scannerToggleBtn.textContent = `Scanner: ${status}`;
   }
-  dom.scannerToggleBtn.setAttribute("aria-label", `Motion Sensor: ${status}`);
+  dom.scannerToggleBtn.setAttribute("aria-label", `Scanner: ${status}`);
   dom.scannerToggleBtn.disabled = controlBlocked;
   dom.scannerToggleBtn.classList.toggle("objective-highlight", state.scannerHighlight);
 }
