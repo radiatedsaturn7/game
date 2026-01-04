@@ -1198,7 +1198,7 @@ function primeLoopTrack(track) {
   const audio = track.element;
   audio.loop = true;
   if (track.isPrimed) return;
-  audio.muted = true;
+  audio.muted = audioMutedByUser;
   audio.volume = 0;
   track.isPrimed = true;
   if (!track.loadRequested && typeof audio.load === "function") {
@@ -1510,13 +1510,23 @@ function clearLoopTrackPending(name) {
 
 function setBusVolume(busName, volume) {
   if (!(busName in audioBuses)) return;
-  audioBuses[busName] = clamp(volume, 0, 1);
+  const nextVolume = clamp(volume, 0, 1);
+  const busesToUpdate = new Set([busName]);
+  if (busName === "sfx") {
+    busesToUpdate.add("movement");
+  } else if (busName === "movement") {
+    busesToUpdate.add("sfx");
+  }
+  busesToUpdate.forEach((name) => {
+    if (name in audioBuses) {
+      audioBuses[name] = nextVolume;
+    }
+  });
   loopTracks.forEach((track) => {
-    if (busName !== "master" && track.bus !== busName) return;
+    if (busName !== "master" && !busesToUpdate.has(track.bus)) return;
     if (!track.isPrimed) return;
     const effectiveTarget = getEffectiveVolume(track, track.currentTargetVolume);
     track.element.volume = effectiveTarget;
-    track.element.muted = effectiveTarget <= 0;
   });
 }
 
@@ -1561,6 +1571,10 @@ function unmuteAllSound() {
   AudioManager.setAmbienceVolume(1);
   AudioManager.setSfxVolume(1);
   AudioManager.setUiVolume(1);
+  loopTracks.forEach((track) => {
+    if (!track.element) return;
+    track.element.muted = false;
+  });
   recoverLoopAudio();
 }
 
@@ -1607,20 +1621,15 @@ function fadeTrackTo(name, targetVolume, durationMs) {
   const appliedTarget = audioMutedByUser ? 0 : effectiveTarget;
   if (appliedTarget > 0.01 && audioUnlockedOnce && !audioMutedByUser) {
     ensureLoopTrackPlaying(name);
-    if (audio.muted) {
-      audio.muted = false;
-    }
   }
   const token = ++track.fadeToken;
   const duration = Math.max(0, durationMs ?? 0);
   const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
   if (shouldBeAudible) {
     ensureTrackAudible(name);
-    audio.muted = false;
   }
   if (duration === 0) {
     audio.volume = appliedTarget;
-    audio.muted = appliedTarget <= 0;
     return;
   }
   const start = performance.now();
@@ -1631,7 +1640,6 @@ function fadeTrackTo(name, targetVolume, durationMs) {
     if (progress < 1) {
       requestAnimationFrame(tick);
     } else {
-      audio.muted = appliedTarget <= 0;
     }
   };
   requestAnimationFrame(tick);
