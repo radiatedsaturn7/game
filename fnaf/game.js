@@ -137,6 +137,7 @@ const ITEM_CLASSES = {
 const COLLECTED_TOOLS = new Set(["Pulse Scanner", "Blowtorch"]);
 const DEPLOYABLE_ITEMS = new Set(["Noise Lure", "Door Jam"]);
 const TOOL_ITEMS = new Set([...COLLECTED_TOOLS]);
+const REUSABLE_SCHEMATICS = new Set(["Noise Lure Schematic", "Door Jam Schematic"]);
 
 function isMaterial(item) {
   return ITEM_CLASSES[item] === "MATERIAL";
@@ -8878,7 +8879,10 @@ function installObjectiveItem() {
       state.objectiveItemInstalled = true;
       state.objectiveBlocksEscapeConsole = false;
       state.completedObjectiveItems.add(itemName);
-      if (state.requiredEscapeSchematic) {
+      if (
+        state.requiredEscapeSchematic &&
+        !REUSABLE_SCHEMATICS.has(state.requiredEscapeSchematic)
+      ) {
         state.foundSchematics.delete(state.requiredEscapeSchematic);
       }
       const recipe = getObjectiveRecipeByName(itemName);
@@ -9177,6 +9181,9 @@ function completeCraftItem(craftable) {
     { type: "build", lastKnownChance: 0.18, bleed: false }
   );
   applyRoomStress(state.playerRoom);
+  if (craftable.schematic && !REUSABLE_SCHEMATICS.has(craftable.schematic)) {
+    state.foundSchematics.delete(craftable.schematic);
+  }
   updateUI();
 }
 
