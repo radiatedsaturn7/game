@@ -169,7 +169,7 @@
       <div class="menu-tabs" role="tablist" aria-label="Menu tabs">
         <button id="systemTabSave" class="tab-button active" type="button" role="tab" aria-selected="true" data-system-tab="save">Save</button>
         <button id="systemTabLoad" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="load">Load</button>
-        <button id="systemTabSettings" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="settings">Settings</button>
+        <button id="systemTabSettings" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="settings">Audio Settings</button>
         <button id="systemTabDebug" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="debug">Debug</button>
       </div>
       <div class="menu-content system-content">
@@ -188,12 +188,24 @@
         <section class="system-tab" data-system-panel="settings" role="tabpanel" aria-labelledby="systemTabSettings">
           <div class="system-settings">
             <label class="system-slider">
+              <span>Master</span>
+              <input id="masterVolumeSlider" type="range" min="0" max="100" value="100" />
+            </label>
+            <label class="system-slider">
               <span>Music</span>
               <input id="musicVolumeSlider" type="range" min="0" max="100" value="80" />
             </label>
             <label class="system-slider">
               <span>Ambience</span>
               <input id="ambienceVolumeSlider" type="range" min="0" max="100" value="100" />
+            </label>
+            <label class="system-slider">
+              <span>Movement</span>
+              <input id="movementVolumeSlider" type="range" min="0" max="100" value="100" />
+            </label>
+            <label class="system-slider">
+              <span>UI</span>
+              <input id="uiVolumeSlider" type="range" min="0" max="100" value="100" />
             </label>
             <label class="system-slider">
               <span>SFX</span>
