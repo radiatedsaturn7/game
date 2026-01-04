@@ -2340,7 +2340,16 @@ function updateUI() {
   if (state.mapTargetMode) {
     if (state.mapTargetSelection !== null) {
       selectedMapRoomId = state.mapTargetSelection;
-      dom.selectedRoom.textContent = rooms[state.mapTargetSelection].name;
+      const targetName = rooms[state.mapTargetSelection].name;
+      const sourceId = state.mapTargetSourceRoom ?? state.playerRoom;
+      const sourceName = rooms[sourceId].name;
+      if (state.mapTargetMode === "noise") {
+        dom.selectedRoom.textContent = `Noise Lure: ${targetName}`;
+      } else if (state.mapTargetMode === "jam") {
+        dom.selectedRoom.textContent = `Door Jam: ${sourceName} ↔ ${targetName}`;
+      } else {
+        dom.selectedRoom.textContent = `Clear Jam: ${sourceName} ↔ ${targetName}`;
+      }
     } else {
       dom.selectedRoom.textContent = state.mapTargetMode === "noise"
         ? "Select noise target"
@@ -2682,6 +2691,8 @@ function updateSchematicList(schematicName = null) {
 function updateBuildButton() {
   const selected = getSelectedSchematic();
   const hasSelectedSchematic = selected && state.foundSchematics.has(selected.schematic);
+  const isObjective = Boolean(state.requiredEscapeSchematic) &&
+    selected?.schematic === state.requiredEscapeSchematic;
   if (!state.unlocks.allowCrafting && !hasSelectedSchematic) {
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     dom.buildBtn.disabled = true;
@@ -2700,31 +2711,29 @@ function updateBuildButton() {
     dom.buildBtn.textContent = "Assembly board active";
     return;
   }
-  const matchesEscape = Boolean(state.requiredEscapeSchematic) &&
-    selected.schematic === state.requiredEscapeSchematic;
-  if (!matchesEscape) {
-    dom.buildBtn.disabled = true;
-    dom.buildBtn.textContent = "Objective schematic required";
-    return;
-  }
-  if (state.objectiveItemInstalled) {
+  if (isObjective && state.objectiveItemInstalled) {
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = "Objective already installed";
     return;
   }
-  if (state.objectiveItemCrafted) {
+  if (isObjective && state.objectiveItemCrafted) {
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = "Objective item crafted";
+    return;
+  }
+  if (!isObjective && state.completedObjectiveItems.has(selected.name)) {
+    dom.buildBtn.disabled = true;
+    dom.buildBtn.textContent = "Schematic already built";
     return;
   }
   const requiredCounts = getRequiredPartCounts(selected.parts);
   const hasAllParts = [...requiredCounts.entries()]
     .every(([part, count]) => hasInventoryItem(part, count));
-  dom.buildBtn.disabled = !(matchesEscape && hasAllParts && state.isAlive && !state.hasEscaped);
+  dom.buildBtn.disabled = !(hasAllParts && state.isAlive && !state.hasEscaped);
   dom.buildBtn.textContent = hasAllParts
     ? `Build ${selected.name}`
     : "Need More Components";
-  dom.buildBtn.classList.toggle("objective-highlight", matchesEscape);
+  dom.buildBtn.classList.toggle("objective-highlight", isObjective);
 }
 
 function updateMoveButtons() {
@@ -9142,8 +9151,23 @@ function completeCraftItem(craftable) {
   const requiredCounts = getRequiredPartCounts(craftable.parts);
   recordMeaningfulAction();
   requiredCounts.forEach((count, part) => removeInventoryItem(part, count));
-  state.objectiveItemName = craftable.name;
-  state.objectiveItemCrafted = true;
+  const isObjective = Boolean(state.requiredEscapeSchematic) &&
+    craftable.schematic === state.requiredEscapeSchematic;
+  if (isObjective) {
+    state.objectiveItemName = craftable.name;
+    state.objectiveItemCrafted = true;
+  } else {
+    const recipe = getObjectiveRecipeByName(craftable.name);
+    state.completedObjectiveItems.add(craftable.name);
+    if (recipe?.unlockDeployable) {
+      state.deployableUnlocks[recipe.unlockDeployable] = true;
+      if (recipe.unlockDeployable === "noiseLure") {
+        state.noiseLureCharges += recipe.chargesGranted ?? 0;
+      } else if (recipe.unlockDeployable === "doorJam") {
+        state.doorJamCharges += recipe.chargesGranted ?? 0;
+      }
+    }
+  }
   updateEscapeReadiness();
   const profile = getNightProfile();
   const effects = getPassiveEffects();
@@ -9162,6 +9186,8 @@ function craftItem() {
   if (state.objectiveBlocked) return;
   const craftable = getSelectedSchematic();
   if (!craftable) return;
+  const isObjective = Boolean(state.requiredEscapeSchematic) &&
+    craftable.schematic === state.requiredEscapeSchematic;
   if (!state.unlocks.allowCrafting && !state.foundSchematics.has(craftable.schematic)) {
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     pushStatus(
@@ -9171,16 +9197,12 @@ function craftItem() {
     return;
   }
   if (!state.foundSchematics.has(craftable.schematic)) return;
-  if (state.objectiveItemInstalled || state.objectiveItemCrafted) {
+  if (isObjective && (state.objectiveItemInstalled || state.objectiveItemCrafted)) {
     pushStatus("Objective item already assembled.", 3);
     return;
   }
   if (state.completedObjectiveItems.has(craftable.name)) {
     pushStatus("Objective already completed tonight.", 3);
-    return;
-  }
-  if (state.requiredEscapeSchematic && craftable.schematic !== state.requiredEscapeSchematic) {
-    pushStatus("This schematic isn't tied to tonight's objective.", 3);
     return;
   }
   if (!craftable.parts.every((part) => isMaterial(part))) {
