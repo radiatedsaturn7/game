@@ -773,6 +773,7 @@ const state = {
   objectiveBlocksEscapeConsole: false,
   completedObjectiveItems: new Set(),
   bagTab: "schematics",
+  systemMenuTab: "save",
   inventoryView: "items",
   usedDevices: new Map(),
   robotFocus: null,
@@ -1016,7 +1017,7 @@ const dom = {
   liveBtn: document.getElementById("liveBtn"),
   tasksBtn: document.getElementById("tasksBtn"),
   useBtn: document.getElementById("useBtn"),
-  debugBtn: document.getElementById("debugBtn"),
+  systemMenuBtn: document.getElementById("systemMenuBtn"),
   toggleRobotBtn: document.getElementById("toggleRobotBtn"),
   sneakBtn: document.getElementById("sneakBtn"),
   runBtn: document.getElementById("runBtn"),
@@ -1024,6 +1025,19 @@ const dom = {
   bagTabSchematics: document.getElementById("bagTabSchematics"),
   bagTabItems: document.getElementById("bagTabItems"),
   bagTabTools: document.getElementById("bagTabTools"),
+  systemMenuPanel: document.getElementById("systemMenuPanel"),
+  systemTabSave: document.getElementById("systemTabSave"),
+  systemTabLoad: document.getElementById("systemTabLoad"),
+  systemTabSettings: document.getElementById("systemTabSettings"),
+  systemTabDebug: document.getElementById("systemTabDebug"),
+  saveGameBtn: document.getElementById("saveGameBtn"),
+  loadGameBtn: document.getElementById("loadGameBtn"),
+  saveStatus: document.getElementById("saveStatus"),
+  loadStatus: document.getElementById("loadStatus"),
+  musicVolumeSlider: document.getElementById("musicVolumeSlider"),
+  ambienceVolumeSlider: document.getElementById("ambienceVolumeSlider"),
+  sfxVolumeSlider: document.getElementById("sfxVolumeSlider"),
+  openDebugPanelBtn: document.getElementById("openDebugPanelBtn"),
   mapPanel: document.getElementById("mapPanel"),
   usePanel: document.getElementById("usePanel"),
   debugPanel: document.getElementById("debugPanel"),
@@ -1082,6 +1096,42 @@ const AUDIO_SOURCE_MAP = [
   { element: dom.sneakAudio, filename: "sneak.mp3" },
   { element: dom.runningAudio, filename: "running.mp3" },
   { element: dom.typingAudio, filename: "Typing.mp3" },
+];
+const SAVE_STORAGE_KEY = "robtergeist_save_v1";
+const STATE_MAP_KEYS = [
+  "hideHistory",
+  "inventory",
+  "usedDevices",
+  "roomSignals",
+  "robotCheckedCooldown",
+  "robotPresenceHeat",
+  "robotAlarmVisits",
+  "signalDecayBoost",
+  "rewireDampen",
+  "persistentSignals",
+  "roomNoisePenalty",
+  "jammedEdges",
+  "alarmDisableProgress",
+  "activeLures",
+  "specialPickups",
+];
+const STATE_SET_KEYS = [
+  "learnedHidingSpots",
+  "foundSchematics",
+  "completedObjectiveItems",
+  "checkedRooms",
+  "stabilizedTargets",
+  "dataFragmentsFound",
+  "manualOverrideTargets",
+  "manualOverridesDone",
+  "alarmedRooms",
+  "triggeredAlarms",
+  "disabledAlarmedRooms",
+  "burnedHidingSpots",
+  "sunlitRooms",
+  "toolCollected",
+  "permaJammedEdges",
+  "lastNightSpawnedParts",
 ];
 
 function setNormalizedAudioSources() {
@@ -1186,6 +1236,23 @@ function ensureTrackAudible(name) {
   }
 }
 
+function ensureTypingAudibleIfNeeded() {
+  if (!dom.typingAudio) return;
+  if (!audioUnlockedOnce || !hasStartedGame) return;
+  if (audioMutedByUser) return;
+  if (!typingAudioActive) return;
+  const audio = dom.typingAudio;
+  if (audio.volume <= 0.01) return;
+  if (audio.paused || audio.ended || audio.readyState < 2) {
+    audio.loop = true;
+    audio.currentTime = 0;
+    attemptPlayAudio(audio, "typing");
+  }
+  if (audio.muted) {
+    audio.muted = false;
+  }
+}
+
 registerLoopTrack("rain", dom.rainAudio, "ambience", 0.6);
 registerLoopTrack("sunny", dom.sunnyAudio, "ambience", 0.5);
 registerLoopTrack("run", dom.runningAudio, "movement", RUN_AUDIO_VOLUME);
@@ -1221,6 +1288,7 @@ let audioUnlockedOnce = false;
 let titleSyncAnimationId = null;
 let canStartAmbience = false;
 let audioLoopsPrimed = false;
+let audioHealthIntervalId = null;
 const audioPlayFailureLogged = new Map();
 let creditsTextPromise = null;
 const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
@@ -1481,6 +1549,12 @@ function fadeTrackTo(name, targetVolume, durationMs) {
   const effectiveTarget = getEffectiveVolume(track, nextTarget);
   const shouldBeAudible = effectiveTarget > 0.01 && !audioMutedByUser;
   const appliedTarget = audioMutedByUser ? 0 : effectiveTarget;
+  if (appliedTarget > 0.01 && audioUnlockedOnce && !audioMutedByUser) {
+    ensureLoopTrackPlaying(name);
+    if (audio.muted) {
+      audio.muted = false;
+    }
+  }
   const token = ++track.fadeToken;
   const duration = Math.max(0, durationMs ?? 0);
   const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
@@ -1532,6 +1606,31 @@ function recoverLoopAudio() {
       ensureTrackAudible(ambienceTarget.name);
     }
   }
+}
+
+function audioHealthTick() {
+  if (!audioUnlockedOnce) return;
+  if (audioMutedByUser) return;
+  if (isTitleScreenActive()) {
+    if (!dom.titleAudio) return;
+    const audio = dom.titleAudio;
+    if (audio.volume > 0.01 && !audio.muted) {
+      if (audio.paused || audio.ended || audio.readyState < 2) {
+        audio.currentTime = 0;
+        attemptPlayAudio(audio, "title-health");
+      }
+    }
+    return;
+  }
+  if (hasStartedGame) {
+    recoverLoopAudio();
+    ensureTypingAudibleIfNeeded();
+  }
+}
+
+function startAudioHealthTicker() {
+  if (audioHealthIntervalId) return;
+  audioHealthIntervalId = window.setInterval(audioHealthTick, 750);
 }
 
 function attachAudioRecoveryEvents() {
@@ -1936,6 +2035,10 @@ function init() {
   updateSchematicList();
   updatePlayerTrail(state.playerRoom);
   updateUI();
+  updateSystemTabs();
+  updateSystemMenuDebugVisibility();
+  syncSystemMenuFromAudio();
+  refreshSaveStatus();
   attachEvents();
   setupDebugPanel();
   startGameLoop();
@@ -2025,6 +2128,7 @@ async function ensureAudioUnlockedFromGesture(event) {
   }
   audioUnlockedOnce = true;
   primeLoopTracksInGesture();
+  startAudioHealthTicker();
   loopTracks.forEach((track) => {
     const audio = track.element;
     if (!audio) return;
@@ -2342,7 +2446,7 @@ function attachEvents() {
   dom.tasksOkBtn.addEventListener("click", closeTasks);
   dom.componentOkBtn.addEventListener("click", closeComponent);
   dom.useBtn.addEventListener("click", openUse);
-  dom.debugBtn.addEventListener("click", openDebug);
+  dom.systemMenuBtn.addEventListener("click", openSystemMenu);
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
   dom.ackObjectiveBtn.addEventListener("click", acknowledgeObjective);
   dom.ackRobotAlertBtn.addEventListener("click", acknowledgeRobotAlert);
@@ -2368,6 +2472,11 @@ function attachEvents() {
   dom.menuPanel.addEventListener("click", (event) => {
     if (event.target === dom.menuPanel) {
       closeMenu();
+    }
+  });
+  dom.systemMenuPanel.addEventListener("click", (event) => {
+    if (event.target === dom.systemMenuPanel) {
+      closeSystemMenu();
     }
   });
   dom.mapPanel.addEventListener("click", (event) => {
@@ -2396,6 +2505,44 @@ function attachEvents() {
       closeTasks();
     }
   });
+  dom.systemTabSave?.addEventListener("click", () => setSystemTab("save"));
+  dom.systemTabLoad?.addEventListener("click", () => setSystemTab("load"));
+  dom.systemTabSettings?.addEventListener("click", () => setSystemTab("settings"));
+  dom.systemTabDebug?.addEventListener("click", () => setSystemTab("debug"));
+  dom.saveGameBtn?.addEventListener("click", saveGame);
+  dom.loadGameBtn?.addEventListener("click", loadGame);
+  dom.openDebugPanelBtn?.addEventListener("click", () => {
+    if (!DEBUG_UI) return;
+    openDebug();
+    closeSystemMenu();
+  });
+  const handleVolumeInput = async (event, busName) => {
+    if (!event) return;
+    if (!audioUnlockedOnce) {
+      const unlocked = await ensureAudioUnlockedFromGesture(event);
+      if (!unlocked) return;
+    }
+    const rawValue = Number(event.target.value);
+    if (Number.isNaN(rawValue)) return;
+    const volume = clamp(rawValue / 100, 0, 1);
+    setBusVolume(busName, volume);
+    switch (busName) {
+      case "music":
+        AudioManager.setMusicVolume(volume);
+        break;
+      case "ambience":
+        AudioManager.setAmbienceVolume(volume);
+        break;
+      case "sfx":
+        AudioManager.setSfxVolume(volume);
+        break;
+      default:
+        break;
+    }
+  };
+  dom.musicVolumeSlider?.addEventListener("input", (event) => handleVolumeInput(event, "music"));
+  dom.ambienceVolumeSlider?.addEventListener("input", (event) => handleVolumeInput(event, "ambience"));
+  dom.sfxVolumeSlider?.addEventListener("input", (event) => handleVolumeInput(event, "sfx"));
 }
 
 function updateAlarmFx(isActive) {
@@ -2561,8 +2708,8 @@ function updateUI() {
     dom.liveBtn.disabled = controlBlocked;
     dom.liveBtn.classList.toggle("objective-highlight", state.introStep === "highlight-live");
   }
-  if (dom.debugBtn) {
-    dom.debugBtn.disabled = controlBlocked;
+  if (dom.systemMenuBtn) {
+    dom.systemMenuBtn.disabled = controlBlocked;
   }
   updateDebugUI();
 }
@@ -4851,7 +4998,7 @@ function closePanel(panel) {
 }
 
 function closePanels() {
-  [dom.menuPanel, dom.mapPanel, dom.usePanel, dom.debugPanel, dom.componentPanel, dom.tasksPanel]
+  [dom.menuPanel, dom.systemMenuPanel, dom.mapPanel, dom.usePanel, dom.debugPanel, dom.componentPanel, dom.tasksPanel]
     .forEach((panel) => {
       if (!panel) return;
       if (panel === dom.debugPanel && isDebugPanelPersistent()) {
@@ -4888,6 +5035,17 @@ function closeMenu() {
   closePanel(dom.menuPanel);
 }
 
+function openSystemMenu() {
+  setSystemTab(state.systemMenuTab || "save");
+  updateSystemMenuDebugVisibility();
+  syncSystemMenuFromAudio();
+  togglePanel(dom.systemMenuPanel);
+}
+
+function closeSystemMenu() {
+  closePanel(dom.systemMenuPanel);
+}
+
 const bagTabPanels = {
   schematics: document.querySelector('[data-bag-panel="schematics"]'),
   items: document.querySelector('[data-bag-panel="items"]'),
@@ -4917,6 +5075,196 @@ function updateBagTabs() {
       panel.setAttribute("aria-hidden", String(!isActive));
     }
   });
+}
+
+const systemTabPanels = {
+  save: document.querySelector('[data-system-panel="save"]'),
+  load: document.querySelector('[data-system-panel="load"]'),
+  settings: document.querySelector('[data-system-panel="settings"]'),
+  debug: document.querySelector('[data-system-panel="debug"]'),
+};
+
+function setSystemTab(tab) {
+  if (!tab) return;
+  state.systemMenuTab = tab;
+  updateSystemTabs();
+}
+
+function updateSystemTabs() {
+  const tabs = [
+    { name: "save", button: dom.systemTabSave, panel: systemTabPanels.save },
+    { name: "load", button: dom.systemTabLoad, panel: systemTabPanels.load },
+    { name: "settings", button: dom.systemTabSettings, panel: systemTabPanels.settings },
+    { name: "debug", button: dom.systemTabDebug, panel: systemTabPanels.debug },
+  ];
+  tabs.forEach(({ name, button, panel }) => {
+    const isActive = state.systemMenuTab === name;
+    if (button) {
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-selected", String(isActive));
+    }
+    if (panel) {
+      panel.classList.toggle("active", isActive);
+      panel.setAttribute("aria-hidden", String(!isActive));
+    }
+  });
+}
+
+function updateSystemMenuDebugVisibility() {
+  const showDebug = Boolean(DEBUG_UI);
+  if (dom.systemTabDebug) {
+    dom.systemTabDebug.classList.toggle("hidden", !showDebug);
+    dom.systemTabDebug.setAttribute("aria-hidden", String(!showDebug));
+  }
+  if (systemTabPanels.debug) {
+    systemTabPanels.debug.classList.toggle("hidden", !showDebug);
+  }
+  if (!showDebug && state.systemMenuTab === "debug") {
+    setSystemTab("save");
+  }
+}
+
+function updateSaveStatus(text) {
+  if (dom.saveStatus) {
+    dom.saveStatus.textContent = text;
+  }
+}
+
+function updateLoadStatus(text) {
+  if (dom.loadStatus) {
+    dom.loadStatus.textContent = text;
+  }
+}
+
+function serializeState() {
+  const snapshot = {};
+  Object.keys(state).forEach((key) => {
+    snapshot[key] = state[key];
+  });
+  snapshot.baseDate = state.baseDate ? state.baseDate.toISOString() : null;
+  STATE_MAP_KEYS.forEach((key) => {
+    snapshot[key] = Array.from(state[key]?.entries?.() ?? []);
+  });
+  STATE_SET_KEYS.forEach((key) => {
+    snapshot[key] = Array.from(state[key]?.values?.() ?? []);
+  });
+  return snapshot;
+}
+
+function applySerializedState(serialized) {
+  if (!serialized || typeof serialized !== "object") return false;
+  Object.keys(state).forEach((key) => {
+    if (!(key in serialized)) return;
+    state[key] = serialized[key];
+  });
+  state.baseDate = serialized.baseDate ? new Date(serialized.baseDate) : new Date("2326-12-25T00:00:00Z");
+  STATE_MAP_KEYS.forEach((key) => {
+    state[key] = new Map(serialized[key] ?? []);
+  });
+  STATE_SET_KEYS.forEach((key) => {
+    state[key] = new Set(serialized[key] ?? []);
+  });
+  state.nightProfile = getNightProfile();
+  state.unlocks = getUnlocks();
+  updateDebugUI();
+  updateUI();
+  updateWeatherAmbience({ forceRestart: true });
+  return true;
+}
+
+function saveGame() {
+  try {
+    const payload = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      state: serializeState(),
+      roomConnections,
+      mapPositions,
+      hasStartedGame,
+      canStartAmbience,
+    };
+    window.localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(payload));
+    updateSaveStatus(`Saved ${new Date(payload.savedAt).toLocaleTimeString()}.`);
+    updateLoadStatus("Save ready to load.");
+  } catch (error) {
+    console.warn("Failed to save game:", error);
+    updateSaveStatus("Save failed.");
+  }
+}
+
+function loadGame() {
+  let payload = null;
+  try {
+    const raw = window.localStorage.getItem(SAVE_STORAGE_KEY);
+    if (!raw) {
+      updateLoadStatus("No save found.");
+      return;
+    }
+    payload = JSON.parse(raw);
+  } catch (error) {
+    console.warn("Failed to read save:", error);
+    updateLoadStatus("Save data corrupted.");
+    return;
+  }
+  if (!payload?.state) {
+    updateLoadStatus("Save data missing.");
+    return;
+  }
+  if (payload.roomConnections) {
+    roomConnections = payload.roomConnections;
+  }
+  if (payload.mapPositions) {
+    Object.keys(mapPositions).forEach((key) => {
+      if (payload.mapPositions[key]) {
+        mapPositions[key] = { ...payload.mapPositions[key] };
+      }
+    });
+  }
+  if (typeof payload.hasStartedGame === "boolean") {
+    hasStartedGame = payload.hasStartedGame;
+  }
+  if (typeof payload.canStartAmbience === "boolean") {
+    canStartAmbience = payload.canStartAmbience;
+  }
+  if (applySerializedState(payload.state)) {
+    renderMap();
+    updateLoadStatus(`Loaded ${new Date(payload.savedAt).toLocaleTimeString()}.`);
+  } else {
+    updateLoadStatus("Load failed.");
+  }
+}
+
+function syncSystemMenuFromAudio() {
+  if (dom.musicVolumeSlider) {
+    dom.musicVolumeSlider.value = String(Math.round((audioBuses.music ?? 1) * 100));
+  }
+  if (dom.ambienceVolumeSlider) {
+    dom.ambienceVolumeSlider.value = String(Math.round((audioBuses.ambience ?? 1) * 100));
+  }
+  if (dom.sfxVolumeSlider) {
+    dom.sfxVolumeSlider.value = String(Math.round((audioBuses.sfx ?? 1) * 100));
+  }
+}
+
+function refreshSaveStatus() {
+  const raw = window.localStorage.getItem(SAVE_STORAGE_KEY);
+  if (!raw) {
+    updateSaveStatus("No save yet.");
+    updateLoadStatus("No save loaded.");
+    return;
+  }
+  try {
+    const payload = JSON.parse(raw);
+    if (payload?.savedAt) {
+      updateSaveStatus(`Saved ${new Date(payload.savedAt).toLocaleTimeString()}.`);
+      updateLoadStatus("Save ready to load.");
+      return;
+    }
+  } catch (error) {
+    console.warn("Save status check failed:", error);
+  }
+  updateSaveStatus("Save data unreadable.");
+  updateLoadStatus("Save data corrupted.");
 }
 
 function openMap() {
@@ -4960,7 +5308,7 @@ function closeDebug() {
 
 function openComponent(part, { keepMenuOpen = false } = {}) {
   if (keepMenuOpen) {
-    [dom.mapPanel, dom.usePanel, dom.debugPanel, dom.tasksPanel]
+    [dom.systemMenuPanel, dom.mapPanel, dom.usePanel, dom.debugPanel, dom.tasksPanel]
       .forEach((panel) => {
         if (!panel) return;
         if (panel === dom.debugPanel && isDebugPanelPersistent()) {
@@ -5902,6 +6250,7 @@ function updateDebugUI() {
     dom.eyesBtn.textContent = `Eyes: ${state.debugEyes ? "ON" : "OFF"}`;
   }
   updateDebugSanityUI();
+  updateSystemMenuDebugVisibility();
 }
 
 function forceEscape() {

@@ -76,7 +76,7 @@
         <div class="room-hud">
           <div class="alarm-indicator" role="img" aria-label="Alarm active"></div>
           <p class="robot-status"><span></span></p>
-          <button id="debugBtn">Debug</button>
+          <button id="systemMenuBtn">Menu</button>
         </div>
         <div class="room-media" id="roomMedia">
           <div class="room-topline">
@@ -155,6 +155,56 @@
           <div>
             <h4>Tools</h4>
             <ul id="toolsList" class="list"></ul>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="systemMenuPanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Menu</h3>
+      </div>
+      <div class="menu-tabs" role="tablist" aria-label="Menu tabs">
+        <button id="systemTabSave" class="tab-button active" type="button" role="tab" aria-selected="true" data-system-tab="save">Save</button>
+        <button id="systemTabLoad" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="load">Load</button>
+        <button id="systemTabSettings" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="settings">Settings</button>
+        <button id="systemTabDebug" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="debug">Debug</button>
+      </div>
+      <div class="menu-content system-content">
+        <section class="system-tab active" data-system-panel="save" role="tabpanel" aria-labelledby="systemTabSave">
+          <div class="system-actions">
+            <button id="saveGameBtn" class="primary" type="button">Save Game</button>
+            <p id="saveStatus" class="menu-status">No save yet.</p>
+          </div>
+        </section>
+        <section class="system-tab" data-system-panel="load" role="tabpanel" aria-labelledby="systemTabLoad">
+          <div class="system-actions">
+            <button id="loadGameBtn" class="primary" type="button">Load Game</button>
+            <p id="loadStatus" class="menu-status">No save loaded.</p>
+          </div>
+        </section>
+        <section class="system-tab" data-system-panel="settings" role="tabpanel" aria-labelledby="systemTabSettings">
+          <div class="system-settings">
+            <label class="system-slider">
+              <span>Music</span>
+              <input id="musicVolumeSlider" type="range" min="0" max="100" value="80" />
+            </label>
+            <label class="system-slider">
+              <span>Ambience</span>
+              <input id="ambienceVolumeSlider" type="range" min="0" max="100" value="100" />
+            </label>
+            <label class="system-slider">
+              <span>SFX</span>
+              <input id="sfxVolumeSlider" type="range" min="0" max="100" value="100" />
+            </label>
+          </div>
+        </section>
+        <section class="system-tab" data-system-panel="debug" role="tabpanel" aria-labelledby="systemTabDebug">
+          <div class="system-actions">
+            <button id="openDebugPanelBtn" class="primary" type="button">Open Debug Panel</button>
+            <p class="menu-status">Debug tools are available when enabled.</p>
           </div>
         </section>
       </div>
