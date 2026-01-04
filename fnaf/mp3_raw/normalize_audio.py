@@ -3,7 +3,7 @@
 Batch-normalize game audio files offline using ffmpeg loudnorm.
 
 Typical command:
-  python tools/normalize_audio.py --in assets/audio --out assets/audio_normalized
+  python fnaf/mp3_raw/normalize_audio.py --in fnaf/mp3_raw --out fnaf/mp3_normalized.mp3
 
 Idempotent behavior means: rerunning with the same inputs + settings will skip
 work that is already normalized based on a manifest stored at:
@@ -300,7 +300,7 @@ def process_file(
 def format_command(args: argparse.Namespace, override: Optional[str] = None) -> str:
     base = [
         "python",
-        "tools/normalize_audio.py",
+        "fnaf/mp3_raw/normalize_audio.py",
         "--in",
         str(args.input_dir),
         "--out",
