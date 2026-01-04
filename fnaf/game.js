@@ -1072,6 +1072,47 @@ const dom = {
   creditsText: document.getElementById("creditsText"),
 };
 
+const NORMALIZED_AUDIO_DIR = "mp3_normalized.mp3";
+const RAW_AUDIO_DIR = "mp3_raw";
+const AUDIO_SOURCE_MAP = [
+  { element: dom.titleAudio, filename: "title-screen.mp3" },
+  { element: dom.rainAudio, filename: "rainy.mp3" },
+  { element: dom.sunnyAudio, filename: "sunny.mp3" },
+  { element: dom.sneakAudio, filename: "sneak.mp3" },
+  { element: dom.runningAudio, filename: "running.mp3" },
+  { element: dom.typingAudio, filename: "Typing.mp3" },
+];
+
+function setNormalizedAudioSources() {
+  AUDIO_SOURCE_MAP.forEach(({ element, filename }) => {
+    if (!element) return;
+    const sources = element.querySelectorAll("source");
+    if (sources.length > 0) {
+      sources[0].src = `${NORMALIZED_AUDIO_DIR}/${filename}`;
+      if (sources[1]) {
+        sources[1].src = `${RAW_AUDIO_DIR}/${filename}`;
+      } else {
+        const fallback = document.createElement("source");
+        fallback.src = `${RAW_AUDIO_DIR}/${filename}`;
+        fallback.type = "audio/mpeg";
+        element.appendChild(fallback);
+      }
+      if (sources.length > 2) {
+        sources.forEach((source, index) => {
+          if (index > 1) {
+            source.remove();
+          }
+        });
+      }
+    } else {
+      element.src = `${NORMALIZED_AUDIO_DIR}/${filename}`;
+    }
+    if (typeof element.load === "function") {
+      element.load();
+    }
+  });
+}
+
 const audioBuses = {
   master: 1,
   music: 1,
@@ -1830,6 +1871,7 @@ function initHorrorFX() {
 function initTitleScreen() {
   initSchematicSprite();
   mirrorConsole();
+  setNormalizedAudioSources();
   if (!dom.titleScreen || !dom.titleStartBtn) {
     canStartAmbience = true;
     initHorrorFX();
