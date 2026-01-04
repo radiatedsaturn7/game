@@ -134,9 +134,8 @@ const ITEM_CLASSES = {
   "Main Fuse (30A)": "POWER_ACCESS",
 };
 
-const COLLECTED_TOOLS = new Set(["Pulse Scanner", "Blowtorch"]);
+const TOOL_ITEMS = new Set(["Pulse Scanner", "Blowtorch"]);
 const DEPLOYABLE_ITEMS = new Set(["Noise Lure", "Door Jam"]);
-const TOOL_ITEMS = new Set([...COLLECTED_TOOLS]);
 const REUSABLE_SCHEMATICS = new Set(["Noise Lure Schematic", "Door Jam Schematic"]);
 
 function isMaterial(item) {
@@ -9430,7 +9429,7 @@ function updateUseList() {
 function updateScannerToggleButton() {
   if (!dom.scannerToggleBtn) return;
   const controlBlocked = state.objectiveBlocked || isActionLocked();
-  const showScanner = hasInventoryItem("Pulse Scanner");
+  const showScanner = hasCollectedTool("Pulse Scanner") && state.unlocks.allowScannerToggle;
   dom.scannerToggleBtn.hidden = !showScanner;
   dom.scannerToggleBtn.classList.toggle("hidden", !showScanner);
   if (!showScanner) return;
