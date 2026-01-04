@@ -9445,6 +9445,7 @@ function updateScannerToggleButton() {
   const showScanner = hasCollectedTool("Pulse Scanner") && state.unlocks.allowScannerToggle;
   dom.scannerToggleBtn.hidden = !showScanner;
   dom.scannerToggleBtn.classList.toggle("hidden", !showScanner);
+  dom.scannerToggleBtn.style.display = showScanner ? "" : "none";
   if (!showScanner) return;
   const status = state.unlocks.allowScannerToggle
     ? (state.scannerOn ? "On" : "Off")

@@ -1435,8 +1435,13 @@ body.night-11 .map-node text {
   gap: 12px;
 }
 
+/* HARD KILL: never render hidden elements */
+[hidden] {
+  display: none !important;
+}
+
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .floorplan-header {
