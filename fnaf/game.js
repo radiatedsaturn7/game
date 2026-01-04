@@ -479,6 +479,22 @@ const NIGHT_UNLOCKS = {
     allowAlarmedRooms: false,
   },
 };
+const DEFAULT_UNLOCKS = {
+  showMap: true,
+  robotActive: true,
+  allowSirens: true,
+  allowSlowRewire: true,
+  allowScannerToggle: true,
+  allowNoiseLure: true,
+  allowCrafting: true,
+  allowDoorJams: true,
+  showRobotIntelOnMap: true,
+  allowAlarmedRooms: true,
+};
+
+Object.values(NIGHT_UNLOCKS).forEach((unlocks) => Object.freeze(unlocks));
+Object.freeze(DEFAULT_UNLOCKS);
+Object.freeze(NIGHT_UNLOCKS);
 
 const SCANNER_TOGGLE_SPIKE = 0.16;
 const SCANNER_TICK_SIGNAL = 0.08;
@@ -3240,19 +3256,16 @@ function canUseScanner() {
   return state.unlocks.allowScannerToggle && hasCollectedTool("Pulse Scanner");
 }
 
+function cloneUnlocks(unlocks) {
+  if (typeof structuredClone === "function") {
+    return structuredClone(unlocks);
+  }
+  return { ...unlocks };
+}
+
 function getUnlocksForNight(night) {
-  return NIGHT_UNLOCKS[night] ?? {
-    showMap: true,
-    robotActive: true,
-    allowSirens: true,
-    allowSlowRewire: true,
-    allowScannerToggle: true,
-    allowNoiseLure: true,
-    allowCrafting: true,
-    allowDoorJams: true,
-    showRobotIntelOnMap: true,
-    allowAlarmedRooms: true,
-  };
+  const baseUnlocks = NIGHT_UNLOCKS[night] ?? DEFAULT_UNLOCKS;
+  return cloneUnlocks(baseUnlocks);
 }
 
 function isTwistNight(night) {
