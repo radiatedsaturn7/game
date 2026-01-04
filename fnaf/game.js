@@ -1072,7 +1072,7 @@ const dom = {
   creditsText: document.getElementById("creditsText"),
 };
 
-const NORMALIZED_AUDIO_DIR = "mp3_normalized.mp3";
+const NORMALIZED_AUDIO_DIR = "mp3_normalized";
 const RAW_AUDIO_DIR = "mp3_raw";
 const AUDIO_SOURCE_MAP = [
   { element: dom.titleAudio, filename: "title-screen.mp3" },
