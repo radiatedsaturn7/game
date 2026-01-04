@@ -1034,8 +1034,11 @@ const dom = {
   loadGameBtn: document.getElementById("loadGameBtn"),
   saveStatus: document.getElementById("saveStatus"),
   loadStatus: document.getElementById("loadStatus"),
+  masterVolumeSlider: document.getElementById("masterVolumeSlider"),
   musicVolumeSlider: document.getElementById("musicVolumeSlider"),
   ambienceVolumeSlider: document.getElementById("ambienceVolumeSlider"),
+  movementVolumeSlider: document.getElementById("movementVolumeSlider"),
+  uiVolumeSlider: document.getElementById("uiVolumeSlider"),
   sfxVolumeSlider: document.getElementById("sfxVolumeSlider"),
   openDebugPanelBtn: document.getElementById("openDebugPanelBtn"),
   mapPanel: document.getElementById("mapPanel"),
@@ -2591,11 +2594,17 @@ function attachEvents() {
     const volume = clamp(rawValue / 100, 0, 1);
     setBusVolume(busName, volume);
     switch (busName) {
+      case "master":
+        AudioManager.setMasterVolume(volume);
+        break;
       case "music":
         AudioManager.setMusicVolume(volume);
         break;
       case "ambience":
         AudioManager.setAmbienceVolume(volume);
+        break;
+      case "ui":
+        AudioManager.setUiVolume(volume);
         break;
       case "sfx":
         AudioManager.setSfxVolume(volume);
@@ -2603,9 +2612,20 @@ function attachEvents() {
       default:
         break;
     }
+    if (busName === "sfx" || busName === "movement") {
+      if (dom.sfxVolumeSlider) {
+        dom.sfxVolumeSlider.value = String(Math.round((audioBuses.sfx ?? 1) * 100));
+      }
+      if (dom.movementVolumeSlider) {
+        dom.movementVolumeSlider.value = String(Math.round((audioBuses.movement ?? 1) * 100));
+      }
+    }
   };
+  dom.masterVolumeSlider?.addEventListener("input", (event) => handleVolumeInput(event, "master"));
   dom.musicVolumeSlider?.addEventListener("input", (event) => handleVolumeInput(event, "music"));
   dom.ambienceVolumeSlider?.addEventListener("input", (event) => handleVolumeInput(event, "ambience"));
+  dom.movementVolumeSlider?.addEventListener("input", (event) => handleVolumeInput(event, "movement"));
+  dom.uiVolumeSlider?.addEventListener("input", (event) => handleVolumeInput(event, "ui"));
   dom.sfxVolumeSlider?.addEventListener("input", (event) => handleVolumeInput(event, "sfx"));
 }
 
@@ -5305,11 +5325,20 @@ function loadGame() {
 }
 
 function syncSystemMenuFromAudio() {
+  if (dom.masterVolumeSlider) {
+    dom.masterVolumeSlider.value = String(Math.round((audioBuses.master ?? 1) * 100));
+  }
   if (dom.musicVolumeSlider) {
     dom.musicVolumeSlider.value = String(Math.round((audioBuses.music ?? 1) * 100));
   }
   if (dom.ambienceVolumeSlider) {
     dom.ambienceVolumeSlider.value = String(Math.round((audioBuses.ambience ?? 1) * 100));
+  }
+  if (dom.movementVolumeSlider) {
+    dom.movementVolumeSlider.value = String(Math.round((audioBuses.movement ?? 1) * 100));
+  }
+  if (dom.uiVolumeSlider) {
+    dom.uiVolumeSlider.value = String(Math.round((audioBuses.ui ?? 1) * 100));
   }
   if (dom.sfxVolumeSlider) {
     dom.sfxVolumeSlider.value = String(Math.round((audioBuses.sfx ?? 1) * 100));
