@@ -1370,8 +1370,10 @@ main {
 }
 
 .map-node.action-selected circle {
+  fill: rgba(255, 232, 140, 0.35);
   stroke: rgba(255, 232, 140, 0.9);
   stroke-width: 3;
+  filter: drop-shadow(0 0 6px rgba(255, 232, 140, 0.5));
 }
 
 .map-node.action-disabled {

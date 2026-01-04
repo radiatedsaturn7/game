@@ -6507,16 +6507,6 @@ function handleMapMove(isRun) {
       return;
     }
     const target = state.mapTargetSelection;
-    let confirmMessage = "";
-    if (state.mapTargetMode === "noise") {
-      confirmMessage = `Deploy Noise Lure in ${rooms[target].name}?`;
-    } else if (state.mapTargetMode === "jam") {
-      const sourceId = state.mapTargetSourceRoom ?? state.playerRoom;
-      confirmMessage = `Deploy Door Jam between ${rooms[sourceId].name} and ${rooms[target].name}?`;
-    }
-    if (confirmMessage && !window.confirm(confirmMessage)) {
-      return;
-    }
     executeMapTargetAction(target, state.mapTargetMode);
     return;
   }
