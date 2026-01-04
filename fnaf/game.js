@@ -1528,8 +1528,7 @@ function setBusVolume(busName, volume) {
   loopTracks.forEach((track) => {
     if (busName !== "master" && !busesToUpdate.has(track.bus)) return;
     if (!track.isPrimed) return;
-    const effectiveTarget = getEffectiveVolume(track, track.currentTargetVolume);
-    track.element.volume = effectiveTarget;
+    applyLoopTrackMix(track, { ensurePlaying: false });
   });
 }
 
@@ -1610,6 +1609,25 @@ function getEffectiveVolume(track, targetVolume) {
   return clamp(base * busVolume * masterVolume, 0, 1);
 }
 
+function applyLoopTrackMix(track, { ensurePlaying = false } = {}) {
+  if (!track?.element) return;
+  if (!track.isPrimed) {
+    primeLoopTrack(track);
+  }
+  const effective = audioMutedByUser ? 0 : getEffectiveVolume(track, track.currentTargetVolume);
+  track.element.volume = effective;
+  track.element.muted = audioMutedByUser;
+  if (
+    ensurePlaying &&
+    effective > 0.01 &&
+    audioUnlockedOnce &&
+    hasStartedGame
+  ) {
+    ensureLoopTrackPlaying(track.name);
+    ensureTrackAudible(track.name);
+  }
+}
+
 function fadeTrackTo(name, targetVolume, durationMs) {
   const track = loopTracks.get(name);
   if (!track?.element) return;
@@ -1619,27 +1637,23 @@ function fadeTrackTo(name, targetVolume, durationMs) {
   const audio = track.element;
   const nextTarget = Number.isFinite(targetVolume) ? targetVolume : track.baseVolume;
   track.currentTargetVolume = nextTarget;
-  const effectiveTarget = getEffectiveVolume(track, nextTarget);
-  const shouldBeAudible = effectiveTarget > 0.01 && !audioMutedByUser;
-  const appliedTarget = audioMutedByUser ? 0 : effectiveTarget;
-  if (appliedTarget > 0.01 && audioUnlockedOnce && !audioMutedByUser) {
-    ensureLoopTrackPlaying(name);
+  const effectiveTarget = audioMutedByUser ? 0 : getEffectiveVolume(track, nextTarget);
+  if (effectiveTarget > 0.01) {
+    applyLoopTrackMix(track, { ensurePlaying: true });
   }
   const token = ++track.fadeToken;
   const duration = Math.max(0, durationMs ?? 0);
   const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
-  if (shouldBeAudible) {
-    ensureTrackAudible(name);
-  }
   if (duration === 0) {
-    audio.volume = appliedTarget;
+    audio.volume = audioMutedByUser ? 0 : getEffectiveVolume(track, track.currentTargetVolume);
     return;
   }
   const start = performance.now();
   const tick = (now) => {
     if (token !== track.fadeToken) return;
     const progress = Math.min(1, (now - start) / duration);
-    audio.volume = startVolume + (appliedTarget - startVolume) * progress;
+    const liveTarget = audioMutedByUser ? 0 : getEffectiveVolume(track, track.currentTargetVolume);
+    audio.volume = startVolume + (liveTarget - startVolume) * progress;
     if (progress < 1) {
       requestAnimationFrame(tick);
     } else {
@@ -4402,6 +4416,7 @@ function startRunningAudio() {
     forceStartLoopTrack("run");
   }
   fadeTrackTo("run", RUN_AUDIO_VOLUME, RUN_AUDIO_FADE_IN_MS);
+  applyLoopTrackMix(loopTracks.get("run"), { ensurePlaying: true });
   runAudioActive = true;
 }
 
@@ -4467,6 +4482,7 @@ function startSneakAudio() {
     forceStartLoopTrack("sneak");
   }
   fadeTrackTo("sneak", SNEAK_AUDIO_VOLUME, SNEAK_AUDIO_FADE_IN_MS);
+  applyLoopTrackMix(loopTracks.get("sneak"), { ensurePlaying: true });
   sneakAudioActive = true;
 }
 
@@ -4517,8 +4533,35 @@ function updateSneakAudioState() {
 }
 
 function updateMovementAudioState() {
-  updateRunningAudioState();
-  updateSneakAudioState();
+  if (audioMutedByUser) return;
+  const shouldPlayRun =
+    audioUnlockedOnce &&
+    hasStartedGame &&
+    isPlayerTraveling() &&
+    state.playerTravelMode === "run";
+  const shouldPlaySneak =
+    audioUnlockedOnce &&
+    hasStartedGame &&
+    isPlayerTraveling() &&
+    state.playerTravelMode === "sneak";
+  if (shouldPlayRun) {
+    if (!runAudioActive) startRunningAudio();
+  } else if (runAudioActive) {
+    stopRunningAudio();
+  }
+  if (shouldPlaySneak) {
+    if (!sneakAudioActive) startSneakAudio();
+  } else if (sneakAudioActive) {
+    stopSneakAudio();
+  }
+  const runTrack = loopTracks.get("run");
+  const sneakTrack = loopTracks.get("sneak");
+  if (runTrack) {
+    applyLoopTrackMix(runTrack, { ensurePlaying: shouldPlayRun });
+  }
+  if (sneakTrack) {
+    applyLoopTrackMix(sneakTrack, { ensurePlaying: shouldPlaySneak });
+  }
 }
 
 function setCurrentNight(night) {
