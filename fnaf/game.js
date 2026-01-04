@@ -9423,10 +9423,12 @@ function updateUseList() {
 function updateScannerToggleButton() {
   if (!dom.scannerToggleBtn) return;
   const controlBlocked = state.objectiveBlocked || isActionLocked();
-  const showScanner = canUseScanner();
+  const showScanner = hasCollectedTool("Pulse Scanner");
   dom.scannerToggleBtn.classList.toggle("hidden", !showScanner);
   if (!showScanner) return;
-  const status = state.scannerOn ? "On" : "Off";
+  const status = state.unlocks.allowScannerToggle
+    ? (state.scannerOn ? "On" : "Off")
+    : "Locked";
   if (dom.scannerToggleStatus) {
     dom.scannerToggleStatus.textContent = status;
   } else {
@@ -9447,7 +9449,7 @@ function updateScannerToggleButton() {
     dom.scannerToggleStatus = statusSpan;
   }
   dom.scannerToggleBtn.setAttribute("aria-label", `Scanner: ${status}`);
-  dom.scannerToggleBtn.disabled = controlBlocked;
+  dom.scannerToggleBtn.disabled = controlBlocked || !state.unlocks.allowScannerToggle;
   dom.scannerToggleBtn.classList.toggle("objective-highlight", state.scannerHighlight);
 }
 
