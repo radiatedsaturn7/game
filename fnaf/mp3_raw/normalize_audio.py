@@ -60,6 +60,7 @@ class ProcessResult:
     output_rel_path: Optional[Path] = None
     output_size: Optional[int] = None
     error: Optional[str] = None
+    used_fallback: bool = False
 
 
 def parse_args() -> argparse.Namespace:
@@ -256,7 +257,23 @@ def process_file(
     output_path = output_dir / output_rel_path
     success, error = run_ffmpeg(task.input_path, output_path, settings)
     if success:
+        if not output_path.exists():
+            return ProcessResult(
+                rel_path=task.rel_path,
+                status="failed",
+                error="ffmpeg reported success but output file was not created.",
+            )
         output_size = output_path.stat().st_size
+        if output_size == 0:
+            try:
+                output_path.unlink()
+            except OSError:
+                pass
+            return ProcessResult(
+                rel_path=task.rel_path,
+                status="failed",
+                error="ffmpeg produced an empty output file.",
+            )
         return ProcessResult(
             rel_path=task.rel_path,
             status="processed",
@@ -275,7 +292,23 @@ def process_file(
             task.input_path, fallback_path, settings
         )
         if fallback_success:
+            if not fallback_path.exists():
+                return ProcessResult(
+                    rel_path=task.rel_path,
+                    status="failed",
+                    error="ffmpeg reported success but fallback output was not created.",
+                )
             output_size = fallback_path.stat().st_size
+            if output_size == 0:
+                try:
+                    fallback_path.unlink()
+                except OSError:
+                    pass
+                return ProcessResult(
+                    rel_path=task.rel_path,
+                    status="failed",
+                    error="ffmpeg produced an empty fallback output file.",
+                )
             if verbose:
                 print(f"Fallback to WAV for {task.rel_path}")
             return ProcessResult(
@@ -283,6 +316,7 @@ def process_file(
                 status="processed",
                 output_rel_path=fallback_rel,
                 output_size=output_size,
+                used_fallback=True,
             )
         error = f"{error}\nFallback failed: {fallback_error}".strip()
         if fallback_path.exists():
@@ -329,6 +363,9 @@ def main() -> int:
     if not input_dir.exists() or not input_dir.is_dir():
         print(f"Input directory not found: {input_dir}")
         return 2
+    if output_dir.exists() and not output_dir.is_dir():
+        print(f"Output path is not a directory: {output_dir}")
+        return 2
 
     try:
         ffmpeg_version = get_ffmpeg_version()
@@ -371,6 +408,7 @@ def main() -> int:
 
     processed = 0
     failed = 0
+    fallback_used = 0
     failures: List[Tuple[Path, str]] = []
 
     if args.dry_run:
@@ -391,6 +429,8 @@ def main() -> int:
                     result = future.result()
                     if result.status == "processed":
                         processed += 1
+                        if result.used_fallback:
+                            fallback_used += 1
                         normalized_at = datetime.now(timezone.utc).isoformat()
                         task = task_map[result.rel_path]
                         file_entries[result.rel_path.as_posix()] = {
@@ -451,6 +491,8 @@ def main() -> int:
     print(f"Processed: {processed}")
     print(f"Skipped: {skipped_count}")
     print(f"Failed: {failed}")
+    if fallback_used:
+        print(f"Fallback (WAV outputs): {fallback_used}")
     print(f"Cleaned: {cleaned}")
     print(f"Manifest: {manifest_path}")
 
