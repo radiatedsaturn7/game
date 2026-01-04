@@ -1017,6 +1017,7 @@ const dom = {
   componentDetails: document.getElementById("componentDetails"),
   componentCount: document.getElementById("componentCount"),
   componentRequirements: document.getElementById("componentRequirements"),
+  componentOkBtn: document.getElementById("componentOkBtn"),
   tasksPanel: document.getElementById("tasksPanel"),
   tasksText: document.getElementById("tasksText"),
   tasksOkBtn: document.getElementById("tasksOkBtn"),
@@ -2198,6 +2199,7 @@ function attachEvents() {
   dom.liveBtn.addEventListener("click", returnToRoom);
   dom.tasksBtn.addEventListener("click", openTasks);
   dom.tasksOkBtn.addEventListener("click", closeTasks);
+  dom.componentOkBtn.addEventListener("click", closeComponent);
   dom.useBtn.addEventListener("click", openUse);
   dom.debugBtn.addEventListener("click", openDebug);
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
@@ -2694,6 +2696,8 @@ function updateBuildButton() {
   const hasSelectedSchematic = selected && state.foundSchematics.has(selected.schematic);
   const isObjective = Boolean(state.requiredEscapeSchematic) &&
     selected?.schematic === state.requiredEscapeSchematic;
+  const isReusable = Boolean(selected?.schematic) &&
+    REUSABLE_SCHEMATICS.has(selected.schematic);
   if (!state.unlocks.allowCrafting && !hasSelectedSchematic) {
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     dom.buildBtn.disabled = true;
@@ -2722,7 +2726,7 @@ function updateBuildButton() {
     dom.buildBtn.textContent = "Objective item crafted";
     return;
   }
-  if (!isObjective && state.completedObjectiveItems.has(selected.name)) {
+  if (!isObjective && !isReusable && state.completedObjectiveItems.has(selected.name)) {
     dom.buildBtn.disabled = true;
     dom.buildBtn.textContent = "Schematic already built";
     return;
@@ -9147,12 +9151,16 @@ function completeCraftItem(craftable) {
   requiredCounts.forEach((count, part) => removeInventoryItem(part, count));
   const isObjective = Boolean(state.requiredEscapeSchematic) &&
     craftable.schematic === state.requiredEscapeSchematic;
+  const isReusable = Boolean(craftable.schematic) &&
+    REUSABLE_SCHEMATICS.has(craftable.schematic);
   if (isObjective) {
     state.objectiveItemName = craftable.name;
     state.objectiveItemCrafted = true;
   } else {
     const recipe = getObjectiveRecipeByName(craftable.name);
-    state.completedObjectiveItems.add(craftable.name);
+    if (!isReusable) {
+      state.completedObjectiveItems.add(craftable.name);
+    }
     if (recipe?.unlockDeployable) {
       state.deployableUnlocks[recipe.unlockDeployable] = true;
       if (recipe.unlockDeployable === "noiseLure") {
@@ -9185,6 +9193,8 @@ function craftItem() {
   if (!craftable) return;
   const isObjective = Boolean(state.requiredEscapeSchematic) &&
     craftable.schematic === state.requiredEscapeSchematic;
+  const isReusable = Boolean(craftable.schematic) &&
+    REUSABLE_SCHEMATICS.has(craftable.schematic);
   if (!state.unlocks.allowCrafting && !state.foundSchematics.has(craftable.schematic)) {
     const unlockNight = getNextUnlockNightFromNow("allowCrafting");
     pushStatus(
@@ -9198,7 +9208,7 @@ function craftItem() {
     pushStatus("Objective item already assembled.", 3);
     return;
   }
-  if (state.completedObjectiveItems.has(craftable.name)) {
+  if (!isReusable && state.completedObjectiveItems.has(craftable.name)) {
     pushStatus("Objective already completed tonight.", 3);
     return;
   }
