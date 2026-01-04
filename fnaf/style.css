@@ -784,11 +784,54 @@ main {
   background: linear-gradient(135deg, rgba(126, 255, 174, 0.98), rgba(48, 206, 121, 0.98));
 }
 
-#debugBtn {
+#systemMenuBtn {
   position: absolute;
   right: 24px;
   top: 50%;
   transform: translateY(-50%);
+}
+
+.system-content {
+  display: grid;
+  gap: 18px;
+}
+
+.system-tab {
+  display: none;
+}
+
+.system-tab.active {
+  display: block;
+}
+
+.system-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.menu-status {
+  margin: 0;
+  font-size: 0.85rem;
+  color: rgba(210, 220, 240, 0.75);
+}
+
+.system-settings {
+  display: grid;
+  gap: 16px;
+}
+
+.system-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9fb2de;
+}
+
+.system-slider input[type="range"] {
+  width: 100%;
 }
 
 @keyframes statusMarquee {
