@@ -9430,7 +9430,7 @@ function updateUseList() {
 function updateScannerToggleButton() {
   if (!dom.scannerToggleBtn) return;
   const controlBlocked = state.objectiveBlocked || isActionLocked();
-  const showScanner = state.toolCollected.has("Pulse Scanner");
+  const showScanner = hasInventoryItem("Pulse Scanner");
   dom.scannerToggleBtn.hidden = !showScanner;
   dom.scannerToggleBtn.classList.toggle("hidden", !showScanner);
   if (!showScanner) return;
