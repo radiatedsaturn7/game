@@ -1220,6 +1220,58 @@ function ensureLoopTrackPlaying(name, { restart = false } = {}) {
   }
 }
 
+function isTrackStalled(name) {
+  const track = loopTracks.get(name);
+  if (!track?.element) return false;
+  const audio = track.element;
+  const now = performance.now();
+  const stats = trackPlaybackStats.get(name);
+  const lastTime = Number.isFinite(stats?.lastTime) ? stats.lastTime : audio.currentTime;
+  const lastWallClock = Number.isFinite(stats?.lastWallClock) ? stats.lastWallClock : now;
+  if (audio.paused) {
+    trackPlaybackStats.set(name, { lastTime: audio.currentTime, lastWallClock: now });
+    return true;
+  }
+  if (audio.readyState < 2) {
+    trackPlaybackStats.set(name, { lastTime: audio.currentTime, lastWallClock: now });
+    return true;
+  }
+  if (audio.muted || audio.volume <= 0.01) {
+    trackPlaybackStats.set(name, { lastTime: audio.currentTime, lastWallClock: now });
+    return false;
+  }
+  const wallClockDelta = now - lastWallClock;
+  const playbackDelta = audio.currentTime - lastTime;
+  const stalled = wallClockDelta > 500 && playbackDelta < 0.02;
+  trackPlaybackStats.set(name, { lastTime: audio.currentTime, lastWallClock: now });
+  return stalled;
+}
+
+function forceStartLoopTrack(name) {
+  if (!audioUnlockedOnce) return;
+  const track = loopTracks.get(name);
+  if (!track?.element) return;
+  primeLoopTrack(track);
+  const audio = track.element;
+  audio.loop = true;
+  audio.muted = false;
+  if (audio.readyState < 2 && typeof audio.load === "function") {
+    audio.load();
+  }
+  audio.currentTime = 0;
+  const now = performance.now();
+  const lastLog = movementForceLogTimes.get(name) ?? 0;
+  if (now - lastLog > 3000) {
+    movementForceLogTimes.set(name, now);
+    console.info("audio: forceStartLoopTrack", name, {
+      paused: audio.paused,
+      readyState: audio.readyState,
+      networkState: audio.networkState,
+    });
+  }
+  attemptPlayAudio(audio, `${name}-force`);
+}
+
 function ensureTrackAudible(name) {
   const track = loopTracks.get(name);
   if (!track?.element) return;
@@ -1228,8 +1280,8 @@ function ensureTrackAudible(name) {
   const effectiveTarget = getEffectiveVolume(track, track.currentTargetVolume);
   if (effectiveTarget <= 0.01) return;
   const audio = track.element;
-  if (audio.paused || audio.ended || audio.readyState < 2) {
-    ensureLoopTrackPlaying(name);
+  if (audio.paused || audio.ended || audio.readyState < 2 || isTrackStalled(name)) {
+    forceStartLoopTrack(name);
   }
   if (audio.muted && effectiveTarget > 0) {
     audio.muted = false;
@@ -1290,6 +1342,8 @@ let canStartAmbience = false;
 let audioLoopsPrimed = false;
 let audioHealthIntervalId = null;
 const audioPlayFailureLogged = new Map();
+const trackPlaybackStats = new Map();
+const movementForceLogTimes = new Map();
 let creditsTextPromise = null;
 const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
 const debugLogBuffer = [];
@@ -1542,7 +1596,9 @@ function getEffectiveVolume(track, targetVolume) {
 function fadeTrackTo(name, targetVolume, durationMs) {
   const track = loopTracks.get(name);
   if (!track?.element) return;
-  if (!track.isPrimed) return;
+  if (!track.isPrimed) {
+    primeLoopTrack(track);
+  }
   const audio = track.element;
   const nextTarget = Number.isFinite(targetVolume) ? targetVolume : track.baseVolume;
   track.currentTargetVolume = nextTarget;
@@ -4314,6 +4370,9 @@ function startRunningAudio() {
   ensureLoopTrackPlaying("run", { restart: true });
   audio.muted = false;
   if (token !== runAudioTransitionToken) return;
+  if (!audioMutedByUser && isPlayerTraveling() && state.playerTravelMode === "run") {
+    forceStartLoopTrack("run");
+  }
   fadeTrackTo("run", RUN_AUDIO_VOLUME, RUN_AUDIO_FADE_IN_MS);
   runAudioActive = true;
 }
@@ -4376,6 +4435,9 @@ function startSneakAudio() {
   ensureLoopTrackPlaying("sneak", { restart: true });
   audio.muted = false;
   if (token !== sneakAudioTransitionToken) return;
+  if (!audioMutedByUser && isPlayerTraveling() && state.playerTravelMode === "sneak") {
+    forceStartLoopTrack("sneak");
+  }
   fadeTrackTo("sneak", SNEAK_AUDIO_VOLUME, SNEAK_AUDIO_FADE_IN_MS);
   sneakAudioActive = true;
 }
