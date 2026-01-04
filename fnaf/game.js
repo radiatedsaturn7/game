@@ -1003,6 +1003,7 @@ const dom = {
   forceEscapeBtn: document.getElementById("forceEscapeBtn"),
   testRunAudioBtn: document.getElementById("testRunAudioBtn"),
   silenceAudioBtn: document.getElementById("silenceAudioBtn"),
+  unmuteAudioBtn: document.getElementById("unmuteAudioBtn"),
   giveAllBtn: document.getElementById("giveAllBtn"),
   godModeBtn: document.getElementById("godModeBtn"),
   eyesBtn: document.getElementById("eyesBtn"),
@@ -1122,6 +1123,8 @@ const audioBuses = {
   sfx: 1,
 };
 const loopTracks = new Map();
+let audioMutedByUser = false;
+let audioRecoveryEventsAttached = false;
 
 function registerLoopTrack(name, element, bus, baseVolume) {
   if (!element) return;
@@ -1164,6 +1167,22 @@ function ensureLoopTrackPlaying(name, { restart = false } = {}) {
   }
   if (audio.paused) {
     queueLoopTrackPlay(track);
+  }
+}
+
+function ensureTrackAudible(name) {
+  const track = loopTracks.get(name);
+  if (!track?.element) return;
+  if (!audioUnlockedOnce || !hasStartedGame) return;
+  if (audioMutedByUser) return;
+  const effectiveTarget = getEffectiveVolume(track, track.currentTargetVolume);
+  if (effectiveTarget <= 0.01) return;
+  const audio = track.element;
+  if (audio.paused || audio.ended || audio.readyState < 2) {
+    ensureLoopTrackPlaying(name);
+  }
+  if (audio.muted && effectiveTarget > 0) {
+    audio.muted = false;
   }
 }
 
@@ -1380,6 +1399,7 @@ function setBusVolume(busName, volume) {
 }
 
 function silenceAllSound() {
+  audioMutedByUser = true;
   setBusVolume("master", 0);
   setBusVolume("music", 0);
   setBusVolume("ambience", 0);
@@ -1404,6 +1424,22 @@ function silenceAllSound() {
     track.element.volume = 0;
     track.element.muted = true;
   });
+}
+
+function unmuteAllSound() {
+  audioMutedByUser = false;
+  setBusVolume("master", 1);
+  setBusVolume("music", 1);
+  setBusVolume("ambience", 1);
+  setBusVolume("movement", 1);
+  setBusVolume("ui", 1);
+  setBusVolume("sfx", 1);
+  AudioManager.setMasterVolume(1);
+  AudioManager.setMusicVolume(MUSIC_BUS_DEFAULT);
+  AudioManager.setAmbienceVolume(1);
+  AudioManager.setSfxVolume(1);
+  AudioManager.setUiVolume(1);
+  recoverLoopAudio();
 }
 
 function playRunTestSound() {
@@ -1443,29 +1479,75 @@ function fadeTrackTo(name, targetVolume, durationMs) {
   const nextTarget = Number.isFinite(targetVolume) ? targetVolume : track.baseVolume;
   track.currentTargetVolume = nextTarget;
   const effectiveTarget = getEffectiveVolume(track, nextTarget);
+  const shouldBeAudible = effectiveTarget > 0.01 && !audioMutedByUser;
+  const appliedTarget = audioMutedByUser ? 0 : effectiveTarget;
   const token = ++track.fadeToken;
   const duration = Math.max(0, durationMs ?? 0);
   const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
-  if (effectiveTarget > 0) {
+  if (shouldBeAudible) {
+    ensureTrackAudible(name);
     audio.muted = false;
   }
   if (duration === 0) {
-    audio.volume = effectiveTarget;
-    audio.muted = effectiveTarget <= 0;
+    audio.volume = appliedTarget;
+    audio.muted = appliedTarget <= 0;
     return;
   }
   const start = performance.now();
   const tick = (now) => {
     if (token !== track.fadeToken) return;
     const progress = Math.min(1, (now - start) / duration);
-    audio.volume = startVolume + (effectiveTarget - startVolume) * progress;
+    audio.volume = startVolume + (appliedTarget - startVolume) * progress;
     if (progress < 1) {
       requestAnimationFrame(tick);
     } else {
-      audio.muted = effectiveTarget <= 0;
+      audio.muted = appliedTarget <= 0;
     }
   };
   requestAnimationFrame(tick);
+}
+
+function recoverLoopAudio() {
+  if (!audioUnlockedOnce || audioMutedByUser) return;
+  const shouldRun =
+    hasStartedGame &&
+    isPlayerTraveling() &&
+    state.playerTravelMode === "run";
+  const shouldSneak =
+    hasStartedGame &&
+    isPlayerTraveling() &&
+    state.playerTravelMode === "sneak";
+  if (shouldRun) {
+    ensureTrackAudible("run");
+  }
+  if (shouldSneak) {
+    ensureTrackAudible("sneak");
+  }
+  const shouldPlayAmbience = hasStartedGame && audioUnlockedOnce && canStartAmbience;
+  const ambienceTarget = shouldPlayAmbience ? getAmbientTrackForWeather(state.weather?.type) : null;
+  if (ambienceTarget?.name) {
+    const track = loopTracks.get(ambienceTarget.name);
+    const effectiveTarget = getEffectiveVolume(track, track?.currentTargetVolume);
+    if (effectiveTarget > 0.01) {
+      ensureTrackAudible(ambienceTarget.name);
+    }
+  }
+}
+
+function attachAudioRecoveryEvents() {
+  if (audioRecoveryEventsAttached) return;
+  audioRecoveryEventsAttached = true;
+  const handler = () => {
+    if (!audioUnlockedOnce) return;
+    const ctx = AudioManager.ctx;
+    if (ctx && ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
+    recoverLoopAudio();
+  };
+  document.addEventListener("visibilitychange", handler);
+  window.addEventListener("focus", handler);
+  window.addEventListener("pageshow", handler);
 }
 
 function primeLoopTracksInGesture() {
@@ -1872,6 +1954,7 @@ function initTitleScreen() {
   initSchematicSprite();
   mirrorConsole();
   setNormalizedAudioSources();
+  attachAudioRecoveryEvents();
   if (!dom.titleScreen || !dom.titleStartBtn) {
     canStartAmbience = true;
     initHorrorFX();
@@ -2233,6 +2316,7 @@ function attachEvents() {
     playRunTestSound();
   });
   dom.silenceAudioBtn.addEventListener("click", silenceAllSound);
+  dom.unmuteAudioBtn?.addEventListener("click", unmuteAllSound);
   dom.giveAllBtn.addEventListener("click", giveAllDebugItems);
   dom.godModeBtn.addEventListener("click", toggleGodMode);
   dom.eyesBtn.addEventListener("click", toggleDebugEyes);
@@ -3983,7 +4067,7 @@ function updateWeatherAmbience({ forceRestart = false } = {}) {
   const fadeIn = forceRestart ? AMBIENT_FADE_IN_MS : AMBIENT_FADE_IN_MS;
   const fadeOut = AMBIENT_FADE_OUT_MS;
 
-  if (targetName) {
+  if (targetName && !audioMutedByUser) {
     ensureLoopTrackPlaying(targetName);
   }
   if (targetName !== "rain") {
@@ -4120,6 +4204,7 @@ function stopRunningAudio() {
 }
 
 function updateRunningAudioState() {
+  if (audioMutedByUser) return;
   const shouldPlay =
     audioUnlockedOnce &&
     hasStartedGame &&
@@ -4181,6 +4266,7 @@ function stopSneakAudio() {
 }
 
 function updateSneakAudioState() {
+  if (audioMutedByUser) return;
   const shouldPlay =
     audioUnlockedOnce &&
     hasStartedGame &&
