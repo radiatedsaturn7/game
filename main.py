@@ -2,6 +2,10 @@ import random
 import json
 import re
 import os
+import shutil
+import subprocess
+import threading
+import time
 from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Iterable, Dict, Set, Tuple
 import sys
@@ -29,6 +33,87 @@ class CaptureBuffer:
 
     def getvalue(self) -> str:
         return self.buffer.getvalue()
+
+
+class StormAudio:
+    """Handle storm ambience playback using available system audio players."""
+
+    def __init__(self, rain_path: str, thunder_paths: List[str]):
+        self.rain_path = rain_path
+        self.thunder_paths = thunder_paths
+        self._stop_event = threading.Event()
+        self._rain_thread: Optional[threading.Thread] = None
+        self._thunder_thread: Optional[threading.Thread] = None
+        self._player = self._detect_player()
+
+    def _detect_player(self) -> Optional[Tuple[str, List[str]]]:
+        players = [
+            ('afplay', ['afplay']),
+            ('mpg123', ['mpg123', '-q']),
+            ('ffplay', ['ffplay', '-nodisp', '-autoexit', '-loglevel', 'quiet']),
+            ('mpv', ['mpv', '--no-video', '--really-quiet']),
+        ]
+        for name, cmd in players:
+            if shutil.which(name):
+                return name, cmd
+        return None
+
+    def _spawn(self, path: str) -> Optional[subprocess.Popen]:
+        if not self._player:
+            return None
+        _, base_cmd = self._player
+        return subprocess.Popen(
+            [*base_cmd, path],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def _wait_for_proc(self, proc: subprocess.Popen):
+        while proc.poll() is None:
+            if self._stop_event.is_set():
+                proc.terminate()
+                break
+            time.sleep(0.2)
+
+    def _rain_loop(self):
+        while not self._stop_event.is_set():
+            proc = self._spawn(self.rain_path)
+            if not proc:
+                return
+            self._wait_for_proc(proc)
+
+    def _thunder_loop(self):
+        while not self._stop_event.is_set():
+            time.sleep(random.uniform(6.0, 18.0))
+            if self._stop_event.is_set():
+                break
+            choices = [path for path in self.thunder_paths if os.path.exists(path)]
+            if not choices:
+                continue
+            proc = self._spawn(random.choice(choices))
+            if not proc:
+                return
+            self._wait_for_proc(proc)
+
+    def _has_assets(self) -> bool:
+        return os.path.exists(self.rain_path) and any(
+            os.path.exists(path) for path in self.thunder_paths
+        )
+
+    def start(self):
+        if self._stop_event.is_set():
+            self._stop_event.clear()
+        if self._rain_thread and self._rain_thread.is_alive():
+            return
+        if not self._player or not self._has_assets():
+            return
+        self._rain_thread = threading.Thread(target=self._rain_loop, daemon=True)
+        self._thunder_thread = threading.Thread(target=self._thunder_loop, daemon=True)
+        self._rain_thread.start()
+        self._thunder_thread.start()
+
+    def stop(self):
+        self._stop_event.set()
 
 
 def color(text: str, code: str) -> str:
@@ -1756,6 +1841,12 @@ class Game:
         modifiers: Optional[Iterable[str]] = None,
         board_size: int = 5,
     ):
+        audio_dir = os.path.join(os.path.dirname(__file__), 'audio')
+        rain_path = os.path.join(audio_dir, 'rain.mp3')
+        thunder_paths = [
+            os.path.join(audio_dir, 'lightning.mp3'),
+            os.path.join(audio_dir, 'thunder.mp3'),
+        ]
         self.encounter_lookup: Dict[str, EncounterCard] = {}
         self.item_registry: Dict[str, Item] = {}
         self.location_lookup: Dict[str, Dict[str, str]] = {}
@@ -1787,6 +1878,10 @@ class Game:
         self.cancel_next_dilemma: bool = False
         self.final_encounter_started: bool = False
         self.final_gate_bonus: int = 0
+        self.weather: str = 'clear'
+        self.storm_audio = StormAudio(rain_path, thunder_paths)
+        if self.has_modifier('storming'):
+            self.set_weather('storming')
 
         # Both players begin at the Fractured Vestibule
         start_x, start_y = self.board.start_pos
@@ -1799,6 +1894,15 @@ class Game:
             tile.revealed = True
             if tile.location and f"[{p.x},{p.y}] - {tile.location.name} (Location)" not in self.discovered_log:
                 self.discovered_log.append(f"[{p.x},{p.y}] - {tile.location.name} (Location)")
+
+    def set_weather(self, weather: str):
+        normalized = weather.strip().lower()
+        if normalized in ('storm', 'storming', 'thunderstorm'):
+            self.weather = 'storming'
+            self.storm_audio.start()
+        else:
+            self.weather = 'clear'
+            self.storm_audio.stop()
 
     def modify_hope(self, amount: int):
         """Adjust shared Hope and sync with players."""
@@ -2466,6 +2570,7 @@ class Game:
         buffer.append(left.ljust(width))
         buffer.append(right.ljust(width))
         buffer.append(f"Hope: {self.hope}".ljust(width))
+        buffer.append(f"Weather: {self.weather}".ljust(width))
         buffer.append('')
 
         # Game board
@@ -2473,7 +2578,7 @@ class Game:
         buffer.append('')
 
         # Command options
-        buffer.append('Commands: w/a/s/d, rest, use, trade, pass, end, items <player>, discovered, lookup <name>, index [type], help')
+        buffer.append('Commands: w/a/s/d, rest, use, trade, pass, end, items <player>, discovered, lookup <name>, index [type], weather <clear|storming>, help')
         buffer.append('')
 
         # Prompt
@@ -2548,7 +2653,8 @@ class Game:
             "use 'rest' to regain Sanity, and 'use <item>' to activate items. "
             "Type 'lookup <name>' to inspect cards or items. The Final Gate "
             "activates automatically when both players stand on it with at "
-            "least 3 Hope and 3 Sanity each."
+            "least 3 Hope and 3 Sanity each. Use 'weather storming' to toggle "
+            "storm ambience if audio files are available."
         )
         input('Press Enter to continue...')
 
@@ -2777,6 +2883,15 @@ class Game:
                 cat = parts[1] if len(parts) == 2 else 'encounter'
                 self.show_index(cat)
                 continue
+            if action.startswith('weather'):
+                parts = action.split(maxsplit=1)
+                if len(parts) == 2 and parts[1]:
+                    self.set_weather(parts[1])
+                    self.last_action_summary = f"Weather set to {self.weather}."
+                else:
+                    print(f"Current weather: {self.weather}. Use 'weather storming' or 'weather clear'.")
+                    input('Press Enter to continue...')
+                continue
             if action in ('help', 'commands'):
                 self.show_help()
                 continue
@@ -2870,12 +2985,15 @@ class Game:
         print('--- Laughing in the Abyss ---')
         game_over = False
         active = 0
-        while not game_over:
-            player = self.players[active]
-            game_over = self.player_turn(player)
-            self.turn_count += 1
-            self.maybe_trigger_abyssal_shift()
-            active = 1 - active
+        try:
+            while not game_over:
+                player = self.players[active]
+                game_over = self.player_turn(player)
+                self.turn_count += 1
+                self.maybe_trigger_abyssal_shift()
+                active = 1 - active
+        finally:
+            self.storm_audio.stop()
 
 if __name__ == '__main__':
     Game().play()
