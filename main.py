@@ -2499,72 +2499,6 @@ class Game:
         if not found:
             print('None yet.')
 
-    def build_debug_lines(self) -> List[str]:
-        lines: List[str] = []
-        lines.append('=== Debug Screen ===')
-        lines.append(f"Weather: {self.weather}")
-        lines.append(f"Hope: {self.hope}")
-        lines.append(f"Turn: {self.turn_count}")
-        lines.append('')
-        lines.append('Discovered Tiles:')
-        if self.discovered_log:
-            lines.extend(self.discovered_log)
-        else:
-            lines.append('None yet.')
-        return lines
-
-    def show_debug_screen(self):
-        offset = 0
-        while True:
-            os.system('cls' if os.name == 'nt' else 'clear')
-            lines = self.build_debug_lines()
-            term_width, term_height = shutil.get_terminal_size((80, 24))
-            footer_lines = 3
-            view_height = max(5, term_height - footer_lines)
-            max_offset = max(0, len(lines) - view_height)
-            if offset > max_offset:
-                offset = max_offset
-            visible = lines[offset: offset + view_height]
-            for line in visible:
-                print(line[:term_width])
-            total = len(lines)
-            if max_offset > 0:
-                progress = offset / max_offset
-            else:
-                progress = 0
-            bar_width = max(10, min(40, term_width - 30))
-            filled = int(progress * bar_width)
-            bar = '[' + '#' * filled + '-' * (bar_width - filled) + ']'
-            start_line = offset + 1 if total else 0
-            end_line = min(offset + view_height, total)
-            print()
-            print(
-                f"Scroll {start_line}-{end_line} of {total} {bar}".ljust(term_width)
-            )
-            print(
-                "Commands: up/down (w/s or k/j), weather <clear|storming>, q to exit".ljust(term_width)
-            )
-            command = input('> ').strip().lower()
-            if command in ('q', 'quit', 'exit'):
-                return
-            if command in ('down', 's', 'j'):
-                offset = min(max_offset, offset + 1)
-                continue
-            if command in ('up', 'w', 'k'):
-                offset = max(0, offset - 1)
-                continue
-            if command in ('pgdown', 'pagedown'):
-                offset = min(max_offset, offset + view_height)
-                continue
-            if command in ('pgup', 'pageup'):
-                offset = max(0, offset - view_height)
-                continue
-            if command.startswith('weather'):
-                parts = command.split(maxsplit=1)
-                if len(parts) == 2:
-                    self.set_weather(parts[1])
-                continue
-
     def show_index(self, category: str = 'encounter'):
         """Display all cards or items for reference."""
         category = category.lower()
@@ -2644,7 +2578,7 @@ class Game:
         buffer.append('')
 
         # Command options
-        buffer.append('Commands: w/a/s/d, rest, use, trade, pass, end, items <player>, discovered, lookup <name>, index [type], weather <clear|storming>, debug, help')
+        buffer.append('Commands: w/a/s/d, rest, use, trade, pass, end, items <player>, discovered, lookup <name>, index [type], weather <clear|storming>, help')
         buffer.append('')
 
         # Prompt
@@ -2720,8 +2654,7 @@ class Game:
             "Type 'lookup <name>' to inspect cards or items. The Final Gate "
             "activates automatically when both players stand on it with at "
             "least 3 Hope and 3 Sanity each. Use 'weather storming' to toggle "
-            "storm ambience if audio files are available. Use 'debug' to open "
-            "the debug screen."
+            "storm ambience if audio files are available."
         )
         input('Press Enter to continue...')
 
@@ -2958,9 +2891,6 @@ class Game:
                 else:
                     print(f"Current weather: {self.weather}. Use 'weather storming' or 'weather clear'.")
                     input('Press Enter to continue...')
-                continue
-            if action == 'debug':
-                self.show_debug_screen()
                 continue
             if action in ('help', 'commands'):
                 self.show_help()
