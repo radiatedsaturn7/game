@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Robtergeist</title>
+  <link rel="stylesheet" href="style.css?v=7" />
+</head>
+<body>
+  <div id="svgSpriteHost" aria-hidden="true"></div>
+  <div id="audioGate" class="audio-gate" aria-hidden="false">
+    <div class="audio-gate-card">
+      <p>This game requires audio enabled.</p>
+      <button id="audioGateBtn" class="audio-gate-button" type="button">Enable audio</button>
+    </div>
+  </div>
+  <div id="titleScreen" class="title-screen" aria-hidden="false">
+    <div class="title-video-stack" aria-hidden="true">
+      <video
+        id="titleVideoBackdrop"
+        class="title-video title-video-backdrop"
+        preload="auto"
+        playsinline
+        muted
+        autoplay
+        loop
+        poster="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1600' height='900'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0%25' stop-color='%230d1116'/><stop offset='60%25' stop-color='%23020306'/></linearGradient></defs><rect width='100%25' height='100%25' fill='%23020306'/><rect width='100%25' height='100%25' fill='url(%23g)'/></svg>"
+      >
+        <source src="title-screen.mp4" type="video/mp4" />
+      </video>
+      <video
+        id="titleVideo"
+        class="title-video title-video-foreground"
+        preload="auto"
+        playsinline
+        muted
+        autoplay
+        loop
+        poster="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1600' height='900'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0%25' stop-color='%230d1116'/><stop offset='60%25' stop-color='%23020306'/></linearGradient></defs><rect width='100%25' height='100%25' fill='%23020306'/><rect width='100%25' height='100%25' fill='url(%23g)'/></svg>"
+      >
+        <source src="title-screen.mp4" type="video/mp4" />
+      </video>
+      <div class="title-vignette"></div>
+    </div>
+    <audio id="titleAudio" preload="auto">
+      <source src="mp3_normalized/title-screen.mp3" type="audio/mpeg" />
+    </audio>
+    <audio id="rainAudio" preload="auto" loop>
+      <source src="mp3_normalized/rainy.mp3" type="audio/mpeg" />
+    </audio>
+    <audio id="sunnyAudio" preload="auto" loop>
+      <source src="mp3_normalized/sunny.mp3" type="audio/mpeg" />
+    </audio>
+    <audio id="sneakAudio" preload="auto" loop>
+      <source src="mp3_normalized/sneak.mp3" type="audio/mpeg" />
+    </audio>
+    <audio id="runningAudio" preload="auto" loop>
+      <source src="mp3_normalized/running.mp3" type="audio/mpeg" />
+    </audio>
+    <audio id="typingAudio" preload="auto" loop>
+      <source src="mp3_normalized/Typing.mp3" type="audio/mpeg" />
+    </audio>
+    <div class="title-content">
+      <button id="titleStartBtn" class="title-start">Start</button>
+    </div>
+  </div>
+  <div class="app">
+    <main>
+      <section class="room-view">
+        <div class="room-hud">
+          <div class="alarm-indicator" role="img" aria-label="Alarm active"></div>
+          <p class="robot-status"><span></span></p>
+          <button id="systemMenuBtn">Menu</button>
+        </div>
+        <div class="room-media" id="roomMedia">
+          <div class="room-topline">
+            <p id="actionStatus" class="action-status hidden"></p>
+          </div>
+          <div class="room-overlay">
+            <p class="room-description hidden"></p>
+            <p id="travelStatus" class="travel-status hidden"></p>
+          </div>
+          <div class="room-actions-overlay">
+            <div id="roomActions" class="actions overlay-actions"></div>
+          </div>
+          <div id="actionLock" class="action-lock hidden" aria-live="polite">
+            <p id="actionLockLabel"></p>
+            <div class="action-bar">
+              <span></span>
+            </div>
+          </div>
+        </div>
+        <div class="overlay-footer">
+          <button id="menuBtn">Bag</button>
+          <button id="mapBtn">Map</button>
+          <button id="liveBtn" class="primary">Live</button>
+          <button id="tasksBtn">Tasks</button>
+          <button id="useBtn">Use</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="deathScreen" class="death-screen" aria-hidden="true">
+    <div class="death-video">
+      <p>Signal Lost</p>
+      <button id="retryBtn" class="primary">Retry Night</button>
+    </div>
+  </div>
+
+  <div id="victoryScreen" class="victory-screen" aria-hidden="true">
+    <div class="victory-card">
+      <h2 id="victoryTitle">Breached Exit</h2>
+      <button id="nextNightBtn" class="primary">Continue</button>
+    </div>
+  </div>
+
+  <div id="menuPanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Bag</h3>
+      </div>
+      <div class="menu-tabs" role="tablist" aria-label="Bag tabs">
+        <button id="bagTabSchematics" class="tab-button active" type="button" role="tab" aria-selected="true" data-bag-tab="schematics">Craft</button>
+        <button id="bagTabItems" class="tab-button" type="button" role="tab" aria-selected="false" data-bag-tab="items">Items</button>
+        <button id="bagTabTools" class="tab-button" type="button" role="tab" aria-selected="false" data-bag-tab="tools">Tools</button>
+      </div>
+      <div class="menu-content bag-content">
+        <section class="bag-tab active" data-bag-panel="schematics" role="tabpanel" aria-labelledby="bagTabSchematics">
+          <div>
+            <h4>Craft</h4>
+            <ul id="schematicInventory" class="list"></ul>
+            <div class="bag-actions">
+              <button id="buildBtn" class="primary" disabled>Build</button>
+            </div>
+          </div>
+        </section>
+        <section class="bag-tab" data-bag-panel="items" role="tabpanel" aria-labelledby="bagTabItems">
+          <div>
+            <div class="bag-selector" role="group" aria-label="Inventory category">
+              <button id="itemsPrevBtn" class="selector-button" type="button" aria-label="Previous category">&lt;</button>
+              <h4 id="itemsCategoryLabel">Items</h4>
+              <button id="itemsNextBtn" class="selector-button" type="button" aria-label="Next category">&gt;</button>
+            </div>
+            <ul id="inventoryList" class="list"></ul>
+          </div>
+        </section>
+        <section class="bag-tab" data-bag-panel="tools" role="tabpanel" aria-labelledby="bagTabTools">
+          <div>
+            <h4>Tools</h4>
+            <ul id="toolsList" class="list"></ul>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="systemMenuPanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Menu</h3>
+      </div>
+      <div class="menu-tabs" role="tablist" aria-label="Menu tabs">
+        <button id="systemTabSave" class="tab-button active" type="button" role="tab" aria-selected="true" data-system-tab="save">Save</button>
+        <button id="systemTabLoad" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="load">Load</button>
+        <button id="systemTabSettings" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="settings">Audio Settings</button>
+        <button id="systemTabDebug" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="debug">Debug</button>
+      </div>
+      <div class="menu-content system-content">
+        <section class="system-tab active" data-system-panel="save" role="tabpanel" aria-labelledby="systemTabSave">
+          <div class="system-actions">
+            <label class="system-input">
+              <span>Save name</span>
+              <input id="saveNameInput" type="text" value="save001" maxlength="32" autocomplete="off" />
+            </label>
+            <button id="saveGameBtn" class="primary" type="button">Save Game</button>
+            <p id="saveStatus" class="menu-status">No save yet.</p>
+          </div>
+        </section>
+        <section class="system-tab" data-system-panel="load" role="tabpanel" aria-labelledby="systemTabLoad">
+          <div class="system-actions">
+            <ul id="saveList" class="list"></ul>
+            <p id="loadStatus" class="menu-status">No save loaded.</p>
+          </div>
+        </section>
+        <section class="system-tab" data-system-panel="settings" role="tabpanel" aria-labelledby="systemTabSettings">
+          <div class="system-settings">
+            <label class="system-slider">
+              <span>Master</span>
+              <input id="masterVolumeSlider" type="range" min="0" max="100" value="100" />
+            </label>
+            <label class="system-slider">
+              <span>Music</span>
+              <input id="musicVolumeSlider" type="range" min="0" max="100" value="80" />
+            </label>
+            <label class="system-slider">
+              <span>Ambience</span>
+              <input id="ambienceVolumeSlider" type="range" min="0" max="100" value="100" />
+            </label>
+            <label class="system-slider">
+              <span>Movement</span>
+              <input id="movementVolumeSlider" type="range" min="0" max="100" value="100" />
+            </label>
+            <label class="system-slider">
+              <span>UI</span>
+              <input id="uiVolumeSlider" type="range" min="0" max="100" value="100" />
+            </label>
+            <label class="system-slider">
+              <span>SFX</span>
+              <input id="sfxVolumeSlider" type="range" min="0" max="100" value="100" />
+            </label>
+          </div>
+        </section>
+        <section class="system-tab" data-system-panel="debug" role="tabpanel" aria-labelledby="systemTabDebug">
+          <div class="system-actions">
+            <button id="openDebugPanelBtn" class="primary" type="button">Open Debug Panel</button>
+            <p class="menu-status">Debug tools are available when enabled.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="mapPanel" class="map-panel" aria-hidden="true">
+    <div class="map-card">
+      <div class="menu-header">
+        <h3>Floor Plan</h3>
+      </div>
+      <div class="floorplan-header">
+        <div class="floorplan-status">
+          <span>Date</span>
+          <strong id="dateLabel" class="date-label">Dec 25 2326</strong>
+        </div>
+        <div class="floorplan-status">
+          <span>Weather</span>
+          <strong id="mapWeatherLabel" class="weather-symbol">Unknown</strong>
+        </div>
+      </div>
+      <div class="map-shell">
+        <svg id="floorplanMap" viewBox="0 0 520 420" width="520" height="420" role="img" aria-label="Factory floorplan"></svg>
+        <div class="map-selected">
+          <span>Selected</span>
+          <strong id="selectedRoom">None</strong>
+          <p id="selectedRoomNote" class="map-selected-note hidden"></p>
+        </div>
+      </div>
+      <div class="map-controls">
+        <div class="quick-actions compact">
+          <div class="quick-buttons">
+            <button id="sneakBtn" class="move-action" type="button">
+              <span class="quick-label">Sneak</span>
+              <span class="quick-sub">Quiet</span>
+            </button>
+            <button id="runBtn" class="move-action" type="button">
+              <span class="quick-label">Run</span>
+              <span class="quick-sub">Motion</span>
+            </button>
+            <button id="scannerToggleBtn" class="hidden" type="button" hidden>
+              <span class="quick-label">Scanner</span>
+              <span id="scannerToggleStatus" class="quick-sub">Off</span>
+            </button>
+            <button id="deployBtn" class="deploy-action" type="button">
+              <span class="quick-label">Deploy</span>
+              <span id="deployStatus" class="quick-sub">Jam / Lure</span>
+            </button>
+            <button id="cancelBtn" class="deploy-action">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="usePanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Use Items</h3>
+      </div>
+      <div class="menu-content">
+        <ul id="useList" class="list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="debugPanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Debug</h3>
+      </div>
+      <div class="menu-content">
+        <div class="map-buttons">
+          <button id="randomizeBtn">Randomize Layout</button>
+          <button id="toggleRobotBtn">Disable Robot</button>
+          <button id="forceEscapeBtn">Force Escape</button>
+          <button id="testRunAudioBtn">Test Running Sound</button>
+          <button id="silenceAudioBtn">Silence All Sound</button>
+          <button id="unmuteAudioBtn">Unmute All Sound</button>
+          <button id="giveAllBtn">Give All</button>
+          <button id="godModeBtn">God Mode: OFF</button>
+          <button id="eyesBtn">Eyes: OFF</button>
+          <label class="debug-sanity">
+            <span>Sanity <strong id="debugSanityValue">100%</strong></span>
+            <input id="debugSanity" type="range" min="0" max="100" step="1" value="100">
+          </label>
+          <label class="night-debug">
+            <span>Debug Night</span>
+            <select id="nightSelect">
+              <option value="1">Night 1</option>
+              <option value="2">Night 2</option>
+              <option value="3">Night 3</option>
+              <option value="4">Night 4</option>
+              <option value="5">Night 5</option>
+              <option value="6">Night 6</option>
+              <option value="7">Night 7</option>
+              <option value="8">Night 8</option>
+              <option value="9">Night 9</option>
+              <option value="10">Night 10</option>
+              <option value="11">Night 11</option>
+            </select>
+          </label>
+        </div>
+        <div class="debug-log">
+          <h4>Console Log</h4>
+          <p class="debug-note">yes, i know about console tools, but I got a kid, and no realistic ability to use a computer</p>
+          <div id="debugLog" class="debug-log-output" role="log" aria-live="polite"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="componentPanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3 id="componentTitle">Component</h3>
+        <button id="componentOkBtn">OK</button>
+      </div>
+      <div class="menu-content">
+        <p id="componentDetails" class="component-details"></p>
+        <p id="componentCount" class="component-count"></p>
+        <div id="componentRequirements" class="component-requirements hidden">
+          <h4>Required Components</h4>
+          <ul id="schematicList" class="list"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tasksPanel" class="menu-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Tasks</h3>
+        <button id="tasksOkBtn">OK</button>
+      </div>
+      <div class="menu-content">
+        <p id="tasksText" class="component-details"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="objectiveModal" class="menu-panel modal-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Cait</h3>
+        <button id="ackObjectiveBtn">OK</button>
+      </div>
+      <div class="menu-content">
+        <p id="objectiveModalText" class="component-details"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="craftMiniGame" class="menu-panel modal-panel craft-mini-game" aria-hidden="true">
+    <div class="menu-card craft-mini-game-card">
+      <div class="menu-header">
+        <div class="craft-mini-game-heading">
+          <h3>ASSEMBLY BOARD</h3>
+          <p id="craftMiniGameSubtitle" class="craft-mini-game-subtitle"></p>
+        </div>
+      </div>
+      <div class="menu-content craft-mini-game-content">
+        <div id="craftMiniGameBoard" class="craft-mini-game-board" role="list"></div>
+        <div class="craft-mini-game-tray-wrapper">
+          <div class="craft-mini-game-tray-label">Component Tray</div>
+          <div id="craftMiniGameTray" class="craft-mini-game-tray" role="list"></div>
+        </div>
+        <div class="menu-actions craft-mini-game-actions">
+          <button id="craftMiniGameCancelBtn">Cancel</button>
+          <button id="craftMiniGameCommitBtn" disabled>Commit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="caitQuietModal" class="menu-panel modal-panel quiet-modal" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Cait</h3>
+        <button id="ackCaitQuietBtn">OK</button>
+      </div>
+      <div class="menu-content">
+        <p id="caitQuietText" class="quiet-text">Ready to go?</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="robotAlertModal" class="menu-panel modal-panel" aria-hidden="true">
+    <div class="menu-card">
+      <div class="menu-header">
+        <h3>Alert</h3>
+        <button id="ackRobotAlertBtn">OK</button>
+      </div>
+      <div class="menu-content">
+        <p id="robotAlertText" class="component-details"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="creditsScreen" class="credits-screen" aria-hidden="true">
+    <div id="creditsScroll" class="credits-scroll">
+      <div class="credits-title">Robtergeist</div>
+      <div id="creditsText" class="credits-text"></div>
+    </div>
+  </div>
+
+  <script src="game.js?v=7"></script>
+</body>
+</html>

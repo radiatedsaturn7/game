@@ -1,0 +1,59 @@
+{
+  "files": {
+    "Typing.mp3": {
+      "input_mtime": 1767556188.195311,
+      "input_size": 124803,
+      "normalized_at_iso": "2026-01-04T20:10:10.798174+00:00",
+      "output_rel_path": "Typing.mp3",
+      "output_size": 124652,
+      "sha256": "edd87c890a443c348a6f18416b4adf158749f462a98cc68c090900982e61593e"
+    },
+    "rainy.mp3": {
+      "input_mtime": 1767556188.211311,
+      "input_size": 2882266,
+      "normalized_at_iso": "2026-01-04T20:10:20.182250+00:00",
+      "output_rel_path": "rainy.mp3",
+      "output_size": 2882266,
+      "sha256": "2ce9c6c1921fc48ab6ddb92673b99a0c18e29bbf3226c39e2a43a6b23c61c559"
+    },
+    "running.mp3": {
+      "input_mtime": 1767556188.215311,
+      "input_size": 88915,
+      "normalized_at_iso": "2026-01-04T20:10:20.805904+00:00",
+      "output_rel_path": "running.mp3",
+      "output_size": 88996,
+      "sha256": "ed71bd3bea64e8993b3986f30a41987b425965839686c371d124c7a00eae37b4"
+    },
+    "sneak.mp3": {
+      "input_mtime": 1767556188.215311,
+      "input_size": 82636,
+      "normalized_at_iso": "2026-01-04T20:10:21.400386+00:00",
+      "output_rel_path": "sneak.mp3",
+      "output_size": 82677,
+      "sha256": "d3a754866bc82fa97a3c7a82dc3967662f0a3621d123a02e640ae07ad7104acc"
+    },
+    "sunny.mp3": {
+      "input_mtime": 1767556188.215311,
+      "input_size": 433772,
+      "normalized_at_iso": "2026-01-04T20:10:23.269139+00:00",
+      "output_rel_path": "sunny.mp3",
+      "output_size": 433772,
+      "sha256": "062bc00f05ae30eb1bd1e4e6a336d1b99d0e8ba807e8a7dbab75e1281ea7c5f1"
+    },
+    "title-screen.mp3": {
+      "input_mtime": 1767556188.2393112,
+      "input_size": 4675752,
+      "normalized_at_iso": "2026-01-04T20:10:34.237915+00:00",
+      "output_rel_path": "title-screen.mp3",
+      "output_size": 3412161,
+      "sha256": "4f05bc0b2dcc3240c1663e5b74b6517480810587774df01fff40f3da225bab7b"
+    }
+  },
+  "settings": {
+    "ffmpeg_version": "ffmpeg version 8.0.1 Copyright (c) 2000-2025 the FFmpeg developers",
+    "i": -16.0,
+    "lra": 11.0,
+    "tp": -1.5
+  },
+  "version": 1
+}
