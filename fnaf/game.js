@@ -1086,6 +1086,7 @@ const dom = {
   actionLock: document.getElementById("actionLock"),
   actionLockLabel: document.getElementById("actionLockLabel"),
   nightSelect: document.getElementById("nightSelect"),
+  debugWeatherSelect: document.getElementById("debugWeatherSelect"),
   debugLog: document.getElementById("debugLog"),
   creditsScreen: document.getElementById("creditsScreen"),
   creditsScroll: document.getElementById("creditsScroll"),
@@ -2535,6 +2536,16 @@ function attachEvents() {
       updateUI();
     });
   }
+  dom.debugWeatherSelect?.addEventListener("change", (event) => {
+    const nextWeather = WEATHER_TYPES.find((entry) => entry.type === event.target.value);
+    if (!nextWeather) return;
+    state.weather = nextWeather;
+    state.weatherAnnounced = false;
+    state.surgeCharges = state.weather.modifiers.surgeBonus || 0;
+    updateWeatherAmbience({ forceRestart: true });
+    announceWeather();
+    updateUI();
+  });
   dom.cancelBtn.addEventListener("click", cancelMovement);
   dom.scannerToggleBtn.addEventListener("click", () => handleAction("scan-toggle"));
   dom.sneakBtn?.addEventListener("click", () => handleMapMove(false));
@@ -6567,6 +6578,9 @@ function updateDebugUI() {
   const debugLabel = dom.nightSelect?.closest(".night-debug");
   if (debugLabel) {
     debugLabel.classList.toggle("hidden", !DEBUG_UI);
+  }
+  if (dom.debugWeatherSelect) {
+    dom.debugWeatherSelect.value = state.weather?.type ?? dom.debugWeatherSelect.value;
   }
   if (dom.godModeBtn) {
     dom.godModeBtn.textContent = `God Mode: ${state.godMode ? "ON" : "OFF"}`;
