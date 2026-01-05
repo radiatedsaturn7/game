@@ -1,0 +1,3 @@
+# filename volume
+rainy.mp3 0.05
+sunny.mp3 0.45

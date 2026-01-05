@@ -1106,6 +1106,8 @@ const dom = {
 
 const NORMALIZED_AUDIO_DIR = "mp3_normalized";
 const RAW_AUDIO_DIR = "mp3_raw";
+const SOUND_SETTINGS_FILE = "sound_settings.txt";
+const soundSettings = new Map();
 const AUDIO_SOURCE_MAP = [
   { element: dom.titleAudio, filename: "title-screen.mp3" },
   { element: dom.rainAudio, filename: "rainy.mp3" },
@@ -1200,6 +1202,61 @@ function setNormalizedAudioSources() {
   });
 }
 
+function parseSoundSettings(text) {
+  const nextSettings = new Map();
+  const lines = String(text ?? "").split(/\r?\n/);
+  lines.forEach((rawLine, index) => {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) return;
+    const [name, value] = line.split(/\s+/);
+    if (!name || !value) {
+      console.warn(`sound settings: invalid line ${index + 1}:`, rawLine);
+      return;
+    }
+    const parsedValue = Number.parseFloat(value);
+    if (!Number.isFinite(parsedValue)) {
+      console.warn(`sound settings: invalid volume for ${name}:`, rawLine);
+      return;
+    }
+    nextSettings.set(name, clamp(parsedValue, 0, 1));
+  });
+  return nextSettings;
+}
+
+async function loadSoundSettings() {
+  try {
+    const response = await fetch(SOUND_SETTINGS_FILE, { cache: "no-store" });
+    if (!response.ok) {
+      console.warn("sound settings: missing or unreadable", response.status);
+      return;
+    }
+    const text = await response.text();
+    soundSettings.clear();
+    parseSoundSettings(text).forEach((value, key) => {
+      soundSettings.set(key, value);
+    });
+    applySoundSettingsToTracks();
+  } catch (error) {
+    console.warn("sound settings: failed to load", error);
+  }
+}
+
+function getSoundSettingsKey(audioEl) {
+  if (!audioEl) return null;
+  if (audioEl.dataset?.audioKey) return audioEl.dataset.audioKey;
+  const src = audioEl.currentSrc || audioEl.src;
+  if (!src) return null;
+  const lastSlash = src.lastIndexOf("/");
+  return lastSlash >= 0 ? src.slice(lastSlash + 1) : src;
+}
+
+function getSoundSettingVolumeForElement(audioEl) {
+  const key = getSoundSettingsKey(audioEl);
+  if (!key) return 1;
+  const setting = soundSettings.get(key);
+  return Number.isFinite(setting) ? setting : 1;
+}
+
 const audioBuses = {
   master: 1,
   music: 1,
@@ -1214,11 +1271,13 @@ let audioRecoveryEventsAttached = false;
 
 function registerLoopTrack(name, element, bus, baseVolume) {
   if (!element) return;
+  const maxVolume = getSoundSettingVolumeForElement(element);
   loopTracks.set(name, {
     name,
     element,
     bus,
     baseVolume,
+    maxVolume,
     currentTargetVolume: 0,
     fadeToken: 0,
     isPrimed: false,
@@ -1513,13 +1572,23 @@ function playSfx(
   if (skipIfPlaying && !audioEl.paused && !audioEl.ended) return;
   audioEl.currentTime = 0;
   audioEl.muted = false;
+  const maxVolume = getSoundSettingVolumeForElement(audioEl);
   const busVolume = audioBuses.sfx ?? 1;
   const masterVolume = audioBuses.master ?? 1;
-  audioEl.volume = clamp(volume * busVolume * masterVolume, 0, 1);
+  audioEl.volume = clamp(volume * maxVolume * busVolume * masterVolume, 0, 1);
   attemptPlayAudio(audioEl, label);
   if (cooldownTicks > 0 && cooldowns) {
     cooldowns.set(label, cooldownTicks);
   }
+}
+
+function applySoundSettingsToTracks() {
+  loopTracks.forEach((track) => {
+    track.maxVolume = getSoundSettingVolumeForElement(track.element);
+    if (track.isPrimed) {
+      applyLoopTrackMix(track, { ensurePlaying: false });
+    }
+  });
 }
 
 function queueLoopTrackPlay(track) {
@@ -1669,9 +1738,10 @@ function playRunTestSound() {
 function getEffectiveVolume(track, targetVolume) {
   if (!track) return 0;
   const base = Number.isFinite(targetVolume) ? targetVolume : track.baseVolume;
+  const maxVolume = Number.isFinite(track.maxVolume) ? track.maxVolume : 1;
   const busVolume = audioBuses[track.bus] ?? 1;
   const masterVolume = audioBuses.master ?? 1;
-  return clamp(base * busVolume * masterVolume, 0, 1);
+  return clamp(base * maxVolume * busVolume * masterVolume, 0, 1);
 }
 
 function applyLoopTrackMix(track, { ensurePlaying = false } = {}) {
@@ -2203,6 +2273,7 @@ function initTitleScreen() {
   initSchematicSprite();
   mirrorConsole();
   setNormalizedAudioSources();
+  loadSoundSettings();
   attachAudioRecoveryEvents();
   if (!dom.titleScreen || !dom.titleStartBtn) {
     canStartAmbience = true;
