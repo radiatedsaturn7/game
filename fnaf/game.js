@@ -979,6 +979,7 @@ const dom = {
   titleVideos: document.querySelectorAll(".title-video"),
   titleAudio: document.getElementById("titleAudio"),
   rainAudio: document.getElementById("rainAudio"),
+  fogAudio: document.getElementById("fogAudio"),
   sunnyAudio: document.getElementById("sunnyAudio"),
   sneakAudio: document.getElementById("sneakAudio"),
   runningAudio: document.getElementById("runningAudio"),
@@ -1092,9 +1093,11 @@ const dom = {
 };
 
 const NORMALIZED_AUDIO_DIR = "mp3_normalized";
+const RAW_AUDIO_DIR = "mp3_raw";
 const AUDIO_SOURCE_MAP = [
   { element: dom.titleAudio, filename: "title-screen.mp3" },
   { element: dom.rainAudio, filename: "rainy.mp3" },
+  { element: dom.fogAudio, filename: "foggy.mp3" },
   { element: dom.sunnyAudio, filename: "sunny.mp3" },
   { element: dom.sneakAudio, filename: "sneak.mp3" },
   { element: dom.runningAudio, filename: "running.mp3" },
@@ -1139,20 +1142,44 @@ const STATE_SET_KEYS = [
   "lastNightSpawnedParts",
 ];
 
+function setAudioSource(element, filename, baseDir) {
+  const sources = element.querySelectorAll("source");
+  if (sources.length > 0) {
+    sources[0].src = `${baseDir}/${filename}`;
+    sources.forEach((source, index) => {
+      if (index > 0) {
+        source.remove();
+      }
+    });
+  } else {
+    element.src = `${baseDir}/${filename}`;
+  }
+}
+
+function attachAudioFallback(element, filename) {
+  if (element.dataset.audioFallbackBound === "true") return;
+  element.dataset.audioFallbackBound = "true";
+
+  const handleError = () => {
+    const currentSrc = element.currentSrc || element.src;
+    if (!currentSrc.includes(`/${NORMALIZED_AUDIO_DIR}/`)) return;
+    setAudioSource(element, filename, RAW_AUDIO_DIR);
+    if (typeof element.load === "function") {
+      element.load();
+    }
+  };
+
+  element.addEventListener("error", handleError);
+  element.querySelectorAll("source").forEach((source) => {
+    source.addEventListener("error", handleError);
+  });
+}
+
 function setNormalizedAudioSources() {
   AUDIO_SOURCE_MAP.forEach(({ element, filename }) => {
     if (!element) return;
-    const sources = element.querySelectorAll("source");
-    if (sources.length > 0) {
-      sources[0].src = `${NORMALIZED_AUDIO_DIR}/${filename}`;
-      sources.forEach((source, index) => {
-        if (index > 0) {
-          source.remove();
-        }
-      });
-    } else {
-      element.src = `${NORMALIZED_AUDIO_DIR}/${filename}`;
-    }
+    setAudioSource(element, filename, NORMALIZED_AUDIO_DIR);
+    attachAudioFallback(element, filename);
     if (typeof element.load === "function") {
       element.load();
     }
@@ -1301,6 +1328,7 @@ function ensureTypingAudibleIfNeeded() {
 }
 
 registerLoopTrack("rain", dom.rainAudio, "ambience", 0.6);
+registerLoopTrack("fog", dom.fogAudio, "ambience", 0.5);
 registerLoopTrack("sunny", dom.sunnyAudio, "ambience", 0.5);
 registerLoopTrack("run", dom.runningAudio, "movement", RUN_AUDIO_VOLUME);
 registerLoopTrack("sneak", dom.sneakAudio, "movement", SNEAK_AUDIO_VOLUME);
@@ -4298,6 +4326,9 @@ function getAmbientTrackForWeather(weatherType) {
   if (weatherType === "Rain") {
     return { name: "rain", volume: 0.6 };
   }
+  if (weatherType === "Fog") {
+    return { name: "fog", volume: 0.5 };
+  }
   if (weatherType === "Clear") {
     return { name: "sunny", volume: 0.5 };
   }
@@ -4318,10 +4349,14 @@ function updateWeatherAmbience({ forceRestart = false } = {}) {
   if (targetName !== "rain") {
     clearLoopTrackPending("rain");
   }
+  if (targetName !== "fog") {
+    clearLoopTrackPending("fog");
+  }
   if (targetName !== "sunny") {
     clearLoopTrackPending("sunny");
   }
   fadeTrackTo("rain", targetName === "rain" ? targetVolume : 0, targetName === "rain" ? fadeIn : fadeOut);
+  fadeTrackTo("fog", targetName === "fog" ? targetVolume : 0, targetName === "fog" ? fadeIn : fadeOut);
   fadeTrackTo("sunny", targetName === "sunny" ? targetVolume : 0, targetName === "sunny" ? fadeIn : fadeOut);
 }
 
@@ -5734,6 +5769,7 @@ async function startNight11Credits() {
   closePanels();
   closeMap();
   fadeTrackTo("rain", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("fog", 0, AMBIENT_FADE_OUT_MS);
   fadeTrackTo("sunny", 0, AMBIENT_FADE_OUT_MS);
   fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
   fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
@@ -8032,6 +8068,7 @@ function buildEscape() {
   if (!state.isAlive || state.hasEscaped) return;
   if (!rooms[state.playerRoom].isExit || !state.escapeReady) return;
   fadeTrackTo("rain", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("fog", 0, AMBIENT_FADE_OUT_MS);
   fadeTrackTo("sunny", 0, AMBIENT_FADE_OUT_MS);
   fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
   fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
@@ -8095,6 +8132,7 @@ function resetGame({ preserveItems = false } = {}) {
   fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
   fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
   fadeTrackTo("rain", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("fog", 0, AMBIENT_FADE_OUT_MS);
   fadeTrackTo("sunny", 0, AMBIENT_FADE_OUT_MS);
   runAudioActive = false;
   sneakAudioActive = false;
