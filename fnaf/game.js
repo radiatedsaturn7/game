@@ -122,6 +122,69 @@ const rooms = [
   },
 ];
 
+const ROOM_BG = {
+  0: "1.png",
+  1: "2.png",
+  2: "3.png",
+  3: "4.png",
+  4: "5.png",
+  5: "6.png",
+  6: "7.png",
+  7: "8.png",
+  8: "9.png",
+  9: "10.png",
+  10: "11.png",
+  11: "12.png",
+  12: "13.png",
+  13: "14.png",
+};
+
+const ROOM_BG_BASE_PATH = "images/";
+const preloadedRoomImages = new Set();
+
+function preloadImages(urls) {
+  urls.filter(Boolean).forEach((url) => {
+    if (preloadedRoomImages.has(url)) return;
+    const image = new Image();
+    image.src = url;
+    preloadedRoomImages.add(url);
+  });
+}
+
+function getRoomBackgroundImage(room) {
+  if (!room) return null;
+
+  if (state.currentNight === 11) {
+    if (room.name === "Entrance") return `${ROOM_BG_BASE_PATH}15.png`;
+    if (room.name === "Grassy Field") return `${ROOM_BG_BASE_PATH}16.png`;
+  }
+
+  const file = ROOM_BG[room.id];
+  return file ? `${ROOM_BG_BASE_PATH}${file}` : null;
+}
+
+function getNightBackgroundUrls() {
+  if (state.currentNight === 11) {
+    return [`${ROOM_BG_BASE_PATH}15.png`, `${ROOM_BG_BASE_PATH}16.png`];
+  }
+  return Object.values(ROOM_BG).map((file) => `${ROOM_BG_BASE_PATH}${file}`);
+}
+
+function preloadRoomBackgrounds() {
+  const urls = new Set(getNightBackgroundUrls());
+  const currentRoom = rooms[state.playerRoom];
+  if (currentRoom) {
+    const currentUrl = getRoomBackgroundImage(currentRoom);
+    if (currentUrl) urls.add(currentUrl);
+    (roomConnections[state.playerRoom] || []).forEach((neighborId) => {
+      const neighbor = rooms[neighborId];
+      const neighborUrl = getRoomBackgroundImage(neighbor);
+      if (neighborUrl) urls.add(neighborUrl);
+    });
+  }
+  preloadImages([...urls]);
+}
+
 const ITEM_CLASSES = {
   Resistors: "MATERIAL",
   Capacitors: "MATERIAL",
@@ -2250,6 +2313,7 @@ function init() {
   }
   updateSchematicList();
   updatePlayerTrail(state.playerRoom);
+  preloadRoomBackgrounds();
   updateUI();
   updateSystemTabs();
   updateSystemMenuDebugVisibility();
@@ -2847,6 +2911,15 @@ function updateUI() {
   dom.roomMedia.classList.toggle("threat-nearby", dangerRoom);
   dom.roomMedia.classList.toggle("glitch", false);
   dom.roomMedia.style.background = "transparent";
+  const roomBackground = getRoomBackgroundImage(room);
+  if (roomBackground) {
+    dom.roomMedia.style.backgroundImage = `url("${roomBackground}")`;
+    dom.roomMedia.style.backgroundSize = "cover";
+    dom.roomMedia.style.backgroundPosition = "center";
+    dom.roomMedia.style.backgroundRepeat = "no-repeat";
+  } else {
+    dom.roomMedia.style.backgroundImage = "";
+  }
   document.body.style.setProperty("--room-theme", room.theme);
   const robotLabel = robotStatusLabel();
   dom.robotStatuses.forEach((node) => {
@@ -4784,6 +4857,7 @@ function setCurrentNight(night) {
   }
   announceWeather();
   updateNextNightButton();
+  preloadRoomBackgrounds();
   updateUI();
   pushStatus(`Night ${next} protocols loaded.`, 3);
 }
@@ -9773,6 +9847,7 @@ function randomizeLayout() {
   state.permaJammedEdges.clear();
   optimizeLayout();
   renderMap();
+  preloadRoomBackgrounds();
   updateUI();
 }
 
