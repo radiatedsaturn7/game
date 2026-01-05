@@ -1031,7 +1031,8 @@ const dom = {
   systemTabSettings: document.getElementById("systemTabSettings"),
   systemTabDebug: document.getElementById("systemTabDebug"),
   saveGameBtn: document.getElementById("saveGameBtn"),
-  loadGameBtn: document.getElementById("loadGameBtn"),
+  saveNameInput: document.getElementById("saveNameInput"),
+  saveList: document.getElementById("saveList"),
   saveStatus: document.getElementById("saveStatus"),
   loadStatus: document.getElementById("loadStatus"),
   masterVolumeSlider: document.getElementById("masterVolumeSlider"),
@@ -1091,7 +1092,6 @@ const dom = {
 };
 
 const NORMALIZED_AUDIO_DIR = "mp3_normalized";
-const RAW_AUDIO_DIR = "mp3_raw";
 const AUDIO_SOURCE_MAP = [
   { element: dom.titleAudio, filename: "title-screen.mp3" },
   { element: dom.rainAudio, filename: "rainy.mp3" },
@@ -1100,7 +1100,9 @@ const AUDIO_SOURCE_MAP = [
   { element: dom.runningAudio, filename: "running.mp3" },
   { element: dom.typingAudio, filename: "Typing.mp3" },
 ];
-const SAVE_STORAGE_KEY = "robtergeist_save_v1";
+const SAVE_LIST_KEY = "robtergeist_saves_v2";
+const SAVE_COUNTER_KEY = "robtergeist_save_counter_v1";
+const LEGACY_SAVE_KEY = "robtergeist_save_v1";
 const STATE_MAP_KEYS = [
   "hideHistory",
   "inventory",
@@ -1143,21 +1145,11 @@ function setNormalizedAudioSources() {
     const sources = element.querySelectorAll("source");
     if (sources.length > 0) {
       sources[0].src = `${NORMALIZED_AUDIO_DIR}/${filename}`;
-      if (sources[1]) {
-        sources[1].src = `${RAW_AUDIO_DIR}/${filename}`;
-      } else {
-        const fallback = document.createElement("source");
-        fallback.src = `${RAW_AUDIO_DIR}/${filename}`;
-        fallback.type = "audio/mpeg";
-        element.appendChild(fallback);
-      }
-      if (sources.length > 2) {
-        sources.forEach((source, index) => {
-          if (index > 1) {
-            source.remove();
-          }
-        });
-      }
+      sources.forEach((source, index) => {
+        if (index > 0) {
+          source.remove();
+        }
+      });
     } else {
       element.src = `${NORMALIZED_AUDIO_DIR}/${filename}`;
     }
@@ -2589,9 +2581,17 @@ function attachEvents() {
   dom.systemTabSave?.addEventListener("click", () => setSystemTab("save"));
   dom.systemTabLoad?.addEventListener("click", () => setSystemTab("load"));
   dom.systemTabSettings?.addEventListener("click", () => setSystemTab("settings"));
-  dom.systemTabDebug?.addEventListener("click", () => setSystemTab("debug"));
+  dom.systemTabDebug?.addEventListener("click", () => {
+    if (!DEBUG_UI) return;
+    openDebug();
+    closeSystemMenu();
+  });
   dom.saveGameBtn?.addEventListener("click", saveGame);
-  dom.loadGameBtn?.addEventListener("click", loadGame);
+  dom.saveList?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-save-id]");
+    if (!button) return;
+    loadGameById(button.dataset.saveId);
+  });
   dom.openDebugPanelBtn?.addEventListener("click", () => {
     if (!DEBUG_UI) return;
     openDebug();
@@ -5257,6 +5257,102 @@ function updateSystemMenuDebugVisibility() {
   }
 }
 
+function formatSaveIndex(index) {
+  return `save${String(index).padStart(3, "0")}`;
+}
+
+function parseSaveIndex(name) {
+  if (!name) return null;
+  const match = /^save(\d+)$/i.exec(name.trim());
+  if (!match) return null;
+  const value = Number.parseInt(match[1], 10);
+  return Number.isFinite(value) ? value : null;
+}
+
+function setSaveList(saves) {
+  window.localStorage.setItem(SAVE_LIST_KEY, JSON.stringify(saves));
+}
+
+function migrateLegacySave() {
+  const raw = window.localStorage.getItem(LEGACY_SAVE_KEY);
+  if (!raw) return [];
+  try {
+    const payload = JSON.parse(raw);
+    if (!payload?.state) {
+      return [];
+    }
+    const savedAt = payload.savedAt ?? new Date().toISOString();
+    const entry = {
+      id: `legacy-${Date.now()}`,
+      name: formatSaveIndex(1),
+      savedAt,
+      payload: { ...payload, savedAt },
+    };
+    const saves = [entry];
+    setSaveList(saves);
+    window.localStorage.removeItem(LEGACY_SAVE_KEY);
+    return saves;
+  } catch (error) {
+    console.warn("Failed to migrate legacy save:", error);
+    return [];
+  }
+}
+
+function getSaveList() {
+  const raw = window.localStorage.getItem(SAVE_LIST_KEY);
+  if (!raw) {
+    return migrateLegacySave();
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn("Failed to read save list:", error);
+    return [];
+  }
+}
+
+function getSortedSaveList() {
+  return getSaveList()
+    .slice()
+    .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+}
+
+function getNextSaveIndex() {
+  const stored = Number.parseInt(window.localStorage.getItem(SAVE_COUNTER_KEY), 10);
+  if (Number.isFinite(stored) && stored > 0) {
+    return stored;
+  }
+  const saves = getSaveList();
+  let maxIndex = 0;
+  saves.forEach((entry) => {
+    const parsed = parseSaveIndex(entry?.name);
+    if (parsed && parsed > maxIndex) {
+      maxIndex = parsed;
+    }
+  });
+  return maxIndex + 1;
+}
+
+function setNextSaveIndex(index) {
+  window.localStorage.setItem(SAVE_COUNTER_KEY, String(index));
+}
+
+function getDefaultSaveName() {
+  return formatSaveIndex(getNextSaveIndex());
+}
+
+function setSaveNameInputDefault() {
+  if (dom.saveNameInput) {
+    dom.saveNameInput.value = getDefaultSaveName();
+  }
+}
+
+function getSaveNameInputValue() {
+  const value = dom.saveNameInput?.value?.trim();
+  return value || getDefaultSaveName();
+}
+
 function updateSaveStatus(text) {
   if (dom.saveStatus) {
     dom.saveStatus.textContent = text;
@@ -5305,8 +5401,49 @@ function applySerializedState(serialized) {
   return true;
 }
 
+function renderSaveList() {
+  if (!dom.saveList) return;
+  const saves = getSortedSaveList();
+  dom.saveList.textContent = "";
+  if (saves.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "list-row";
+    empty.textContent = "No saves yet.";
+    dom.saveList.appendChild(empty);
+    return;
+  }
+  saves.forEach((entry) => {
+    const row = document.createElement("li");
+    row.className = "list-row";
+
+    const label = document.createElement("div");
+    label.className = "item-label";
+    label.textContent = entry.name || "Unnamed save";
+
+    const meta = document.createElement("span");
+    meta.textContent = new Date(entry.savedAt).toLocaleString();
+    label.appendChild(document.createTextNode(" "));
+    label.appendChild(meta);
+
+    const actions = document.createElement("div");
+    actions.className = "item-actions";
+
+    const loadButton = document.createElement("button");
+    loadButton.className = "inspect-button";
+    loadButton.type = "button";
+    loadButton.textContent = "Load";
+    loadButton.dataset.saveId = entry.id;
+
+    actions.appendChild(loadButton);
+    row.appendChild(label);
+    row.appendChild(actions);
+    dom.saveList.appendChild(row);
+  });
+}
+
 function saveGame() {
   try {
+    const saveName = getSaveNameInputValue();
     const payload = {
       version: 1,
       savedAt: new Date().toISOString(),
@@ -5316,8 +5453,19 @@ function saveGame() {
       hasStartedGame,
       canStartAmbience,
     };
-    window.localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(payload));
-    updateSaveStatus(`Saved ${new Date(payload.savedAt).toLocaleTimeString()}.`);
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: saveName,
+      savedAt: payload.savedAt,
+      payload,
+    };
+    const saves = getSaveList();
+    saves.push(entry);
+    setSaveList(saves);
+    setNextSaveIndex(getNextSaveIndex() + 1);
+    setSaveNameInputDefault();
+    renderSaveList();
+    updateSaveStatus(`Saved ${saveName} at ${new Date(payload.savedAt).toLocaleTimeString()}.`);
     updateLoadStatus("Save ready to load.");
   } catch (error) {
     console.warn("Failed to save game:", error);
@@ -5325,20 +5473,8 @@ function saveGame() {
   }
 }
 
-function loadGame() {
-  let payload = null;
-  try {
-    const raw = window.localStorage.getItem(SAVE_STORAGE_KEY);
-    if (!raw) {
-      updateLoadStatus("No save found.");
-      return;
-    }
-    payload = JSON.parse(raw);
-  } catch (error) {
-    console.warn("Failed to read save:", error);
-    updateLoadStatus("Save data corrupted.");
-    return;
-  }
+function loadGame(entry) {
+  const payload = entry?.payload;
   if (!payload?.state) {
     updateLoadStatus("Save data missing.");
     return;
@@ -5361,10 +5497,21 @@ function loadGame() {
   }
   if (applySerializedState(payload.state)) {
     renderMap();
-    updateLoadStatus(`Loaded ${new Date(payload.savedAt).toLocaleTimeString()}.`);
+    updateLoadStatus(`Loaded ${entry?.name ?? "save"} at ${new Date(payload.savedAt).toLocaleTimeString()}.`);
   } else {
     updateLoadStatus("Load failed.");
   }
+}
+
+function loadGameById(saveId) {
+  if (!saveId) return;
+  const saves = getSaveList();
+  const entry = saves.find((item) => item.id === saveId);
+  if (!entry) {
+    updateLoadStatus("Save not found.");
+    return;
+  }
+  loadGame(entry);
 }
 
 function syncSystemMenuFromAudio() {
@@ -5389,24 +5536,24 @@ function syncSystemMenuFromAudio() {
 }
 
 function refreshSaveStatus() {
-  const raw = window.localStorage.getItem(SAVE_STORAGE_KEY);
-  if (!raw) {
+  const saves = getSortedSaveList();
+  if (saves.length === 0) {
     updateSaveStatus("No save yet.");
     updateLoadStatus("No save loaded.");
+    renderSaveList();
+    setSaveNameInputDefault();
     return;
   }
-  try {
-    const payload = JSON.parse(raw);
-    if (payload?.savedAt) {
-      updateSaveStatus(`Saved ${new Date(payload.savedAt).toLocaleTimeString()}.`);
-      updateLoadStatus("Save ready to load.");
-      return;
-    }
-  } catch (error) {
-    console.warn("Save status check failed:", error);
+  const latest = saves[0];
+  if (latest?.savedAt) {
+    updateSaveStatus(`Saved ${latest.name ?? "save"} at ${new Date(latest.savedAt).toLocaleTimeString()}.`);
+    updateLoadStatus("Save ready to load.");
+  } else {
+    updateSaveStatus("Save data unreadable.");
+    updateLoadStatus("Save data corrupted.");
   }
-  updateSaveStatus("Save data unreadable.");
-  updateLoadStatus("Save data corrupted.");
+  renderSaveList();
+  setSaveNameInputDefault();
 }
 
 function openMap() {
