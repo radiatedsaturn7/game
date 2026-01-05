@@ -1501,11 +1501,16 @@ const ROBOT_SFX_VOLUMES = {
   captureImpact: 0.65,
 };
 
-function playSfx(audioEl, label, { volume = 1, cooldownTicks = 0 } = {}) {
+function playSfx(
+  audioEl,
+  label,
+  { volume = 1, cooldownTicks = 0, skipIfPlaying = false } = {},
+) {
   if (!audioEl) return;
   if (!audioUnlockedOnce || !hasStartedGame) return;
   const cooldowns = state.robotSfxCooldowns;
   if (cooldowns && cooldowns.get(label) > 0) return;
+  if (skipIfPlaying && !audioEl.paused && !audioEl.ended) return;
   audioEl.currentTime = 0;
   audioEl.muted = false;
   const busVolume = audioBuses.sfx ?? 1;
@@ -4377,8 +4382,8 @@ function announceWeather() {
 
 const AMBIENT_FADE_IN_MS = 1200;
 const AMBIENT_FADE_OUT_MS = 1200;
-const STORM_LIGHTNING_MIN_TICKS = 4;
-const STORM_LIGHTNING_MAX_TICKS = 9;
+const STORM_LIGHTNING_MIN_TICKS = 12;
+const STORM_LIGHTNING_MAX_TICKS = 22;
 
 function getAmbientTrackForWeather(weatherType) {
   if (weatherType === "Rain") {
@@ -4428,7 +4433,10 @@ function getStormLightningDelay() {
 
 function triggerStormLightning() {
   if (!dom.lightningAudio) return;
-  playSfx(dom.lightningAudio, "lightning-crash", { volume: 0.8 });
+  playSfx(dom.lightningAudio, "lightning-crash", {
+    volume: 0.8,
+    skipIfPlaying: true,
+  });
 }
 
 function tickStormLightning() {
