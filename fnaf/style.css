@@ -1599,7 +1599,8 @@ body.night-11 .map-node text {
   margin-top: 12px;
 }
 
-.night-debug {
+.night-debug,
+.debug-weather {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1628,7 +1629,8 @@ body.night-11 .map-node text {
   width: 100%;
 }
 
-.night-debug select {
+.night-debug select,
+.debug-weather select {
   background: rgba(10, 16, 28, 0.8);
   color: #e3ebff;
   border: 1px solid rgba(140, 169, 255, 0.35);
@@ -1692,6 +1694,12 @@ body.night-11 .map-node text {
   color: #9dd6ff;
 }
 
+#debugPanel .debug-content {
+  max-height: min(70vh, 640px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 #debugPanel.debug-docked {
   display: flex;
   position: fixed;
@@ -1711,7 +1719,7 @@ body.night-11 .map-node text {
 }
 
 #debugPanel.debug-docked .menu-content {
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 #debugPanel.debug-docked .debug-log-output {
