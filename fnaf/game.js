@@ -910,6 +910,7 @@ const state = {
   surgeMapFlashRoom: null,
   surgeMapFlashActive: false,
   surgeAlertShown: false,
+  lightningCooldown: null,
   vista: 0,
   sunlightMemoryShown: false,
   hiddenTurns: 0,
@@ -986,6 +987,7 @@ const dom = {
   sneakAudio: document.getElementById("sneakAudio"),
   runningAudio: document.getElementById("runningAudio"),
   typingAudio: document.getElementById("typingAudio"),
+  lightningAudio: document.getElementById("lightningAudio"),
   robotDistantMoveAudio: document.getElementById("robotDistantMoveAudio"),
   robotNearMoveAudio: document.getElementById("robotNearMoveAudio"),
   robotEnterAudio: document.getElementById("robotEnterAudio"),
@@ -1112,6 +1114,7 @@ const AUDIO_SOURCE_MAP = [
   { element: dom.sneakAudio, filename: "sneak.mp3" },
   { element: dom.runningAudio, filename: "running.mp3" },
   { element: dom.typingAudio, filename: "Typing.mp3" },
+  { element: dom.lightningAudio, filename: "lightning_loud.mp3" },
 ];
 const SAVE_LIST_KEY = "robtergeist_saves_v2";
 const SAVE_COUNTER_KEY = "robtergeist_save_counter_v1";
@@ -4374,10 +4377,15 @@ function announceWeather() {
 
 const AMBIENT_FADE_IN_MS = 1200;
 const AMBIENT_FADE_OUT_MS = 1200;
+const STORM_LIGHTNING_MIN_TICKS = 4;
+const STORM_LIGHTNING_MAX_TICKS = 9;
 
 function getAmbientTrackForWeather(weatherType) {
   if (weatherType === "Rain") {
     return { name: "rain", volume: 0.6 };
+  }
+  if (weatherType === "Storm") {
+    return { name: "rain", volume: 0.7 };
   }
   if (weatherType === "Fog") {
     return { name: "fog", volume: 0.5 };
@@ -4411,6 +4419,31 @@ function updateWeatherAmbience({ forceRestart = false } = {}) {
   fadeTrackTo("rain", targetName === "rain" ? targetVolume : 0, targetName === "rain" ? fadeIn : fadeOut);
   fadeTrackTo("fog", targetName === "fog" ? targetVolume : 0, targetName === "fog" ? fadeIn : fadeOut);
   fadeTrackTo("sunny", targetName === "sunny" ? targetVolume : 0, targetName === "sunny" ? fadeIn : fadeOut);
+}
+
+function getStormLightningDelay() {
+  const spread = STORM_LIGHTNING_MAX_TICKS - STORM_LIGHTNING_MIN_TICKS;
+  return STORM_LIGHTNING_MIN_TICKS + Math.floor(Math.random() * (spread + 1));
+}
+
+function triggerStormLightning() {
+  if (!dom.lightningAudio) return;
+  playSfx(dom.lightningAudio, "lightning-crash", { volume: 0.8 });
+}
+
+function tickStormLightning() {
+  if (state.weather?.type !== "Storm") {
+    state.lightningCooldown = null;
+    return;
+  }
+  if (state.lightningCooldown === null) {
+    state.lightningCooldown = getStormLightningDelay();
+    return;
+  }
+  state.lightningCooldown -= 1;
+  if (state.lightningCooldown > 0) return;
+  triggerStormLightning();
+  state.lightningCooldown = getStormLightningDelay();
 }
 
 function fadeTypingAudioVolume(audio, fromVolume, toVolume, duration, token, onComplete) {
@@ -10232,6 +10265,7 @@ function startGameLoop() {
     tickAlarmedRooms();
     tickSunlitRooms();
     tickPowerSurge();
+    tickStormLightning();
     tickPersistentSignals();
     decaySignals();
     tickDirector();
