@@ -817,6 +817,7 @@ const state = {
   robotCheckedCooldown: new Map(),
   robotPresenceHeat: new Map(),
   robotAlarmVisits: new Map(),
+  robotSfxCooldowns: new Map(),
   robotAlarmStreak: 0,
   robotAlarmLoopEdge: null,
   robotAlarmLoopTurns: 0,
@@ -827,6 +828,7 @@ const state = {
   robotPredictionCooldown: 0,
   robotMood: null,
   robotMoodTicks: 0,
+  robotLockOnPlayed: false,
   currentNight: 1,
   completedNight: null,
   nightProfile: null,
@@ -984,6 +986,13 @@ const dom = {
   sneakAudio: document.getElementById("sneakAudio"),
   runningAudio: document.getElementById("runningAudio"),
   typingAudio: document.getElementById("typingAudio"),
+  robotDistantMoveAudio: document.getElementById("robotDistantMoveAudio"),
+  robotNearMoveAudio: document.getElementById("robotNearMoveAudio"),
+  robotEnterAudio: document.getElementById("robotEnterAudio"),
+  robotInspectAudio: document.getElementById("robotInspectAudio"),
+  robotLockOnAudio: document.getElementById("robotLockOnAudio"),
+  robotRerouteAudio: document.getElementById("robotRerouteAudio"),
+  robotCaptureAudio: document.getElementById("robotCaptureAudio"),
   titleStartBtn: document.getElementById("titleStartBtn"),
   app: document.querySelector(".app"),
   dateLabel: document.getElementById("dateLabel"),
@@ -1115,6 +1124,7 @@ const STATE_MAP_KEYS = [
   "robotCheckedCooldown",
   "robotPresenceHeat",
   "robotAlarmVisits",
+  "robotSfxCooldowns",
   "signalDecayBoost",
   "rewireDampen",
   "persistentSignals",
@@ -1475,6 +1485,32 @@ function attemptPlayAudio(audio, label) {
   const playAttempt = audio.play();
   if (playAttempt && typeof playAttempt.catch === "function") {
     playAttempt.catch((err) => logAudioPlayFailure(label, audio, err));
+  }
+}
+
+const ROBOT_SFX_VOLUMES = {
+  distantMove: 0.25,
+  nearMove: 0.35,
+  enterThunk: 0.55,
+  inspectClicks: 0.3,
+  lockOnTone: 0.4,
+  rerouteScrape: 0.45,
+  captureImpact: 0.65,
+};
+
+function playSfx(audioEl, label, { volume = 1, cooldownTicks = 0 } = {}) {
+  if (!audioEl) return;
+  if (!audioUnlockedOnce || !hasStartedGame) return;
+  const cooldowns = state.robotSfxCooldowns;
+  if (cooldowns && cooldowns.get(label) > 0) return;
+  audioEl.currentTime = 0;
+  audioEl.muted = false;
+  const busVolume = audioBuses.sfx ?? 1;
+  const masterVolume = audioBuses.master ?? 1;
+  audioEl.volume = clamp(volume * busVolume * masterVolume, 0, 1);
+  attemptPlayAudio(audioEl, label);
+  if (cooldownTicks > 0 && cooldowns) {
+    cooldowns.set(label, cooldownTicks);
   }
 }
 
@@ -3331,6 +3367,12 @@ function setRobotMode(mode) {
   if (state.robotMode === mode) return;
   state.robotMode = mode;
   logDebug("robot-mode", { mode, confidence: state.robotTargetConfidence });
+  if (mode === "investigate" || mode === "search" || mode === "sweep") {
+    playSfx(dom.robotInspectAudio, "robot-inspect", {
+      volume: ROBOT_SFX_VOLUMES.inspectClicks,
+      cooldownTicks: 4,
+    });
+  }
   if (mode === "search") {
     pushStatus("Servos whirr as the robot sweeps the area.", 3);
   } else if (mode === "investigate") {
@@ -5011,6 +5053,18 @@ function tickStatus() {
       state.thoughtMessage = "";
     }
   }
+}
+
+function tickRobotSfxCooldowns() {
+  if (state.robotSfxCooldowns.size === 0) return;
+  state.robotSfxCooldowns.forEach((value, key) => {
+    const next = value - 1;
+    if (next <= 0) {
+      state.robotSfxCooldowns.delete(key);
+    } else {
+      state.robotSfxCooldowns.set(key, next);
+    }
+  });
 }
 
 function tickRobotMemory() {
@@ -7973,6 +8027,12 @@ function advanceRobot() {
     state.robotPath = getShortestPath(state.robotRoom, target).slice(1);
     if (commitAllowed) {
       startRobotTravelStep();
+      if (!state.robotLockOnPlayed && state.robotTargetConfidence >= 0.7) {
+        playSfx(dom.robotLockOnAudio, "robot-lock-on", {
+          volume: ROBOT_SFX_VOLUMES.lockOnTone,
+        });
+        state.robotLockOnPlayed = true;
+      }
     } else {
       state.robotLinger = Math.floor(Math.random() * 3) + 2;
     }
@@ -8072,6 +8132,12 @@ function triggerDeath() {
   state.isAlive = false;
   clearActionLock();
   closeMap();
+  playSfx(dom.robotCaptureAudio, "robot-capture", {
+    volume: ROBOT_SFX_VOLUMES.captureImpact,
+  });
+  fadeTrackTo("rain", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("fog", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("sunny", 0, AMBIENT_FADE_OUT_MS);
   fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
   fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
   dom.deathScreen.classList.add("active");
@@ -8208,6 +8274,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.robotCheckedCooldown.clear();
   state.robotPresenceHeat.clear();
   state.robotAlarmVisits.clear();
+  state.robotSfxCooldowns.clear();
   state.robotAlarmStreak = 0;
   state.robotAlarmLoopEdge = null;
   state.robotAlarmLoopTurns = 0;
@@ -8218,6 +8285,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.robotPredictionCooldown = 0;
   state.robotMood = null;
   state.robotMoodTicks = 0;
+  state.robotLockOnPlayed = false;
   state.robotLastRoom = null;
   resetGoofingState();
   state.nightProfile = getNightProfile();
@@ -8522,6 +8590,7 @@ function maybeExpireLastKnown() {
   state.lastKnownPlayerRoom = null;
   state.lastKnownTick = -999;
   state.robotTargetConfidence = Math.max(0, state.robotTargetConfidence - 0.2);
+  state.robotLockOnPlayed = false;
   adjustSanity(0.05, "breather");
   if (state.turn - state.lastTrailBreakTick > 4) {
     pushStatus("The pressure fades.", 3);
@@ -10071,11 +10140,15 @@ function startGameLoop() {
     state.robotMovedThisTick = false;
     if (state.trailTurns > 0) {
       state.trailTurns -= 1;
+      if (state.trailTurns === 0) {
+        state.robotLockOnPlayed = false;
+      }
     }
     if (state.alertTicks > 0) {
       state.alertTicks -= 1;
     }
     tickStatus();
+    tickRobotSfxCooldowns();
     tickStoryQueue();
     if (state.sanityGlitchCooldown > 0) {
       state.sanityGlitchCooldown -= 1;
@@ -10482,6 +10555,7 @@ function tickPlayerTravel() {
       if (hadTrail && state.trailTurns === 0 && state.turn - state.lastTrailBreakTick > 4) {
         pushStatus("The echoes die out.", 3);
         state.lastTrailBreakTick = state.turn;
+        state.robotLockOnPlayed = false;
       }
       state.sneakStepsWithoutSignal = 0;
     }
@@ -10544,6 +10618,10 @@ function tickRobotTravel() {
   if (elapsed < state.robotTravelStepDuration) return;
   const nextRoom = state.robotPath[0];
   if (nextRoom !== undefined && isEdgeJammed(state.robotRoom, nextRoom)) {
+    playSfx(dom.robotRerouteAudio, "robot-reroute", {
+      volume: ROBOT_SFX_VOLUMES.rerouteScrape,
+      cooldownTicks: 3,
+    });
     const key = edgeKey(state.robotRoom, nextRoom);
     const isPerma = state.permaJammedEdges.has(key);
     if (!isPerma) {
@@ -10574,6 +10652,30 @@ function tickRobotTravel() {
   state.robotRoom = nextRoom;
   state.robotLastRoom = previousRoom;
   state.robotMovedThisTick = true;
+  if (state.robotDormant === 0) {
+    const distance = getRobotDistance();
+    if (distance >= 2) {
+      if (Math.random() < 0.15) {
+        playSfx(dom.robotDistantMoveAudio, "robot-distant-move", {
+          volume: ROBOT_SFX_VOLUMES.distantMove,
+          cooldownTicks: 4,
+        });
+      }
+    } else if (distance === 1) {
+      if (Math.random() < 0.22) {
+        playSfx(dom.robotNearMoveAudio, "robot-near-move", {
+          volume: ROBOT_SFX_VOLUMES.nearMove,
+          cooldownTicks: 3,
+        });
+      }
+    }
+  }
+  if (state.robotRoom === state.playerRoom && previousRoom !== state.playerRoom) {
+    playSfx(dom.robotEnterAudio, "robot-enter-room", {
+      volume: ROBOT_SFX_VOLUMES.enterThunk,
+      cooldownTicks: 2,
+    });
+  }
   handleRobotFocusArrival();
   markRoomChecked(state.robotRoom);
   recordRobotAlarmVisit(state.robotRoom);
