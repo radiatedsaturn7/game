@@ -230,7 +230,17 @@ body::before {
   content: "";
   position: fixed;
   inset: 8px;
-  border: 4px solid #000;
+  border: 4px solid rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  z-index: 1;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 16px;
+  border: 3px solid #000;
+  border-radius: 26px;
   pointer-events: none;
   z-index: 1;
 }
@@ -703,23 +713,34 @@ main {
   flex-direction: column;
   gap: var(--view-gap);
   min-height: 100svh;
-  padding-top: calc(var(--hud-h) + 12px + env(safe-area-inset-top));
+  padding-top: calc(16px + env(safe-area-inset-top));
   padding-bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));
   flex: 1 1 auto;
 }
 
 .room-hud {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: var(--hud-h);
+  position: relative;
+  height: auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 24px;
-  background: rgba(16, 14, 10, 0.92);
-  border-bottom: 1px solid var(--panel-border);
+  padding: 10px 24px;
+  border-radius: 8px;
+  color: var(--text-primary);
+  background:
+    linear-gradient(145deg, var(--ui-panel-2), var(--ui-panel)),
+    repeating-linear-gradient(
+      120deg,
+      rgba(255, 255, 255, 0.02) 0,
+      rgba(255, 255, 255, 0.02) 1px,
+      transparent 1px,
+      transparent 8px
+    );
+  border: 1px solid var(--panel-border);
+  box-shadow:
+    inset 0 3px 8px rgba(0, 0, 0, 0.75),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.6),
+    0 8px 18px rgba(0, 0, 0, 0.55);
   z-index: 45;
 }
 
@@ -756,6 +777,8 @@ main {
   border: 1px solid var(--panel-border);
   box-shadow:
     0 0 28px rgba(0, 0, 0, 0.5),
+    0 10px 22px rgba(0, 0, 0, 0.45),
+    inset 0 4px 10px rgba(0, 0, 0, 0.75),
     inset 0 18px 28px rgba(0, 0, 0, 0.7),
     inset 0 -12px 18px rgba(180, 140, 70, 0.08);
   filter: saturate(var(--surge-sat)) contrast(var(--surge-contrast)) blur(var(--surge-blur));
@@ -859,7 +882,7 @@ main {
   border-radius: 0;
   border: none;
   background: transparent;
-  color: #e0e8ff;
+  color: var(--text-primary);
   font-size: 0.8rem;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -1112,7 +1135,7 @@ main {
 .overlay-footer {
   position: fixed;
   left: 50%;
-  bottom: env(safe-area-inset-bottom);
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
   transform: translateX(-50%);
   display: flex;
   gap: 12px;
@@ -1125,7 +1148,7 @@ main {
     inset 0 1px 0 var(--panel-highlight),
     inset 0 -1px 0 var(--ui-border-lo),
     0 6px 18px rgba(0, 0, 0, 0.45);
-  z-index: 40;
+  z-index: 70;
 }
 
 .overlay-footer button {
