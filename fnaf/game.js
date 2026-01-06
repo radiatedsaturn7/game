@@ -2962,6 +2962,13 @@ function updateAlarmFx(isActive) {
 
 function updateUI() {
   document.body.classList.toggle("night-11", isNight11());
+  const weatherType = state.weather?.type ?? "Clear";
+  const weatherKey = weatherType === "Rain" || weatherType === "Storm" ? "rain" : "clear";
+  document.body.dataset.weather = weatherKey;
+  document.body.dataset.move = state.playerTravelMode === "run" ? "run" : "sneak";
+  const threatValue = state.threat ?? 1;
+  const threatKey = threatValue >= 4 ? "high" : threatValue >= 2.75 ? "med" : "low";
+  document.body.dataset.threat = threatKey;
   const room = rooms[state.playerRoom];
   const alarmActive = isAlarmTriggered(room.id);
   const sunlitRoom = state.sunlitRooms.has(room.id);
