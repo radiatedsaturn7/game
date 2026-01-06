@@ -1053,6 +1053,8 @@ const dom = {
   runningAudio: document.getElementById("runningAudio"),
   typingAudio: document.getElementById("typingAudio"),
   lightningAudio: document.getElementById("lightningAudio"),
+  menuPressAudio: document.getElementById("menuPressAudio"),
+  caitRadioAudio: document.getElementById("caitRadioAudio"),
   robotDistantMoveAudio: document.getElementById("robotDistantMoveAudio"),
   robotNearMoveAudio: document.getElementById("robotNearMoveAudio"),
   robotEnterAudio: document.getElementById("robotEnterAudio"),
@@ -1645,6 +1647,25 @@ function playSfx(
   if (cooldownTicks > 0 && cooldowns) {
     cooldowns.set(label, cooldownTicks);
   }
+}
+
+function playUiSfx(
+  audioEl,
+  label,
+  { volume = 1, allowBeforeStart = false, skipIfPlaying = false } = {},
+) {
+  if (!audioEl) return;
+  if (!audioUnlockedOnce) return;
+  if (audioMutedByUser) return;
+  if (!allowBeforeStart && !hasStartedGame) return;
+  if (skipIfPlaying && !audioEl.paused && !audioEl.ended) return;
+  audioEl.currentTime = 0;
+  audioEl.muted = false;
+  const maxVolume = getSoundSettingVolumeForElement(audioEl);
+  const busVolume = audioBuses.ui ?? 1;
+  const masterVolume = audioBuses.master ?? 1;
+  audioEl.volume = clamp(volume * maxVolume * busVolume * masterVolume, 0, 1);
+  attemptPlayAudio(audioEl, label);
 }
 
 function applySoundSettingsToTracks() {
@@ -2817,6 +2838,11 @@ function attachEvents() {
     openDebug();
     closeSystemMenu();
   });
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button || button.disabled) return;
+    playUiSfx(dom.menuPressAudio, "menu-press", { volume: 0.6, allowBeforeStart: true });
+  });
   const handleVolumeInput = async (event, busName) => {
     if (!event) return;
     if (!audioUnlockedOnce) {
@@ -3461,6 +3487,10 @@ function updatePanels() {
 function stripCaitPrefix(message) {
   if (typeof message !== "string") return message;
   return message.replace(/^Cait:\s*/i, "");
+}
+
+function isCaitMessage(message) {
+  return typeof message === "string" && /^Cait:\s*/i.test(message);
 }
 
 function getCaitSanityTag() {
@@ -5963,6 +5993,9 @@ function showObjectiveModal(text) {
     return;
   }
   clearThought();
+  if (isCaitMessage(text)) {
+    playUiSfx(dom.caitRadioAudio, "cait-radio", { volume: 1 });
+  }
   dom.objectiveModalText.textContent = formatCaitModalText(text);
   openPanel(dom.objectiveModal);
   state.objectiveBlocked = true;
@@ -6012,6 +6045,7 @@ function acknowledgeRobotAlert() {
 function showCaitQuietModal() {
   if (!dom.caitQuietModal) return;
   clearThought();
+  playUiSfx(dom.caitRadioAudio, "cait-radio", { volume: 1 });
   dom.caitQuietText.textContent = "Ready to go?";
   openPanel(dom.caitQuietModal);
   state.objectiveBlocked = true;
