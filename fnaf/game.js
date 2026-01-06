@@ -2373,12 +2373,18 @@ function initTitleScreen() {
     dom.app.classList.add("is-hidden");
   }
   if (dom.titleScreen) {
+    const shouldRevealTitle =
+      !dom.audioGate ||
+      dom.audioGate.getAttribute("aria-hidden") === "true" ||
+      audioUnlockedOnce;
     dom.titleScreen.classList.remove("title-video-visible");
     dom.titleScreen.classList.remove("title-fade-out");
     dom.titleScreen.classList.remove("title-visible");
-    requestAnimationFrame(() => {
-      dom.titleScreen?.classList.add("title-visible");
-    });
+    if (shouldRevealTitle) {
+      requestAnimationFrame(() => {
+        dom.titleScreen?.classList.add("title-visible");
+      });
+    }
   }
   if (dom.audioGate) {
     dom.audioGate.setAttribute("aria-hidden", "false");
@@ -2455,6 +2461,11 @@ async function handleAudioGateGesture(event) {
   }
   if (dom.audioGateBtn) {
     dom.audioGateBtn.removeEventListener("click", handleAudioGateGesture, true);
+  }
+  if (dom.titleScreen && !dom.titleScreen.classList.contains("title-visible")) {
+    requestAnimationFrame(() => {
+      dom.titleScreen?.classList.add("title-visible");
+    });
   }
   if (dom.titleStartBtn) {
     dom.titleStartBtn.disabled = false;
