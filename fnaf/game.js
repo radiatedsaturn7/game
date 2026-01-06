@@ -1031,6 +1031,7 @@ let sneakAudioBurstToken = 0;
 let typingTransitionToken = 0;
 let typingAudioActive = false;
 let typingAudioTimeoutId = null;
+let screenQueryApplied = false;
 const SUNLIGHT_MEMORY_TEXT = "You remember sunlight on a chipped mug.\nIt mattered then.";
 const SUNLIGHT_MEMORY_CHANCE = 0.28;
 const SUNLIGHT_MEMORY_TICKS = 3;
@@ -2357,6 +2358,7 @@ function init() {
   attachEvents();
   setupDebugPanel();
   startGameLoop();
+  applyScreenQuery();
   if (!isNight11()) {
     showObjectiveModal(getInitialObjectiveModalText());
   }
@@ -2368,12 +2370,58 @@ function initHorrorFX() {
   updateHorrorFX();
 }
 
+function getScreenQuery() {
+  const params = new URLSearchParams(window.location.search);
+  const rawScreen = params.get("screen");
+  if (!rawScreen) return null;
+  const normalized = rawScreen.trim().toLowerCase();
+  if (!normalized) return null;
+  const [target, subTarget] = normalized.split(/[:/._-]/);
+  return { target, subTarget };
+}
+
+function startGameFromQuery() {
+  if (hasStartedGame) return;
+  hasStartedGame = true;
+  canStartAmbience = true;
+  state.startRevealPending = false;
+  state.introSequenceActive = false;
+  state.introStep = null;
+  state.introEscapeVisited = false;
+  setCurrentNight(1);
+  initHorrorFX();
+  init();
+  if (dom.titleAudio) {
+    dom.titleAudio.pause();
+    dom.titleAudio.currentTime = 0;
+  }
+  dom.titleVideos.forEach((video) => {
+    video.pause();
+    video.currentTime = 0;
+  });
+  if (dom.titleScreen) {
+    dom.titleScreen.setAttribute("aria-hidden", "true");
+  }
+  document.body.classList.remove("title-active");
+  if (dom.app) {
+    dom.app.classList.remove("is-hidden");
+  }
+}
+
 function initTitleScreen() {
+  const screenQuery = getScreenQuery();
   initSchematicSprite();
   mirrorConsole();
   setNormalizedAudioSources();
   loadSoundSettings();
   attachAudioRecoveryEvents();
+  if (screenQuery) {
+    if (dom.audioGate) {
+      dom.audioGate.setAttribute("aria-hidden", "true");
+    }
+    startGameFromQuery();
+    return;
+  }
   if (!dom.titleScreen || !dom.titleStartBtn) {
     canStartAmbience = true;
     initHorrorFX();
@@ -5585,6 +5633,47 @@ function closePanels() {
       }
       closePanel(panel);
     });
+}
+
+function applyScreenQuery() {
+  if (screenQueryApplied) return;
+  const screenQuery = getScreenQuery();
+  if (!screenQuery) return;
+  screenQueryApplied = true;
+  const { target, subTarget } = screenQuery;
+  switch (target) {
+    case "map":
+      openMap();
+      break;
+    case "bag":
+      openMenu();
+      if (subTarget && subTarget in bagTabPanels) {
+        setBagTab(subTarget);
+      }
+      break;
+    case "menu":
+      openSystemMenu();
+      if (subTarget && subTarget in systemTabPanels) {
+        setSystemTab(subTarget);
+      }
+      break;
+    case "tasks":
+      openTasks();
+      break;
+    case "use":
+      openUse();
+      break;
+    case "live":
+      returnToRoom();
+      break;
+    case "debug":
+      if (DEBUG_UI) {
+        openDebug();
+      }
+      break;
+    default:
+      break;
+  }
 }
 
 function togglePanel(panel) {
