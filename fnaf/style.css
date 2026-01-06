@@ -3,8 +3,10 @@
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   background: #0b0a08;
   color: #e4ded1;
-  --hud-height: 52px;
-  --footer-height: 64px;
+  --hud-h: 56px;
+  --nav-h: 72px;
+  --hud-height: var(--hud-h);
+  --footer-height: var(--nav-h);
   --view-gap: 18px;
   --ui-bg: #0b0a08;
   --ui-panel: rgba(20, 18, 14, 0.92);
@@ -609,16 +611,8 @@ body.fx-critical .map-node text {
   animation: alarmPulse 2.4s ease-in-out infinite;
 }
 
-.app.alarm-active {
-  animation: alarmShake 2.4s ease-in-out infinite;
-}
-
 .app.surge-warning {
   animation: surgeWarningRamp var(--surge-warning-duration, 2.2s) ease-in forwards;
-}
-
-.app.surge-zap {
-  animation: surgeJitter 0.22s ease-in-out;
 }
 
 .app.surge-zap::after {
@@ -697,9 +691,9 @@ main {
   display: flex;
   flex-direction: column;
   gap: var(--view-gap);
-  min-height: 0;
-  padding-top: calc(var(--hud-height) + 12px + env(safe-area-inset-top));
-  padding-bottom: calc(var(--footer-height) + 16px + env(safe-area-inset-bottom));
+  min-height: 100svh;
+  padding-top: calc(var(--hud-h) + 12px + env(safe-area-inset-top));
+  padding-bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom));
   flex: 1 1 auto;
 }
 
@@ -708,7 +702,7 @@ main {
   top: 0;
   left: 0;
   right: 0;
-  height: var(--hud-height);
+  height: var(--hud-h);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -742,9 +736,9 @@ main {
   border-radius: 10px;
   width: 100%;
   max-width: 100%;
-  aspect-ratio: 16 / 9;
+  flex: 1 1 auto;
   height: auto;
-  max-height: calc(100svh - var(--hud-height) - var(--footer-height) - 48px);
+  max-height: calc(100svh - var(--hud-h) - var(--nav-h) - env(safe-area-inset-bottom));
   min-height: 0;
   overflow: hidden;
   background: rgba(16, 14, 10, 0.4);
@@ -758,6 +752,13 @@ main {
   --sunlight-border: rgba(196, 166, 96, 0.3);
 }
 
+.app.alarm-active .room-media {
+  animation: alarmShake 2.4s ease-in-out infinite;
+}
+
+.app.surge-zap .room-media {
+  animation: surgeJitter 0.22s ease-in-out;
+}
 .room-media.sunlit {
   border-color: var(--sunlight-border);
   box-shadow: 0 0 26px rgba(196, 156, 60, 0.35), 0 0 50px rgba(90, 70, 20, 0.35);
@@ -1104,9 +1105,9 @@ main {
   display: flex;
   gap: 12px;
   padding: 8px 12px;
-  min-height: var(--footer-height);
+  min-height: var(--nav-h);
   border-radius: 6px;
-  background: linear-gradient(180deg, rgba(30, 26, 20, 0.95), rgba(16, 14, 10, 0.95));
+  background: linear-gradient(180deg, rgba(24, 22, 18, 0.97), rgba(12, 10, 8, 0.97));
   border: 1px solid var(--panel-border);
   box-shadow:
     inset 0 1px 0 var(--panel-highlight),
@@ -1122,14 +1123,16 @@ main {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   background:
-    linear-gradient(180deg, rgba(42, 36, 26, 0.98), rgba(20, 16, 12, 0.98)),
+    linear-gradient(180deg, rgba(24, 22, 18, 0.98), rgba(10, 9, 7, 0.98)),
     repeating-linear-gradient(
       120deg,
-      rgba(255, 255, 255, 0.03) 0,
-      rgba(255, 255, 255, 0.03) 1px,
+      rgba(255, 255, 255, 0.025) 0,
+      rgba(255, 255, 255, 0.025) 1px,
       transparent 1px,
       transparent 6px
     );
+  border-color: rgba(60, 56, 48, 0.8);
+  color: rgba(222, 214, 198, 0.9);
 }
 
 .overlay-footer button.is-active,
@@ -1138,9 +1141,9 @@ body:has(#menuPanel.active) #menuBtn,
 body:has(#tasksPanel.active) #tasksBtn,
 body:has(#usePanel.active) #useBtn,
 body:not(:has(.menu-panel.active, .map-panel.active)) #liveBtn {
-  border-color: rgba(108, 214, 168, 0.8);
+  border-color: rgba(150, 60, 50, 0.9);
   background:
-    linear-gradient(135deg, rgba(96, 214, 168, 0.92), rgba(42, 146, 112, 0.92)),
+    linear-gradient(160deg, rgba(180, 74, 60, 0.95), rgba(92, 28, 24, 0.95)),
     repeating-linear-gradient(
       120deg,
       rgba(255, 255, 255, 0.05) 0,
@@ -1148,8 +1151,8 @@ body:not(:has(.menu-panel.active, .map-panel.active)) #liveBtn {
       transparent 1px,
       transparent 6px
     );
-  color: #07140d;
-  box-shadow: 0 0 14px rgba(96, 214, 168, 0.4), 0 0 0 1px rgba(96, 214, 168, 0.3);
+  color: #1b0b09;
+  box-shadow: 0 0 16px rgba(168, 60, 50, 0.45), 0 0 0 1px rgba(160, 70, 58, 0.4);
 }
 
 body:has(#mapPanel.active) #liveBtn,
@@ -1158,11 +1161,11 @@ body:has(#tasksPanel.active) #liveBtn,
 body:has(#usePanel.active) #liveBtn {
   border-color: var(--panel-border);
   background:
-    linear-gradient(180deg, rgba(42, 36, 26, 0.98), rgba(20, 16, 12, 0.98)),
+    linear-gradient(180deg, rgba(24, 22, 18, 0.98), rgba(10, 9, 7, 0.98)),
     repeating-linear-gradient(
       120deg,
-      rgba(255, 255, 255, 0.03) 0,
-      rgba(255, 255, 255, 0.03) 1px,
+      rgba(255, 255, 255, 0.025) 0,
+      rgba(255, 255, 255, 0.025) 1px,
       transparent 1px,
       transparent 6px
     );
@@ -1571,37 +1574,37 @@ body:has(#usePanel.active) #liveBtn {
 }
 
 .map-link {
-  stroke: rgba(132, 152, 204, 0.32);
+  stroke: rgba(140, 128, 108, 0.32);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-dasharray: 14 7;
 }
 
 .map-link.active {
-  stroke: rgba(255, 194, 86, 0.8);
+  stroke: rgba(214, 164, 86, 0.82);
   stroke-width: 3;
   stroke-dasharray: 10 5;
 }
 
 .map-link.robot-plan {
-  stroke: rgba(255, 88, 122, 0.85);
+  stroke: rgba(196, 78, 70, 0.85);
   stroke-width: 3;
   stroke-dasharray: 6 6;
 }
 
 .map-link.edge-jammed {
-  stroke: rgba(230, 236, 255, 0.85);
+  stroke: rgba(214, 202, 184, 0.7);
   stroke-width: 3;
   stroke-dasharray: 3 4;
 }
 
 .map-link.action-edge {
-  stroke: rgba(107, 255, 159, 0.65);
+  stroke: rgba(214, 164, 86, 0.65);
   stroke-width: 3;
 }
 
 .map-link.action-edge-selected {
-  stroke: rgba(255, 232, 140, 0.9);
+  stroke: rgba(234, 198, 120, 0.95);
   stroke-width: 3.4;
 }
 
@@ -1612,11 +1615,11 @@ body:has(#usePanel.active) #liveBtn {
 }
 
 .map-travel.player-travel {
-  stroke: rgba(120, 208, 255, 0.9);
+  stroke: rgba(214, 196, 168, 0.85);
 }
 
 .map-travel.robot-travel {
-  stroke: rgba(255, 140, 140, 0.9);
+  stroke: rgba(206, 92, 84, 0.9);
 }
 
 .map-node {
@@ -1632,19 +1635,19 @@ body:has(#usePanel.active) #liveBtn {
 }
 
 .map-node circle {
-  fill: rgba(24, 32, 49, 0.9);
-  stroke: rgba(140, 169, 255, 0.6);
+  fill: rgba(20, 18, 14, 0.9);
+  stroke: rgba(138, 126, 108, 0.75);
   stroke-width: 2;
 }
 
 .map-node text {
-  fill: rgba(214, 225, 247, 0.82);
+  fill: rgba(214, 206, 188, 0.88);
   font-size: 14px;
   text-anchor: middle;
   pointer-events: none;
   text-shadow:
-    0.6px 0 rgba(255, 255, 255, 0.2),
-    -0.6px 0 rgba(20, 25, 40, 0.35);
+    0.6px 0 rgba(255, 245, 230, 0.2),
+    -0.6px 0 rgba(30, 26, 20, 0.45);
 }
 
 .map-node .map-hazard {
@@ -1662,25 +1665,25 @@ body:has(#usePanel.active) #liveBtn {
 }
 
 .map-node.surge-flash circle {
-  stroke: rgba(255, 190, 90, 0.95);
+  stroke: rgba(230, 178, 94, 0.95);
   stroke-width: 2;
   stroke-dasharray: 4 2;
   animation: surgeMapFlash 0.5s ease-out;
-  filter: drop-shadow(0 0 6px rgba(255, 180, 90, 0.6));
+  filter: drop-shadow(0 0 6px rgba(228, 170, 92, 0.6));
 }
 
 .map-node.surge-flash text {
-  fill: #ffe4c4;
+  fill: #e6d8c4;
 }
 
 .map-jam {
-  fill: rgba(235, 240, 255, 0.8);
+  fill: rgba(224, 214, 196, 0.8);
   font-size: 12px;
   opacity: 0;
   pointer-events: none;
   text-shadow:
-    0.6px 0 rgba(255, 255, 255, 0.2),
-    -0.6px 0 rgba(20, 25, 40, 0.35);
+    0.6px 0 rgba(255, 245, 230, 0.2),
+    -0.6px 0 rgba(30, 26, 20, 0.45);
 }
 
 .map-jam.active {
@@ -1688,54 +1691,54 @@ body:has(#usePanel.active) #liveBtn {
 }
 
 .map-jam.perma {
-  fill: rgba(255, 190, 140, 0.95);
+  fill: rgba(214, 164, 120, 0.95);
 }
 
 .map-node .map-poi {
-  fill: rgba(230, 238, 255, 0.78);
+  fill: rgba(218, 208, 188, 0.78);
   font-size: 16px;
   letter-spacing: 0.08em;
   pointer-events: none;
   opacity: 0.85;
   text-shadow:
-    0.6px 0 rgba(255, 255, 255, 0.2),
-    -0.6px 0 rgba(20, 25, 40, 0.35);
+    0.6px 0 rgba(255, 245, 230, 0.2),
+    -0.6px 0 rgba(30, 26, 20, 0.45);
 }
 
 .map-node .map-poi.poi-item {
-  fill: rgba(146, 214, 255, 0.9);
+  fill: rgba(214, 198, 172, 0.9);
 }
 
 .map-node .map-poi.poi-schematic {
-  fill: rgba(255, 212, 140, 0.9);
+  fill: rgba(226, 184, 112, 0.92);
 }
 
 .map-node .map-poi.poi-objective {
-  fill: rgba(255, 168, 214, 0.95);
+  fill: rgba(206, 112, 96, 0.95);
 }
 
 .map-node .map-poi.poi-exit {
-  fill: rgba(132, 255, 180, 0.9);
+  fill: rgba(214, 186, 140, 0.9);
 }
 
 .map-node .map-poi.poi-exit-ready {
-  fill: rgba(80, 255, 150, 1);
+  fill: rgba(226, 198, 140, 1);
 }
 
 .map-node.robot-target circle {
-  stroke: rgba(255, 120, 160, 0.9);
+  stroke: rgba(196, 78, 70, 0.9);
   stroke-width: 2.8;
 }
 
 .map-node.robot-sweep circle {
-  stroke: rgba(255, 190, 130, 0.85);
+  stroke: rgba(226, 178, 120, 0.85);
   stroke-width: 2.4;
 }
 
 .map-node.scan-focus circle {
-  stroke: rgba(148, 236, 255, 0.9);
+  stroke: rgba(224, 200, 150, 0.9);
   stroke-width: 3;
-  filter: drop-shadow(0 0 6px rgba(120, 208, 255, 0.6));
+  filter: drop-shadow(0 0 6px rgba(224, 180, 120, 0.55));
 }
 
 .poi-blink {
@@ -1753,30 +1756,30 @@ body:has(#usePanel.active) #liveBtn {
 }
 
 .map-node.active circle {
-  fill: rgba(92, 115, 191, 0.9);
-  stroke: #b8c9ff;
+  fill: rgba(122, 96, 50, 0.9);
+  stroke: rgba(236, 198, 120, 0.9);
 }
 
 .map-node.alert circle {
-  fill: rgba(113, 34, 44, 0.9);
-  stroke: rgba(255, 128, 128, 0.9);
+  fill: rgba(84, 22, 20, 0.92);
+  stroke: rgba(206, 88, 78, 0.92);
 }
 
 .map-node.preview circle {
-  fill: rgba(255, 194, 86, 0.85);
-  stroke: rgba(255, 224, 156, 0.9);
+  fill: rgba(196, 140, 68, 0.85);
+  stroke: rgba(236, 198, 120, 0.9);
 }
 
 .map-node.action-target circle {
-  stroke: rgba(107, 255, 159, 0.85);
+  stroke: rgba(226, 178, 120, 0.9);
   stroke-width: 2.6;
 }
 
 .map-node.action-selected circle {
-  fill: rgba(255, 232, 140, 0.35);
-  stroke: rgba(255, 232, 140, 0.9);
+  fill: rgba(236, 198, 120, 0.35);
+  stroke: rgba(236, 198, 120, 0.9);
   stroke-width: 3;
-  filter: drop-shadow(0 0 6px rgba(255, 232, 140, 0.5));
+  filter: drop-shadow(0 0 6px rgba(236, 198, 120, 0.5));
 }
 
 .map-node.action-disabled {
@@ -1866,14 +1869,14 @@ body.night-11 .map-node text {
   align-items: flex-end;
   gap: 4px;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: rgba(200, 190, 174, 0.75);
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
 
 .floorplan-status strong {
   font-size: 1.1rem;
-  color: var(--text-primary);
+  color: rgba(226, 214, 196, 0.95);
 }
 
 .floorplan-status .date-label {
@@ -1882,6 +1885,7 @@ body.night-11 .map-node text {
 
 .floorplan-status .weather-symbol {
   font-size: 1.2rem;
+  color: rgba(214, 172, 112, 0.9);
 }
 
 .night-row {
