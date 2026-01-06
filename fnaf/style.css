@@ -3,6 +3,9 @@
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   background: #0b0a08;
   color: #e4ded1;
+  --hud-height: 52px;
+  --footer-height: 64px;
+  --view-gap: 18px;
   --ui-bg: #0b0a08;
   --ui-panel: rgba(20, 18, 14, 0.92);
   --ui-panel-2: rgba(30, 26, 20, 0.92);
@@ -208,7 +211,8 @@
 html,
 body {
   width: 100%;
-  overflow-x: hidden;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -569,12 +573,14 @@ body.fx-critical .map-node text {
 .app {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 24px 64px;
+  padding: 0 24px;
   display: flex;
   flex-direction: column;
   gap: 32px;
   position: relative;
   min-height: 100svh;
+  height: 100svh;
+  overflow: hidden;
   --surge-sat: 1;
   --surge-contrast: 1;
   --surge-blur: 0px;
@@ -690,9 +696,10 @@ main {
 .room-view {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--view-gap);
   min-height: 0;
-  padding-top: 64px;
+  padding-top: calc(var(--hud-height) + 12px + env(safe-area-inset-top));
+  padding-bottom: calc(var(--footer-height) + 16px + env(safe-area-inset-bottom));
   flex: 1 1 auto;
 }
 
@@ -701,6 +708,7 @@ main {
   top: 0;
   left: 0;
   right: 0;
+  height: var(--hud-height);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -736,7 +744,7 @@ main {
   max-width: 100%;
   aspect-ratio: 16 / 9;
   height: auto;
-  max-height: 60svh;
+  max-height: calc(100svh - var(--hud-height) - var(--footer-height) - 48px);
   min-height: 0;
   overflow: hidden;
   background: rgba(16, 14, 10, 0.4);
@@ -1096,6 +1104,7 @@ main {
   display: flex;
   gap: 12px;
   padding: 8px 12px;
+  min-height: var(--footer-height);
   border-radius: 6px;
   background: linear-gradient(180deg, rgba(30, 26, 20, 0.95), rgba(16, 14, 10, 0.95));
   border: 1px solid var(--panel-border);
@@ -1121,6 +1130,47 @@ main {
       transparent 1px,
       transparent 6px
     );
+}
+
+.overlay-footer button.is-active,
+body:has(#mapPanel.active) #mapBtn,
+body:has(#menuPanel.active) #menuBtn,
+body:has(#tasksPanel.active) #tasksBtn,
+body:has(#usePanel.active) #useBtn,
+body:not(:has(.menu-panel.active, .map-panel.active)) #liveBtn {
+  border-color: rgba(108, 214, 168, 0.8);
+  background:
+    linear-gradient(135deg, rgba(96, 214, 168, 0.92), rgba(42, 146, 112, 0.92)),
+    repeating-linear-gradient(
+      120deg,
+      rgba(255, 255, 255, 0.05) 0,
+      rgba(255, 255, 255, 0.05) 1px,
+      transparent 1px,
+      transparent 6px
+    );
+  color: #07140d;
+  box-shadow: 0 0 14px rgba(96, 214, 168, 0.4), 0 0 0 1px rgba(96, 214, 168, 0.3);
+}
+
+body:has(#mapPanel.active) #liveBtn,
+body:has(#menuPanel.active) #liveBtn,
+body:has(#tasksPanel.active) #liveBtn,
+body:has(#usePanel.active) #liveBtn {
+  border-color: var(--panel-border);
+  background:
+    linear-gradient(180deg, rgba(42, 36, 26, 0.98), rgba(20, 16, 12, 0.98)),
+    repeating-linear-gradient(
+      120deg,
+      rgba(255, 255, 255, 0.03) 0,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 6px
+    );
+  color: var(--text-primary);
+  box-shadow:
+    inset 0 1px 0 var(--ui-border-hi),
+    inset 0 -1px 0 var(--ui-border-lo),
+    0 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 .action-lock {
@@ -1419,9 +1469,9 @@ main {
 
 .map-shell {
   background:
-    linear-gradient(160deg, rgba(28, 24, 18, 0.85), rgba(14, 12, 9, 0.92)),
-    repeating-linear-gradient(0deg, rgba(210, 190, 140, 0.05) 0, rgba(210, 190, 140, 0.05) 1px, transparent 1px, transparent 10px),
-    repeating-linear-gradient(90deg, rgba(210, 190, 140, 0.04) 0, rgba(210, 190, 140, 0.04) 1px, transparent 1px, transparent 12px),
+    linear-gradient(160deg, rgba(22, 22, 18, 0.88), rgba(10, 12, 10, 0.95)),
+    repeating-linear-gradient(0deg, rgba(204, 186, 130, 0.04) 0, rgba(204, 186, 130, 0.04) 1px, transparent 1px, transparent 10px),
+    repeating-linear-gradient(90deg, rgba(204, 186, 130, 0.035) 0, rgba(204, 186, 130, 0.035) 1px, transparent 1px, transparent 12px),
     url("images/screen.png") center/cover no-repeat;
   border-radius: 6px;
   padding: 10px;
@@ -1444,7 +1494,7 @@ main {
 }
 
 #floorplanMap {
-  filter: saturate(0.85) contrast(0.98);
+  filter: sepia(0.22) saturate(0.7) contrast(1.05) brightness(0.92);
 }
 
 .map-shell::before,
@@ -2048,7 +2098,8 @@ body.night-11 .map-node text {
   position: fixed;
   inset: 0;
   background:
-    linear-gradient(rgba(8, 6, 4, 0.78), rgba(8, 6, 4, 0.78)),
+    linear-gradient(rgba(12, 10, 8, 0.82), rgba(6, 6, 6, 0.92)),
+    radial-gradient(circle at 20% 15%, rgba(120, 112, 84, 0.18), transparent 55%),
     url("images/background.png") center/cover no-repeat;
   display: flex;
   align-items: stretch;
@@ -2076,7 +2127,7 @@ body.night-11 .map-node text {
 
 .map-card {
   background:
-    linear-gradient(160deg, rgba(30, 26, 20, 0.92), rgba(14, 12, 9, 0.96)),
+    linear-gradient(160deg, rgba(26, 24, 18, 0.92), rgba(12, 12, 10, 0.96)),
     url("images/map.png") center/cover no-repeat;
   border: 1px solid var(--panel-border);
   border-radius: 4px;
