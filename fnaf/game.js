@@ -2700,6 +2700,27 @@ function startGameFromTitle() {
   canStartAmbience = true;
   primeLoopTracksInGesture();
   stopTitleSyncLoop();
+  const waitForTitleFadeOut = () =>
+    new Promise((resolve) => {
+      if (!dom.titleScreen) {
+        resolve();
+        return;
+      }
+      let resolved = false;
+      const finish = () => {
+        if (resolved) return;
+        resolved = true;
+        dom.titleScreen?.removeEventListener("transitionend", onFadeEnd);
+        resolve();
+      };
+      const onFadeEnd = (event) => {
+        if (event.propertyName === "opacity") {
+          finish();
+        }
+      };
+      dom.titleScreen.addEventListener("transitionend", onFadeEnd);
+      setTimeout(finish, TITLE_FADE_OUT_MS + 200);
+    });
   if (dom.titleScreen) {
     dom.titleScreen.classList.add("title-fade-out");
   }
@@ -2730,7 +2751,7 @@ function startGameFromTitle() {
     canStartAmbience = true;
     updateWeatherAmbience();
   };
-  fadeOutMusicBus(TITLE_FADE_OUT_MS).finally(finishStart);
+  Promise.allSettled([fadeOutMusicBus(TITLE_FADE_OUT_MS), waitForTitleFadeOut()]).then(finishStart);
 }
 
 function attachEvents() {
