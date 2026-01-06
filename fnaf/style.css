@@ -1481,6 +1481,11 @@ body.night-11 .map-link {
   stroke: rgba(120, 180, 120, 0.4);
 }
 
+body.night-11 .map-link.active {
+  stroke: rgba(200, 255, 180, 0.95);
+  stroke-width: 3.2;
+}
+
 body.night-11 .map-node circle {
   fill: rgba(36, 56, 36, 0.95);
   stroke: rgba(120, 200, 140, 0.65);

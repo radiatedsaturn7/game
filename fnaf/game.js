@@ -1024,6 +1024,8 @@ let runAudioTransitionToken = 0;
 let sneakAudioTransitionToken = 0;
 let runAudioStopTimeoutId = null;
 let sneakAudioStopTimeoutId = null;
+let runAudioBurstTimeoutId = null;
+let runAudioBurstToken = 0;
 let typingTransitionToken = 0;
 let typingAudioActive = false;
 let typingAudioTimeoutId = null;
@@ -4625,6 +4627,7 @@ function fadeTypingAudioVolume(audio, fromVolume, toVolume, duration, token, onC
 function startTypingAudio(durationMs) {
   if (!dom.typingAudio) return;
   if (!audioUnlockedOnce || !hasStartedGame) return;
+  if (audioMutedByUser) return;
   const audio = dom.typingAudio;
   const token = ++typingTransitionToken;
   if (typingAudioTimeoutId) {
@@ -4671,6 +4674,34 @@ function stopTypingAudio() {
     audio.currentTime = 0;
     typingAudioActive = false;
   });
+}
+
+function playRunBurst(durationMs = 350) {
+  if (!dom.runningAudio) return;
+  if (!audioUnlockedOnce || !hasStartedGame) return;
+  if (audioMutedByUser) return;
+  if (runAudioActive || (isPlayerTraveling() && state.playerTravelMode === "run")) return;
+  const audio = dom.runningAudio;
+  const token = ++runAudioBurstToken;
+  if (runAudioBurstTimeoutId) {
+    clearTimeout(runAudioBurstTimeoutId);
+    runAudioBurstTimeoutId = null;
+  }
+  audio.loop = false;
+  audio.muted = false;
+  const maxVolume = getSoundSettingVolumeForElement(audio);
+  const busVolume = audioBuses.movement ?? 1;
+  const masterVolume = audioBuses.master ?? 1;
+  audio.volume = clamp(RUN_AUDIO_VOLUME * maxVolume * busVolume * masterVolume, 0, 1);
+  audio.currentTime = 0;
+  attemptPlayAudio(audio, "run-burst");
+  runAudioBurstTimeoutId = setTimeout(() => {
+    if (token !== runAudioBurstToken) return;
+    audio.pause();
+    audio.currentTime = 0;
+    audio.loop = true;
+    runAudioBurstTimeoutId = null;
+  }, durationMs);
 }
 
 function startRunningAudio() {
@@ -10646,6 +10677,7 @@ function useBlowtorch(roomId) {
 function handleEscape() {
   if (!state.escapeReady) return;
   if (!rooms[state.playerRoom].isExit) return;
+  playRunBurst();
   buildEscape();
 }
 
