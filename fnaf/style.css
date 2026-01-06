@@ -1189,9 +1189,7 @@ main {
 }
 
 .map-shell {
-  background:
-    linear-gradient(rgba(9, 14, 26, 0.85), rgba(9, 14, 26, 0.85)),
-    url("images/screen.png") center/cover no-repeat;
+  background: url("images/map.png") center/cover no-repeat;
   border-radius: 14px;
   padding: 10px;
   border: 1px solid rgba(140, 169, 255, 0.2);
@@ -1801,7 +1799,7 @@ body.night-11 .map-node text {
 .map-card {
   background:
     linear-gradient(rgba(12, 20, 35, 0.88), rgba(12, 20, 35, 0.88)),
-    url("images/map.png") center/cover no-repeat;
+    url("images/screen.png") center/cover no-repeat;
   border: 1px solid rgba(140, 169, 255, 0.35);
   border-radius: 20px;
   padding: 24px;
