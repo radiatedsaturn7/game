@@ -5,6 +5,7 @@
   color: #e4ded1;
   --hud-h: 56px;
   --nav-h: 72px;
+  --camera-boost: 64px;
   --hud-height: var(--hud-h);
   --footer-height: var(--nav-h);
   --view-gap: 18px;
@@ -770,7 +771,7 @@ main {
   max-width: 100%;
   flex: 1 1 auto;
   height: auto;
-  max-height: calc(100svh - var(--hud-h) - var(--nav-h) - env(safe-area-inset-bottom));
+  max-height: calc(100svh - var(--hud-h) - var(--nav-h) - env(safe-area-inset-bottom) + var(--camera-boost));
   min-height: 0;
   overflow: hidden;
   background: rgba(16, 14, 10, 0.4);
@@ -878,7 +879,7 @@ main {
 
 .robot-status {
   margin: 0;
-  padding: 8px 56px;
+  padding: 12px 56px 6px 64px;
   border-radius: 0;
   border: none;
   background: transparent;
@@ -889,7 +890,7 @@ main {
   overflow: hidden;
   max-width: 100%;
   width: 100%;
-  text-align: center;
+  text-align: left;
 }
 
 .robot-status span {
@@ -2530,8 +2531,8 @@ body.night-11 .map-node text {
 }
 
 .tab-button.active {
-  background: linear-gradient(135deg, rgba(207, 166, 86, 0.92), rgba(138, 100, 42, 0.92));
-  color: #1a1208;
+  background: linear-gradient(160deg, rgba(180, 74, 60, 0.95), rgba(92, 28, 24, 0.95));
+  color: #1b0b09;
 }
 
 .bag-content {
@@ -2659,15 +2660,17 @@ button {
 button:hover {
   transform: translateY(-1px);
   background:
-    linear-gradient(180deg, rgba(56, 48, 36, 0.96), rgba(30, 24, 18, 0.98)),
+    linear-gradient(180deg, rgba(245, 243, 238, 0.98), rgba(224, 220, 212, 0.98)),
     repeating-linear-gradient(
       110deg,
-      rgba(255, 255, 255, 0.04) 0,
-      rgba(255, 255, 255, 0.04) 1px,
+      rgba(255, 255, 255, 0.35) 0,
+      rgba(255, 255, 255, 0.35) 1px,
       transparent 1px,
       transparent 7px
     );
-  border-color: rgba(156, 140, 112, 0.75);
+  border-color: rgba(244, 242, 238, 0.9);
+  color: #1b0b09;
+  text-shadow: none;
 }
 
 button:active {
@@ -2684,9 +2687,9 @@ button:disabled {
 
 button.primary {
   grid-column: span 2;
-  background: linear-gradient(135deg, rgba(207, 166, 86, 0.92), rgba(138, 100, 42, 0.92));
-  color: #1a1208;
-  border-color: rgba(184, 148, 72, 0.9);
+  background: linear-gradient(160deg, rgba(180, 74, 60, 0.95), rgba(92, 28, 24, 0.95));
+  color: #1b0b09;
+  border-color: rgba(150, 60, 50, 0.9);
 }
 
 button.objective-highlight {
@@ -2792,7 +2795,9 @@ button.objective-highlight {
 }
 
 .room-grid button.active {
-  border: 1px solid var(--ui-amber);
+  border: 1px solid rgba(150, 60, 50, 0.9);
+  background: linear-gradient(160deg, rgba(180, 74, 60, 0.95), rgba(92, 28, 24, 0.95));
+  color: #1b0b09;
 }
 
 .room-grid button.alert {
