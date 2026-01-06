@@ -1026,6 +1026,8 @@ let runAudioStopTimeoutId = null;
 let sneakAudioStopTimeoutId = null;
 let runAudioBurstTimeoutId = null;
 let runAudioBurstToken = 0;
+let sneakAudioBurstTimeoutId = null;
+let sneakAudioBurstToken = 0;
 let typingTransitionToken = 0;
 let typingAudioActive = false;
 let typingAudioTimeoutId = null;
@@ -1666,6 +1668,16 @@ function playUiSfx(
   const masterVolume = audioBuses.master ?? 1;
   audioEl.volume = clamp(volume * maxVolume * busVolume * masterVolume, 0, 1);
   attemptPlayAudio(audioEl, label);
+}
+
+function shouldSuppressMenuPress(button) {
+  if (!button) return false;
+  if (button === dom.sneakBtn || button === dom.runBtn) return true;
+  if (button.classList.contains("escape-button")) return true;
+  if (button.dataset?.suppressMenuPress === "true") return true;
+  if (isPlayerTraveling()) return true;
+  if (state.hasEscaped) return true;
+  return false;
 }
 
 function applySoundSettingsToTracks() {
@@ -2763,6 +2775,12 @@ function attachEvents() {
   dom.scannerToggleBtn.addEventListener("click", () => handleAction("scan-toggle"));
   dom.sneakBtn?.addEventListener("click", () => handleMapMove(false));
   dom.runBtn?.addEventListener("click", () => handleMapMove(true));
+  if (dom.sneakBtn) {
+    dom.sneakBtn.dataset.suppressMenuPress = "true";
+  }
+  if (dom.runBtn) {
+    dom.runBtn.dataset.suppressMenuPress = "true";
+  }
   dom.deployBtn?.addEventListener("click", handleDeployAction);
   dom.menuBtn.addEventListener("click", openMenu);
   dom.mapBtn.addEventListener("click", openMap);
@@ -2856,6 +2874,7 @@ function attachEvents() {
       const unlocked = await ensureAudioUnlockedFromGesture(event);
       if (!unlocked) return;
     }
+    if (shouldSuppressMenuPress(button)) return;
     playUiSfx(dom.menuPressAudio, "menu-press", { volume: 0.6, allowBeforeStart: true });
   });
   const handleVolumeInput = async (event, busName) => {
@@ -4679,6 +4698,10 @@ function startTypingAudio(durationMs) {
     clearTimeout(typingAudioTimeoutId);
     typingAudioTimeoutId = null;
   }
+  const maxVolume = getSoundSettingVolumeForElement(audio);
+  const busVolume = audioBuses.ui ?? 1;
+  const masterVolume = audioBuses.master ?? 1;
+  const targetVolume = clamp(TYPING_AUDIO_VOLUME * maxVolume * busVolume * masterVolume, 0, 1);
   if (audio.paused) {
     audio.loop = true;
     audio.muted = false;
@@ -4687,7 +4710,7 @@ function startTypingAudio(durationMs) {
     attemptPlayAudio(audio, "typing");
   }
   const startVolume = Number.isFinite(audio.volume) ? audio.volume : 0;
-  fadeTypingAudioVolume(audio, startVolume, TYPING_AUDIO_VOLUME, TYPING_AUDIO_FADE_IN_MS, token);
+  fadeTypingAudioVolume(audio, startVolume, targetVolume, TYPING_AUDIO_FADE_IN_MS, token);
   typingAudioActive = true;
   if (Number.isFinite(durationMs) && durationMs > 0) {
     typingAudioTimeoutId = setTimeout(() => {
@@ -4746,6 +4769,38 @@ function playRunBurst(durationMs = 350) {
     audio.currentTime = 0;
     audio.loop = true;
     runAudioBurstTimeoutId = null;
+  }, durationMs);
+}
+
+function playSneakBurst(durationMs = 300) {
+  if (!dom.sneakAudio) return;
+  if (!audioUnlockedOnce || !hasStartedGame) return;
+  if (audioMutedByUser) return;
+  if (sneakAudioActive || (isPlayerTraveling() && state.playerTravelMode === "sneak")) return;
+  const audio = dom.sneakAudio;
+  const token = ++sneakAudioBurstToken;
+  if (sneakAudioBurstTimeoutId) {
+    clearTimeout(sneakAudioBurstTimeoutId);
+    sneakAudioBurstTimeoutId = null;
+  }
+  audio.loop = false;
+  audio.muted = false;
+  const maxVolume = getSoundSettingVolumeForElement(audio);
+  const busVolume = audioBuses.movement ?? 1;
+  const masterVolume = audioBuses.master ?? 1;
+  audio.volume = clamp(SNEAK_AUDIO_VOLUME * maxVolume * busVolume * masterVolume, 0, 1);
+  audio.currentTime = 0;
+  attemptPlayAudio(audio, "sneak-burst");
+  sneakAudioBurstTimeoutId = setTimeout(() => {
+    if (token !== sneakAudioBurstToken) return;
+    if (sneakAudioActive || (isPlayerTraveling() && state.playerTravelMode === "sneak")) {
+      audio.loop = true;
+      return;
+    }
+    audio.pause();
+    audio.currentTime = 0;
+    audio.loop = true;
+    sneakAudioBurstTimeoutId = null;
   }, durationMs);
 }
 
@@ -6349,6 +6404,7 @@ function updateRoomActions() {
       disabled: false,
       highlight: true,
       className: "escape-button",
+      suppressMenuPress: true,
     });
   } else if (canEscape) {
     actions.push({
@@ -6357,6 +6413,7 @@ function updateRoomActions() {
       disabled: blocked,
       highlight: true,
       className: "escape-button",
+      suppressMenuPress: true,
     });
   }
 
@@ -6386,6 +6443,7 @@ function updateRoomActions() {
       label: "Unhide",
       onClick: () => startHideAction(null),
       disabled: blocked,
+      suppressMenuPress: true,
     });
   }
 
@@ -6550,6 +6608,7 @@ function updateRoomActions() {
         searching ? "hide-searching" : "",
       ].filter(Boolean),
       tags,
+      suppressMenuPress: true,
     });
   });
 
@@ -6611,6 +6670,9 @@ function updateRoomActions() {
         tagWrap.appendChild(tagNode);
       });
       button.appendChild(tagWrap);
+    }
+    if (action.suppressMenuPress) {
+      button.dataset.suppressMenuPress = "true";
     }
     button.disabled = action.disabled;
     if (action.highlight) {
@@ -7498,6 +7560,7 @@ function movePlayer(roomId, isRun, options = {}) {
       clearTimeout(pendingMoveTimeoutId);
       pendingMoveTimeoutId = null;
     }
+    playSneakBurst();
     runLockedAction({
       label: "Leaving hiding spot…",
       steps: 1,
@@ -7976,6 +8039,7 @@ function startHideAction(spot) {
   if (isActionLocked()) return;
   if (!spot) {
     if (!state.hidden) return;
+    playSneakBurst();
     runLockedAction({
       label: "Leaving hiding spot…",
       steps: 1,
@@ -7990,6 +8054,7 @@ function startHideAction(spot) {
   }
   const switching = state.hidden && state.hiddenSpot !== spot;
   const label = switching ? "Shifting hiding spot…" : "Hiding…";
+  playSneakBurst();
   runLockedAction({
     label,
     steps: 1,
