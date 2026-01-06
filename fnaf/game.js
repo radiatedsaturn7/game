@@ -2838,9 +2838,13 @@ function attachEvents() {
     openDebug();
     closeSystemMenu();
   });
-  document.addEventListener("click", (event) => {
+  document.addEventListener("click", async (event) => {
     const button = event.target.closest("button");
     if (!button || button.disabled) return;
+    if (!audioUnlockedOnce) {
+      const unlocked = await ensureAudioUnlockedFromGesture(event);
+      if (!unlocked) return;
+    }
     playUiSfx(dom.menuPressAudio, "menu-press", { volume: 0.6, allowBeforeStart: true });
   });
   const handleVolumeInput = async (event, busName) => {
@@ -6421,7 +6425,7 @@ function updateRoomActions() {
           : `Schematic Scan (Night ${getNextUnlockNightFromNow("allowCrafting") ?? "?"})`;
       actions.push({
         label: scanLabel,
-        onClick: () => startSchematicScan(room.id),
+      onClick: (event) => startSchematicScan(room.id, event),
         disabled: state.hidden || blocked || (!isDataMission && !canScanSchematic),
         risk: "Quiet",
         highlight: isDataMission || isObjectiveSchematic,
@@ -6438,7 +6442,7 @@ function updateRoomActions() {
       !state.foundSchematics.has(state.requiredEscapeSchematic);
     actions.push({
       label: "Inspect Escape Console",
-      onClick: () => startEscapeConsoleInspect(),
+      onClick: (event) => startEscapeConsoleInspect(event),
       disabled: state.hidden || blocked,
       highlight: !(requiredBlocked || objectiveBlocked),
       risk: "Exposed",
@@ -6477,7 +6481,7 @@ function updateRoomActions() {
     !state.manualOverridesDone.has(room.id)) {
     actions.push({
       label: "Align Override Node",
-      onClick: () => startAlignManualOverride(room.id),
+      onClick: (event) => startAlignManualOverride(room.id, event),
       disabled: state.hidden || blocked,
       highlight: true,
       risk: "Quiet",
@@ -7808,7 +7812,11 @@ function shouldPlayTypingSfxForDataFragment(roomId) {
   return !state.dataFragmentsFound.has(roomId);
 }
 
-function startSchematicScan(roomId) {
+async function startSchematicScan(roomId, event) {
+  if (!audioUnlockedOnce) {
+    const unlocked = await ensureAudioUnlockedFromGesture(event);
+    if (!unlocked) return;
+  }
   const actionRunner = shouldPlayTypingSfxForDataFragment(roomId)
     ? runLockedActionWithTypingSfx
     : runLockedAction;
@@ -7824,7 +7832,7 @@ function startSchematicScan(roomId) {
   });
 }
 
-function startEscapeConsoleInspect() {
+async function startEscapeConsoleInspect(event) {
   if (state.requiredPickup?.blocksEscapeConsole && !isRequiredPickupComplete()) {
     const pickupName = state.requiredPickup?.itemName ?? "tool";
     showObjectiveModal(`Cait: Not yet. Grab the ${pickupName}.`);
@@ -7838,6 +7846,10 @@ function startEscapeConsoleInspect() {
   ) {
     showObjectiveModal(`Cait: Grab the ${state.requiredEscapeSchematic} first.`);
     return;
+  }
+  if (!audioUnlockedOnce) {
+    const unlocked = await ensureAudioUnlockedFromGesture(event);
+    if (!unlocked) return;
   }
   runLockedActionWithTypingSfx({
     label: "Inspecting console…",
@@ -7862,7 +7874,11 @@ function startStabilizeSystem(target) {
   });
 }
 
-function startAlignManualOverride(roomId) {
+async function startAlignManualOverride(roomId, event) {
+  if (!audioUnlockedOnce) {
+    const unlocked = await ensureAudioUnlockedFromGesture(event);
+    if (!unlocked) return;
+  }
   runLockedActionWithTypingSfx({
     label: "Aligning override node…",
     steps: 1,
