@@ -3004,8 +3004,8 @@ function updateUI() {
   const roomBackground = getRoomBackgroundImage(room);
   if (roomBackground) {
     dom.roomMedia.style.backgroundImage = `url("${roomBackground}")`;
-    dom.roomMedia.style.backgroundSize = "cover";
-    dom.roomMedia.style.backgroundPosition = "center";
+    dom.roomMedia.style.backgroundSize = "112% 112%";
+    dom.roomMedia.style.backgroundPosition = "45% center";
     dom.roomMedia.style.backgroundRepeat = "no-repeat";
   } else {
     dom.roomMedia.style.backgroundImage = "";
