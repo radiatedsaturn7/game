@@ -199,13 +199,21 @@
   }
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  overflow-x: hidden;
 }
 
 body {
   margin: 0;
-  min-height: 100vh;
+  min-height: 100svh;
   background: url("images/background.png") center/cover no-repeat fixed;
   background-color: var(--ui-bg);
   color: var(--text-primary);
@@ -235,7 +243,7 @@ body[data-threat="high"] {
 }
 
 body.title-active {
-  overflow: hidden;
+  overflow: auto;
   background-color: #000;
   background-image: none;
 }
@@ -566,6 +574,7 @@ body.fx-critical .map-node text {
   flex-direction: column;
   gap: 32px;
   position: relative;
+  min-height: 100svh;
   --surge-sat: 1;
   --surge-contrast: 1;
   --surge-blur: 0px;
@@ -674,6 +683,8 @@ main {
   display: grid;
   grid-template-columns: 1fr;
   gap: 24px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .room-view {
@@ -682,6 +693,7 @@ main {
   gap: 18px;
   min-height: 0;
   padding-top: 64px;
+  flex: 1 1 auto;
 }
 
 .room-hud {
@@ -720,7 +732,12 @@ main {
 .room-media {
   position: relative;
   border-radius: 10px;
-  height: clamp(360px, 68vh, 620px);
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  max-height: 60svh;
+  min-height: 0;
   overflow: hidden;
   background: rgba(16, 14, 10, 0.4);
   border: 1px solid var(--panel-border);
@@ -793,6 +810,15 @@ main {
 .room-media > * {
   position: relative;
   z-index: 3;
+}
+
+.room-media img,
+.room-media video,
+.room-media canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .room-topline {
@@ -1400,14 +1426,20 @@ main {
   border-radius: 6px;
   padding: 10px;
   border: 1px solid var(--panel-border);
-  min-height: 320px;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 #floorplanMap {
   width: 100%;
-  height: 265px;
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  aspect-ratio: 520 / 420;
   display: block;
 }
 
@@ -1459,6 +1491,7 @@ main {
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 .map-controls .quick-actions {
@@ -2018,8 +2051,10 @@ body.night-11 .map-node text {
     linear-gradient(rgba(8, 6, 4, 0.78), rgba(8, 6, 4, 0.78)),
     url("images/background.png") center/cover no-repeat;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: calc(16px + env(safe-area-inset-top)) 16px
+    calc(16px + env(safe-area-inset-bottom) + 4.5rem);
   z-index: 25;
   opacity: 0;
   visibility: hidden;
@@ -2046,10 +2081,14 @@ body.night-11 .map-node text {
   border: 1px solid var(--panel-border);
   border-radius: 4px;
   padding: 24px;
-  width: min(500px, 92vw);
-  display: grid;
+  width: min(500px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   background-blend-mode: soft-light;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .menu-panel .menu-card,
