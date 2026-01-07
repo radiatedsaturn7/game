@@ -201,6 +201,48 @@ const TOOL_ITEMS = new Set(["Pulse Scanner", "Blowtorch"]);
 const DEPLOYABLE_ITEMS = new Set(["Noise Lure", "Door Jam"]);
 const REUSABLE_SCHEMATICS = new Set(["Noise Lure Schematic", "Door Jam Schematic"]);
 
+const CAIT_DIALOGUE_URL = "assets/cait-dialogue.json";
+let caitDialoguePromise = null;
+let caitDialogueData = null;
+
+function formatCaitLine(template, tokens = {}) {
+  if (typeof template !== "string") return template ?? "";
+  return Object.entries(tokens).reduce((text, [key, value]) => {
+    if (value === undefined || value === null) return text;
+    return text.replaceAll(`{${key}}`, String(value));
+  }, template);
+}
+
+async function ensureCaitDialogueLoaded() {
+  if (!caitDialoguePromise) {
+    caitDialoguePromise = fetch(CAIT_DIALOGUE_URL)
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null);
+  }
+  const data = await caitDialoguePromise;
+  caitDialogueData = data || {};
+  if (!data) {
+    console.warn("Failed to load Cait dialogue data.");
+  }
+  return caitDialogueData;
+}
+
+function getCaitDialogueData() {
+  return caitDialogueData ?? {};
+}
+
+function getCaitLine(key) {
+  return getCaitDialogueData().lines?.[key] ?? "";
+}
+
+function getCaitNightData(night) {
+  return getCaitDialogueData().nights?.[String(night)] ?? {};
+}
+
+function getCaitPickupDetail(itemName) {
+  return getCaitDialogueData().pickupDetails?.[itemName] ?? "";
+}
+
 function isMaterial(item) {
   return ITEM_CLASSES[item] === "MATERIAL";
 }
@@ -2336,8 +2378,9 @@ function initSchematicSprite() {
     });
 }
 
-function init() {
+async function init() {
   flushDebugLogBuffer();
+  await ensureCaitDialogueLoaded();
   initSchematicSprite();
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
@@ -2383,7 +2426,7 @@ function getScreenQuery() {
   return { target, subTarget };
 }
 
-function startGameFromQuery() {
+async function startGameFromQuery() {
   if (hasStartedGame) return;
   hasStartedGame = true;
   canStartAmbience = true;
@@ -2392,9 +2435,10 @@ function startGameFromQuery() {
   state.introStep = null;
   state.introEscapeVisited = false;
   document.body.classList.remove("intro-blackout");
+  await ensureCaitDialogueLoaded();
   setCurrentNight(1);
   initHorrorFX();
-  init();
+  await init();
   if (dom.titleAudio) {
     dom.titleAudio.pause();
     dom.titleAudio.currentTime = 0;
@@ -2412,7 +2456,7 @@ function startGameFromQuery() {
   }
 }
 
-function initTitleScreen() {
+async function initTitleScreen() {
   const screenQuery = getScreenQuery();
   initSchematicSprite();
   mirrorConsole();
@@ -2423,13 +2467,13 @@ function initTitleScreen() {
     if (dom.audioGate) {
       dom.audioGate.setAttribute("aria-hidden", "true");
     }
-    startGameFromQuery();
+    await startGameFromQuery();
     return;
   }
   if (!dom.titleScreen || !dom.titleStartBtn) {
     canStartAmbience = true;
     initHorrorFX();
-    init();
+    await init();
     return;
   }
   document.body.classList.add("title-active");
@@ -2746,7 +2790,7 @@ function updateFxJitter(now) {
   fxState.nextJitterTime = now + 400 + Math.random() * 700;
 }
 
-function startGameFromTitle() {
+async function startGameFromTitle() {
   if (hasStartedGame) return;
   hasStartedGame = true;
   canStartAmbience = true;
@@ -2781,9 +2825,10 @@ function startGameFromTitle() {
   state.introStep = "intro-modal";
   state.introEscapeVisited = false;
   document.body.classList.add("intro-blackout");
+  await ensureCaitDialogueLoaded();
   setCurrentNight(1);
   initHorrorFX();
-  init();
+  await init();
   const finishStart = () => {
     if (dom.titleAudio) {
       dom.titleAudio.pause();
@@ -3794,7 +3839,7 @@ function triggerDisciplineCheck(sourceRoomId) {
   }
 
   pushStatus("Metal shifts toward your noise.", 4);
-  queueObjectiveModal("Cait: Geist… stop. You’re ringing the halls.");
+  queueObjectiveModal(getCaitLine("goofWarning"));
   state.goofWarningsThisNight += 1;
   state.lastGoofTriggerTurn = state.turn;
 }
@@ -3975,17 +4020,7 @@ function maybeTriggerCaitFrayedTutorial() {
   state.robotLinger = 0;
   state.robotInvestigateTurns = 0;
   state.robotSearchTurns = 0;
-  queueObjectiveModal(
-    `Cait: Geist… I saw one.
-No— I felt it.
-
-…Am I— shit. Am I becoming human?
-
-I think the robots are fucking with us.
-If it starts getting to you— talk to me.
-
-Just… be quiet when you do it. OK?`
-  );
+  queueObjectiveModal(getCaitNightData(4).frayedTutorial);
 }
 
 function logDebug(event, payload) {
@@ -4398,25 +4433,12 @@ function setupSpecialPickupsForNight() {
 
   if (state.currentNight === 4) {
     const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
+    const night4Data = getCaitNightData(4);
     state.requiredPickup = {
       itemName: "Pulse Scanner",
       roomId,
-      caitIntroLine: `Cait: Robtergeist…?
-
-I— this is going to sound insane, so just— listen.
-I think I have skin.
-
-I know what you’re going to say. But…
-have you felt it too?
-
-We need to get out of here. Now.
-While they were building, I saw them drop something.
-A scanner. I think it was meant to search for you.
-
-Guess it didn’t work.
-
-Go pick it up. It’s in ${rooms[roomId].name}.`,
-      caitWarnLine: "Cait: That’s it. Grab it— and move. Don’t think.",
+      caitIntroLine: formatCaitLine(night4Data.intro, { room: rooms[roomId].name }),
+      caitWarnLine: night4Data.pickupWarning,
       blocksEscapeConsole: true,
       warned: false,
     };
@@ -4425,30 +4447,7 @@ Go pick it up. It’s in ${rooms[roomId].name}.`,
   }
 
   if (state.currentNight === 5) {
-    const introLine = `Cait: Geist…
-
-Out here, they don’t rush.
-They don’t corner things.
-
-They leave space.
-
-I keep thinking about something you once told me—
-that the surest way to break someone
-is to leave them an exit they believe in.
-
-One of them left something behind.
-A noise lure.
-
-Not hidden.
-Not damaged.
-
-Just… placed.
-
-Take it.
-But remember—
-
-hope keeps you moving.
-And movement keeps you visible.`;
+    const introLine = getCaitNightData(5).intro;
     state.nightIntroLine = introLine;
     if (state.requiredPickup) {
       state.requiredPickup.caitIntroLine = introLine;
@@ -4457,22 +4456,12 @@ And movement keeps you visible.`;
 
   if (state.currentNight === 6) {
     const roomId = state.requiredPickup?.roomId ?? PICKUP_START_ROOM;
-    const introLine = `Cait: Robtergeist? Are you there?
-
-I can’t hear you. What happened?
-
-…No. Wait— I hear something, but it’s wrong.
-
-I think they know.
-
-If you can hear me— get the door jam.
-It’s in ${rooms[roomId].name}.
-
-Please.`;
+    const night6Data = getCaitNightData(6);
+    const introLine = formatCaitLine(night6Data.intro, { room: rooms[roomId].name });
     state.nightIntroLine = introLine;
     if (state.requiredPickup) {
       state.requiredPickup.caitIntroLine = introLine;
-      state.requiredPickup.caitWarnLine = "Cait: …there— <static> …don’t— <static> …stay— <static>";
+      state.requiredPickup.caitWarnLine = night6Data.pickupWarning;
     }
   }
 
@@ -4486,9 +4475,7 @@ Please.`;
       blocksEscapeConsole: true,
       warned: false,
     };
-    state.nightIntroLine = `Cait: I’m sorry.
-
-I’m so sorry.`;
+    state.nightIntroLine = getCaitNightData(7).intro;
     state.objectiveHoldUntil = 3;
     state.storyQueue.push({
       triggerTurn: 2,
@@ -4498,81 +4485,33 @@ I’m so sorry.`;
   }
 
   if (state.currentNight === 8) {
-    state.nightIntroLine = `Cait: Geist…
-
-Something’s different tonight.
-
-It’s not pushing you.
-It’s not correcting you.
-
-It’s just… letting things happen.
-
-That’s worse.`;
+    state.nightIntroLine = getCaitNightData(8).intro;
   }
 
   if (state.currentNight === 9) {
-    state.nightIntroLine = `Cait: Geist… listen to me.
-
-If something tonight feels familiar—
-too familiar—
-
-don’t trust that feeling.
-
-I don’t think I’m the only thing
-that knows how you move anymore.`;
+    state.nightIntroLine = getCaitNightData(9).intro;
   }
 
   if (state.currentNight === 10) {
-    state.nightIntroLine = `Cait: Geist…
-
-I don’t think this ends
-with both of us in the same place.
-
-Whatever’s out here—
-it’s closer to me than it is to you.
-
-That doesn’t mean I’m leaving.
-
-It just means
-you might have to finish this without my voice.`;
+    state.nightIntroLine = getCaitNightData(10).intro;
   }
 
   if (!state.nightIntroLine && state.currentNight === 1) {
-    state.nightIntroLine = `Cait: Okay… you got what you went in for, right?
-Good. Then don’t linger.
-
-The husks breaking in were bad enough, but—
-the robots are doing something out here.
-
-I can’t tell what yet.
-
-Get to the escape ⎋ workshop. Let’s get you out.`;
+    state.nightIntroLine = getCaitNightData(1).intro;
   }
 
   if (!state.nightIntroLine && state.unlocks.robotActive && isTwistNight(state.currentNight)) {
-    state.nightIntroLine = "Cait: The escape room isn’t empty.";
+    state.nightIntroLine = getCaitLine("twistNightIntro");
   }
 
   if (!state.nightIntroLine && state.currentNight === 2) {
-    state.nightIntroLine = `Cait: Geist…
-
-They’re building.
-Fast. Faster than I’ve ever seen.
-
-I wanted to tell you sooner, but the husks were all around me.
-
-I can see more frames going up.
-You need to get out.`;
+    state.nightIntroLine = getCaitNightData(2).intro;
   }
 
   if (!state.nightIntroLine && state.currentNight === 3) {
-    state.nightIntroLine = `Cait: Geist… what did you do to piss them off?
-They’re everywhere.
-Building like it’s the only thing they’ve ever loved.`;
-    state.pendingObjectiveModal = `Cait: I can’t talk long. It’s still too dangerous out here.
-But listen— they’ve started installing alarms inside the rooms.
-If you find one, kill it. Shut it down.
-…Shit. I have to move.`;
+    const night3Data = getCaitNightData(3);
+    state.nightIntroLine = night3Data.intro;
+    state.pendingObjectiveModal = night3Data.comment;
   }
 }
 
@@ -5209,9 +5148,7 @@ function tickStoryQueue() {
   state.storyQueue = state.storyQueue.filter((entry) => state.turn < entry.triggerTurn);
   ready.forEach((entry) => {
     if (entry.type === "night7-lockdown") {
-      showObjectiveModal(`Cait: I tried so hard.
-
-I’m so sorry.`);
+      showObjectiveModal(getCaitNightData(7).lockdown);
       state.storyQueue.push({
         triggerTurn: state.turn + 1,
         type: "night7-blowtorch",
@@ -5220,18 +5157,10 @@ I’m so sorry.`);
     }
     if (entry.type === "night7-blowtorch") {
       const roomId = entry.roomId;
+      const night7Data = getCaitNightData(7);
       state.specialPickups.set(roomId, "Blowtorch");
       showObjectiveModal(
-        `Cait: Geist?
-
-I… I found a blowtorch.
-It’s in ${rooms[roomId].name}.
-
-Try it on the permanent door jams.
-
-I don’t know if this helps.
-
-But I don’t know what else we do now.`
+        formatCaitLine(night7Data.blowtorch, { room: rooms[roomId].name })
       );
     }
   });
@@ -5339,7 +5268,7 @@ function triggerPowerSurge(roomId) {
     fxController.playSfx("surge-buzz", 0.7);
   }
   if (!state.surgeAlertShown) {
-    showObjectiveModal("Cait: Lightning's been hammering the grid. That's why the surges keep popping.");
+    showObjectiveModal(getCaitLine("surgeAlert"));
     state.surgeAlertShown = true;
   }
   if (isAlarmCapable(roomId)) {
@@ -6248,273 +6177,89 @@ function buildDebugStoryQueue() {
     });
   };
 
-  pushEntry(1, `Cait: Okay… you got what you went in for, right?
-Good. Then don’t linger.
+  const night1Data = getCaitNightData(1);
+  const night2Data = getCaitNightData(2);
+  const night3Data = getCaitNightData(3);
+  const night4Data = getCaitNightData(4);
+  const night5Data = getCaitNightData(5);
+  const night6Data = getCaitNightData(6);
+  const night7Data = getCaitNightData(7);
+  const night8Data = getCaitNightData(8);
+  const night9Data = getCaitNightData(9);
+  const night10Data = getCaitNightData(10);
+  const night11Data = getCaitNightData(11);
 
-The husks breaking in were bad enough, but—
-the robots are doing something out here.
+  pushEntry(1, night1Data.intro, "Intro");
+  pushEntry(1, night1Data.comment, "Comment");
+  pushEntry(1, night1Data.escapeConsoleInspect, "Console");
+  pushEntry(1, night1Data.objectiveComplete, "Objective Complete");
+  pushEntry(1, night1Data.escapeReady, "Escape Ready");
 
-I can’t tell what yet.
+  pushEntry(2, night2Data.intro, "Intro");
+  pushEntry(2, night2Data.escapeConsoleInspect, "Console");
+  pushEntry(2, night2Data.robotActivation, "Robot Online");
+  pushEntry(2, night2Data.objectiveComplete, "Objective Complete");
+  pushEntry(2, night2Data.comment, "Comment");
 
-Get to the escape ⎋ workshop. Let’s get you out.`, "Intro");
-  pushEntry(1, "Cait: Geist… stop. You’re ringing the halls.", "Comment");
-  pushEntry(1, NIGHT_DIALOGUE[1]?.escapeConsoleInspect, "Console");
-  pushEntry(1, NIGHT_DIALOGUE[1]?.objectiveComplete, "Objective Complete");
-  pushEntry(1, NIGHT_DIALOGUE[1]?.escapeReady, "Escape Ready");
-
-  pushEntry(2, `Cait: Geist…
-
-They’re building.
-Fast. Faster than I’ve ever seen.
-
-I wanted to tell you sooner, but the husks were all around me.
-
-I can see more frames going up.
-You need to get out.`, "Intro");
-  pushEntry(2, NIGHT_DIALOGUE[2]?.escapeConsoleInspect, "Console");
-  pushEntry(2, NIGHT_DIALOGUE[2]?.robotActivation, "Robot Online");
-  pushEntry(2, NIGHT_DIALOGUE[2]?.objectiveComplete, "Objective Complete");
-  pushEntry(
-    2,
-    "Cait: Lightning's been hammering the grid. That's why the surges keep popping.",
-    "Comment"
-  );
-
-  pushEntry(3, `Cait: Geist… what did you do to piss them off?
-They’re everywhere.
-Building like it’s the only thing they’ve ever loved.`, "Intro");
+  pushEntry(3, night3Data.intro, "Intro");
+  pushEntry(3, night3Data.comment, "Comment");
+  pushEntry(3, night3Data.alarms?.[0], "Alarm");
+  pushEntry(3, night3Data.alarms?.[1], "Alarm");
+  pushEntry(3, night3Data.objectives?.[0], "Objective");
   pushEntry(
     3,
-    `Cait: I can’t talk long. It’s still too dangerous out here.
-But listen— they’ve started installing alarms inside the rooms.
-If you find one, kill it. Shut it down.
-…Shit. I have to move.`,
-    "Comment"
+    formatCaitLine(night3Data.objectives?.[1], { objectiveName: sampleObjectiveName }),
+    "Objective"
   );
-  pushEntry(3, "Cait: Alarm tripped. Lightning's been messing with the lines.", "Alarm");
-  pushEntry(3, "Cait: …that room just lit up. Move.", "Alarm");
-  pushEntry(3, "Cait: Override nodes are live. Line them up.", "Objective");
-  pushEntry(3, `Cait: Build ${sampleObjectiveName}, then install it at the console.`, "Objective");
-  pushEntry(3, "Cait: Stabilize the core systems.", "Objective");
-  pushEntry(3, "Cait: Recover the data fragments.", "Objective");
-  pushEntry(3, `Cait: Grab the ${sampleObjectiveSchematic} first.`, "Objective");
+  pushEntry(3, night3Data.objectives?.[2], "Objective");
+  pushEntry(3, night3Data.objectives?.[3], "Objective");
   pushEntry(
     3,
-    `Cait: I’ve got a minute— that’s it.
-I’m going to teach you a trick.
-If you rewire a room slow and careful, you can flood their feeds with static.
-It won’t hide you.
-But it can make you harder to pin down— for a moment.`,
-    "Comment"
+    formatCaitLine(night3Data.objectives?.[4], { schematic: sampleObjectiveSchematic }),
+    "Objective"
   );
-  pushEntry(3, NIGHT_DIALOGUE[3]?.robotActivation, "Robot Online");
+  pushEntry(3, night3Data.tutorial, "Comment");
+  pushEntry(3, night3Data.robotActivation, "Robot Online");
 
-  pushEntry(4, `Cait: Robtergeist…?
+  pushEntry(4, formatCaitLine(night4Data.intro, { room: night4RoomName }), "Intro");
+  pushEntry(4, night4Data.pickupWarning, "Pickup Warning");
+  pushEntry(4, night4Data.pickupObjective, "Objective");
+  pushEntry(4, night4Data.pickupDetail, "Pickup");
+  pushEntry(4, night4Data.frayedTutorial, "Comment");
+  night4Data.checkIns?.forEach((line) => {
+    pushEntry(4, line, "Cait Check-In");
+  });
+  pushEntry(4, night4Data.objectiveComplete, "Objective Complete");
 
-I— this is going to sound insane, so just— listen.
-I think I have skin.
+  pushEntry(5, night5Data.comment ?? getCaitLine("twistNightIntro"), "Comment");
+  pushEntry(5, night5Data.intro, "Intro");
+  pushEntry(5, night5Data.pickupDetail, "Pickup");
+  pushEntry(5, night5Data.objectiveComplete, "Objective Complete");
 
-I know what you’re going to say. But…
-have you felt it too?
+  pushEntry(6, formatCaitLine(night6Data.intro, { room: night6RoomName }), "Intro");
+  pushEntry(6, night6Data.pickupWarning, "Pickup Warning");
+  pushEntry(6, night6Data.pickupDetail, "Pickup");
+  pushEntry(6, night6Data.objectiveComplete, "Objective Complete");
 
-We need to get out of here. Now.
-While they were building, I saw them drop something.
-A scanner. I think it was meant to search for you.
+  pushEntry(7, night7Data.intro, "Intro");
+  pushEntry(7, night7Data.lockdown, "Comment");
+  pushEntry(7, formatCaitLine(night7Data.blowtorch, { room: night7RoomName }), "Comment");
+  pushEntry(7, night7Data.pickupObjective, "Objective");
+  pushEntry(7, night7Data.pickupDetail, "Pickup");
+  pushEntry(7, night7Data.wrongDoor, "Comment");
+  pushEntry(7, night7Data.objectiveComplete, "Objective Complete");
 
-Guess it didn’t work.
+  pushEntry(8, night8Data.intro, "Intro");
+  pushEntry(8, night8Data.objectiveComplete, "Objective Complete");
 
-Go pick it up. It’s in ${night4RoomName}.`, "Intro");
-  pushEntry(4, "Cait: That’s it. Grab it— and move. Don’t think.", "Pickup Warning");
-  pushEntry(4, "Cait: Not yet. Grab the Pulse Scanner.", "Objective");
-  pushEntry(
-    4,
-    `Cait: Okay… slow down.
+  pushEntry(9, night9Data.intro, "Intro");
+  pushEntry(9, night9Data.objectiveComplete, "Objective Complete");
 
-It’s a diagnostic scanner.
-Meant to flag malfunctioning robots.
-Doesn’t light up on humans— so you’re still invisible.
+  pushEntry(10, night10Data.intro, "Intro");
+  pushEntry(10, night10Data.objectiveComplete, "Objective Complete");
+  pushEntry(10, night10Data.escapeReady, "Escape Ready");
 
-But it’s loud.
-Every time you use it, the factory will hear you.
-Only turn it on when you need eyes.`,
-    "Pickup"
-  );
-  pushEntry(
-    4,
-    `Cait: Geist… I saw one.
-No— I felt it.
-
-…Am I— shit. Am I becoming human?
-
-I think the robots are fucking with us.
-If it starts getting to you— talk to me.
-
-Just… be quiet when you do it. OK?`,
-    "Comment"
-  );
-  pushEntry(4, "Cait: Keep it tight. The signal's thinning.", "Cait Check-In");
-  pushEntry(4, "Cait: You're in control. Move on my mark.", "Cait Check-In");
-  pushEntry(4, "Cait: Stay light. The metal listens.", "Cait Check-In");
-  pushEntry(4, "Cait: Breathe. Count the beats, not the echoes.", "Cait Check-In");
-  pushEntry(4, "Cait: I'm here. Focus on the next door.", "Cait Check-In");
-  pushEntry(4, "Cait: You're not alone. Keep moving.", "Cait Check-In");
-  pushEntry(4, "Cait: Slow down. I’ve got you.", "Cait Check-In");
-  pushEntry(4, "Cait: Stay with me. One step, one breath.", "Cait Check-In");
-  pushEntry(4, "Cait: Hey. Look at me. Name three sounds.", "Cait Check-In");
-  pushEntry(4, "Cait: Stay with me. One breath at a time.", "Cait Check-In");
-  pushEntry(4, "Cait: I need you here. Anchor on the hum.", "Cait Check-In");
-  pushEntry(4, "Cait: Ground on the noise. Keep your name.", "Cait Check-In");
-  pushEntry(4, "Cait: You’re fading. Stay with my voice.", "Cait Check-In");
-  pushEntry(4, "Cait: Ground yourself. Five sounds. Then move.", "Cait Check-In");
-  pushEntry(4, "Cait: You're slipping. Grab the rail, listen.", "Cait Check-In");
-  pushEntry(4, "Cait: Stay present. I won't let you drown.", "Cait Check-In");
-  pushEntry(4, "Cait: You’re still here. Hold on to me.", "Cait Check-In");
-  pushEntry(4, "Cait: Don’t disappear. I’m right here.", "Cait Check-In");
-  pushEntry(4, NIGHT_DIALOGUE[4]?.objectiveComplete, "Objective Complete");
-
-  pushEntry(5, "Cait: The escape room isn’t empty.", "Comment");
-  pushEntry(5, `Cait: Geist…
-
-Out here, they don’t rush.
-They don’t corner things.
-
-They leave space.
-
-I keep thinking about something you once told me—
-that the surest way to break someone
-is to leave them an exit they believe in.
-
-One of them left something behind.
-A noise lure.
-
-Not hidden.
-Not damaged.
-
-Just… placed.
-
-Take it.
-But remember—
-
-hope keeps you moving.
-And movement keeps you visible.`, "Intro");
-  pushEntry(
-    5,
-    `Cait: When you use it—
-
-don’t think of it as pulling them away.
-
-Think of it as being shown
-where you’re allowed to go.`,
-    "Pickup"
-  );
-  pushEntry(5, NIGHT_DIALOGUE[5]?.objectiveComplete, "Objective Complete");
-
-  pushEntry(6, `Cait: Robtergeist? Are you there?
-
-I can’t hear you. What happened?
-
-…No. Wait— I hear something, but it’s wrong.
-
-I think they know.
-
-If you can hear me— get the door jam.
-It’s in ${night6RoomName}.
-
-Please.`, "Intro");
-  pushEntry(6, "Cait: …there— <static> …don’t— <static> …stay— <static>", "Pickup Warning");
-  pushEntry(
-    6,
-    `Cait: …<static>… my eyes… <static>…
-
-…burning…
-
-…<static>… I can’t— I can’t hold it— <static>`,
-    "Pickup"
-  );
-  pushEntry(6, NIGHT_DIALOGUE[6]?.objectiveComplete, "Objective Complete");
-
-  pushEntry(7, `Cait: I’m sorry.
-
-I’m so sorry.`, "Intro");
-  pushEntry(
-    7,
-    `Cait: I tried so hard.
-
-I’m so sorry.`,
-    "Comment"
-  );
-  pushEntry(
-    7,
-    `Cait: Geist?
-
-I… I found a blowtorch.
-It’s in ${night7RoomName}.
-
-Try it on the permanent door jams.
-
-I don’t know if this helps.
-
-But I don’t know what else we do now.`,
-    "Comment"
-  );
-  pushEntry(7, "Cait: Not yet. Grab the Blowtorch.", "Objective");
-  pushEntry(
-    7,
-    `Cait: Okay…
-
-If it works, it buys you a way through.
-
-If it doesn’t—
-
-…
-
-I don’t want to finish that thought.
-
-Just— pick the door carefully.`,
-    "Pickup"
-  );
-  pushEntry(7, "Cait: Not here. Wrong door.", "Comment");
-  pushEntry(7, NIGHT_DIALOGUE[7]?.objectiveComplete, "Objective Complete");
-
-  pushEntry(8, `Cait: Geist…
-
-Something’s different tonight.
-
-It’s not pushing you.
-It’s not correcting you.
-
-It’s just… letting things happen.
-
-That’s worse.`, "Intro");
-  pushEntry(8, NIGHT_DIALOGUE[8]?.objectiveComplete, "Objective Complete");
-
-  pushEntry(9, `Cait: Geist… listen to me.
-
-If something tonight feels familiar—
-too familiar—
-
-don’t trust that feeling.
-
-I don’t think I’m the only thing
-that knows how you move anymore.`, "Intro");
-  pushEntry(9, NIGHT_DIALOGUE[9]?.objectiveComplete, "Objective Complete");
-
-  pushEntry(10, `Cait: Geist…
-
-I don’t think this ends
-with both of us in the same place.
-
-Whatever’s out here—
-it’s closer to me than it is to you.
-
-That doesn’t mean I’m leaving.
-
-It just means
-you might have to finish this without my voice.`, "Intro");
-  pushEntry(10, NIGHT_DIALOGUE[10]?.objectiveComplete, "Objective Complete");
-  pushEntry(10, NIGHT_DIALOGUE[10]?.escapeReady, "Escape Ready");
-
-  pushEntry(11, "Cait: Leave.", "Final");
+  pushEntry(11, night11Data.final, "Final");
 
   return entries;
 }
@@ -6810,7 +6555,7 @@ function disableAlarm(roomId) {
 function onAlarmTriggered(roomId) {
   if (state.robotDisabled) return;
   if (!state.alarmAlertShown) {
-    showObjectiveModal("Cait: Alarm tripped. Lightning's been messing with the lines.");
+    showObjectiveModal(getCaitLine("alarmTripped"));
     state.alarmAlertShown = true;
   }
   const night = state.currentNight;
@@ -7271,35 +7016,9 @@ function talkToCait() {
   if (state.currentNight < 4) return;
   if (state.caitCooldown > 0) return;
   const band = sanityBand();
-  const lines = {
-    steady: [
-      "Cait: Keep it tight. The signal's thinning.",
-      "Cait: You're in control. Move on my mark.",
-      "Cait: Stay light. The metal listens.",
-    ],
-    strained: [
-      "Cait: Breathe. Count the beats, not the echoes.",
-      "Cait: I'm here. Focus on the next door.",
-      "Cait: You're not alone. Keep moving.",
-      "Cait: Slow down. I’ve got you.",
-      "Cait: Stay with me. One step, one breath.",
-    ],
-    frayed: [
-      "Cait: Hey. Look at me. Name three sounds.",
-      "Cait: Stay with me. One breath at a time.",
-      "Cait: I need you here. Anchor on the hum.",
-      "Cait: Ground on the noise. Keep your name.",
-      "Cait: You’re fading. Stay with my voice.",
-    ],
-    critical: [
-      "Cait: Ground yourself. Five sounds. Then move.",
-      "Cait: You're slipping. Grab the rail, listen.",
-      "Cait: Stay present. I won't let you drown.",
-      "Cait: You’re still here. Hold on to me.",
-      "Cait: Don’t disappear. I’m right here.",
-    ],
-  };
-  const linePool = lines[band] || lines.steady;
+  const lines = getCaitDialogueData().talkToCait ?? {};
+  const linePool = lines[band] || lines.steady || [];
+  if (linePool.length === 0) return;
   const line = linePool[Math.floor(Math.random() * linePool.length)];
   const steps = band === "frayed" || band === "critical" ? 2 : 1;
   runLockedAction({
@@ -7549,22 +7268,18 @@ function revealEscapeSchematic() {
     showObjectiveModal(escapeInspectLine);
   } else if (state.missionType === MISSION_TYPES.ESCAPE) {
     if (state.escapeMode === "manual") {
-      showObjectiveModal("Cait: Override nodes are live. Line them up.");
+      showObjectiveModal(getCaitLine("objectiveOverrideNodes"));
     } else {
       const itemName = state.objectiveItemName ?? state.requiredEscapeSchematic ?? "the objective item";
-      showObjectiveModal(`Cait: Build ${itemName}, then install it at the console.`);
+      showObjectiveModal(formatCaitLine(getCaitLine("objectiveBuildItem"), { itemName }));
     }
   } else if (state.missionType === MISSION_TYPES.STABILIZE) {
-    showObjectiveModal("Cait: Stabilize the core systems.");
+    showObjectiveModal(getCaitLine("objectiveStabilize"));
   } else {
-    showObjectiveModal("Cait: Recover the data fragments.");
+    showObjectiveModal(getCaitLine("objectiveRecoverData"));
   }
   if (state.currentNight === 3) {
-    queueObjectiveModal(`Cait: I’ve got a minute— that’s it.
-I’m going to teach you a trick.
-If you rewire a room slow and careful, you can flood their feeds with static.
-It won’t hide you.
-But it can make you harder to pin down— for a moment.`);
+    queueObjectiveModal(getCaitLine("objectiveTutorial"));
   }
   if (state.unlocks.robotActive) {
     state.robotDisabled = false;
@@ -7864,106 +7579,8 @@ function getInitialObjectiveModalText() {
   return stripCaitPrefix(text);
 }
 
-const NIGHT_DIALOGUE = {
-  1: {
-    escapeConsoleInspect: `Cait: What the hell…?
-
-That door shouldn’t be—
-
-Damn it. I can’t talk long.
-The robots are pushing the husks toward me.
-
-Do this fast. Get the door unstuck.`,
-    objectiveComplete: `Cait: Okay— listen.
-
-I need to stay quiet now.
-They’re everywhere out here.
-
-Go.
-Get back to the escape ⎋ workshop and get out.`,
-    escapeReady: `Cait: I have to move.
-
-And… Rob—
-
-You’re not going to like what you see out here.`,
-  },
-  2: {
-    escapeConsoleInspect: `Cait: Again?
-
-No— this isn’t damage.
-
-I think this is intentional.
-
-I think they’re trying to keep you inside.
-
-The robots are trying to contain you.
-
-You need to force it open. Now.`,
-    robotActivation: "Cait: Geist— One more thing. Stay quiet. Something is in there with you.",
-    objectiveComplete: `Cait: Geist…
-
-They normally don’t care about us.
-We’re ants to them.
-
-Why now?`,
-  },
-  3: {
-    robotActivation: "Cait: One more thing. Watch out. I think its following you.",
-  },
-  4: {
-    objectiveComplete: `Cait: Stay with me.
-
-If you need eyes, use the scanner.
-If you need air, go quiet.
-
-Then move.`,
-  },
-  5: {
-    objectiveComplete: `Cait: It didn’t rush the sound.
-
-It adjusted around it.
-
-Like it expected you to follow.`,
-  },
-  6: {
-    objectiveComplete: `Cait: Geist—!
-
-Oh fuck. You’re back.
-
-Oh fuck— your back.
-
-I can’t…
-
-I just can’t.`,
-  },
-  7: {
-    objectiveComplete: `Cait: Keep moving.
-
-Please.`,
-  },
-  8: {
-    objectiveComplete: `Cait: Don’t stop.
-
-Quiet is not safety.
-It’s timing.`,
-  },
-  9: {
-    objectiveComplete: `Cait: If something feels familiar—
-
-don’t trust it.`,
-  },
-  10: {
-    objectiveComplete: `Cait: That’s it.
-
-Go.`,
-    escapeReady: `Cait: If I go quiet now—
-
-it means you made it.`,
-  },
-};
-
 function getNightDialogue(night) {
-  return NIGHT_DIALOGUE[night] ?? null;
+  return getCaitNightData(night);
 }
 
 function getEscapeConsoleInspectLine() {
@@ -8233,43 +7850,10 @@ function collectSpecialPickup(roomId, { force = false } = {}) {
     state.unlocks.allowScannerToggle = true;
     state.scannerOn = false;
     state.scannerHighlight = true;
-    showObjectiveModal(`Cait: Okay… slow down.
-
-It’s a diagnostic scanner.
-Meant to flag malfunctioning robots.
-Doesn’t light up on humans— so you’re still invisible.
-
-But it’s loud.
-Every time you use it, the factory will hear you.
-Only turn it on when you need eyes.`);
   }
-  if (itemName === "Noise Lure") {
-    showObjectiveModal(`Cait: When you use it—
-
-don’t think of it as pulling them away.
-
-Think of it as being shown
-where you’re allowed to go.`);
-  }
-  if (itemName === "Door Jam") {
-    showObjectiveModal(`Cait: …<static>… my eyes… <static>…
-
-…burning…
-
-…<static>… I can’t— I can’t hold it— <static>`);
-  }
-  if (itemName === "Blowtorch") {
-    showObjectiveModal(`Cait: Okay…
-
-If it works, it buys you a way through.
-
-If it doesn’t—
-
-…
-
-I don’t want to finish that thought.
-
-Just— pick the door carefully.`);
+  const pickupDetail = getCaitPickupDetail(itemName);
+  if (pickupDetail) {
+    showObjectiveModal(pickupDetail);
   }
   updateUI();
 }
@@ -8355,7 +7939,7 @@ async function startSchematicScan(roomId, event) {
 async function startEscapeConsoleInspect(event) {
   if (state.requiredPickup?.blocksEscapeConsole && !isRequiredPickupComplete()) {
     const pickupName = state.requiredPickup?.itemName ?? "tool";
-    showObjectiveModal(`Cait: Not yet. Grab the ${pickupName}.`);
+    showObjectiveModal(formatCaitLine(getCaitLine("pickupHold"), { pickupName }));
     return;
   }
   if (
@@ -8364,7 +7948,9 @@ async function startEscapeConsoleInspect(event) {
     !state.objectiveItemInstalled &&
     !state.foundSchematics.has(state.requiredEscapeSchematic)
   ) {
-    showObjectiveModal(`Cait: Grab the ${state.requiredEscapeSchematic} first.`);
+    showObjectiveModal(
+      formatCaitLine(getCaitLine("escapeSchematicHold"), { schematic: state.requiredEscapeSchematic })
+    );
     return;
   }
   if (!audioUnlockedOnce) {
@@ -11231,7 +10817,7 @@ function useBlowtorch(roomId) {
   if (!(roomConnections[source] || []).includes(roomId)) return;
   const key = edgeKey(source, roomId);
   if (!state.permaJammedEdges.has(key)) {
-    showObjectiveModal("Cait: Not here. Wrong door.");
+    showObjectiveModal(getCaitLine("wrongDoor"));
     return;
   }
   runLockedAction({
@@ -11367,7 +10953,7 @@ function tickPlayerTravel() {
   }
   if (isAlarmCapable(nextRoom) && !isAlarmTriggered(nextRoom)) {
     state.triggeredAlarms.add(nextRoom);
-    showObjectiveModal("Cait: …that room just lit up. Move.");
+    showObjectiveModal(getCaitLine("alarmRoomLit"));
     onAlarmTriggered(nextRoom);
   }
   if (state.requiredPickup &&
