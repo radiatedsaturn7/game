@@ -5,7 +5,9 @@
   color: #e4ded1;
   --hud-h: 56px;
   --nav-h: 72px;
-  --camera-boost: 160px;
+  --inner-frame-inset: 10px;
+  --inner-frame-radius: 30px;
+  --camera-boost: 280px;
   --hud-height: var(--hud-h);
   --footer-height: var(--nav-h);
   --view-gap: 18px;
@@ -211,6 +213,19 @@
   box-sizing: border-box;
 }
 
+* {
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.18);
+}
+
+button {
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.18);
+}
+
+button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline-offset: 2px;
+}
+
 html,
 body {
   width: 100%;
@@ -239,9 +254,9 @@ body::before {
 body::after {
   content: "";
   position: fixed;
-  inset: 16px;
+  inset: var(--inner-frame-inset);
   border: 3px solid #000;
-  border-radius: 26px;
+  border-radius: var(--inner-frame-radius);
   pointer-events: none;
   z-index: 1;
 }
@@ -772,7 +787,7 @@ main {
   flex: 1 1 auto;
   height: auto;
   max-height: calc(100svh - var(--hud-h) - var(--nav-h) - env(safe-area-inset-bottom) + var(--camera-boost));
-  min-height: 0;
+  min-height: clamp(360px, 55svh, 760px);
   margin: 0 auto;
   overflow: hidden;
   background: rgba(16, 14, 10, 0.4);
@@ -1142,7 +1157,11 @@ main {
   display: flex;
   gap: 12px;
   padding: 8px 12px;
+  width: min(calc(100% - 32px), 720px);
+  max-width: min(calc(100% - 32px), 720px);
   min-height: var(--nav-h);
+  justify-content: space-between;
+  box-sizing: border-box;
   border-radius: 6px;
   background: linear-gradient(180deg, rgba(24, 22, 18, 0.97), rgba(12, 10, 8, 0.97));
   border: 1px solid var(--panel-border);
