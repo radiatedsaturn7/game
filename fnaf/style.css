@@ -37,6 +37,8 @@
   --panel-sheen: none;
   --panel-flicker: none;
   --panel-pulse: none;
+  --app-max-width: 1080px;
+  --room-max-width: 680px;
   --panel-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
 }
 
@@ -610,7 +612,7 @@ body.fx-critical .map-node text {
 }
 
 .app {
-  max-width: 1200px;
+  max-width: var(--app-max-width);
   margin: 0 auto;
   padding: 0 24px;
   display: flex;
@@ -784,7 +786,7 @@ main {
   position: relative;
   border-radius: 10px;
   width: 100%;
-  max-width: min(100%, 720px);
+  max-width: min(100%, var(--room-max-width));
   flex: 1 1 auto;
   height: auto;
   max-height: calc(
@@ -1165,8 +1167,8 @@ main {
   display: flex;
   gap: 12px;
   padding: 8px 12px;
-  width: min(calc(100% - 32px), 720px);
-  max-width: min(calc(100% - 32px), 720px);
+  width: min(calc(100% - 32px), var(--room-max-width));
+  max-width: min(calc(100% - 32px), var(--room-max-width));
   min-height: var(--nav-h);
   justify-content: space-between;
   box-sizing: border-box;
