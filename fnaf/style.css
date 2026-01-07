@@ -5,7 +5,7 @@
   color: #e4ded1;
   --hud-h: 56px;
   --nav-h: 72px;
-  --camera-boost: 64px;
+  --camera-boost: 120px;
   --hud-height: var(--hud-h);
   --footer-height: var(--nav-h);
   --view-gap: 18px;
@@ -230,8 +230,8 @@ body {
 body::before {
   content: "";
   position: fixed;
-  inset: 8px;
-  border: 4px solid rgba(0, 0, 0, 0.55);
+  inset: 0;
+  border: none;
   pointer-events: none;
   z-index: 1;
 }
@@ -239,9 +239,9 @@ body::before {
 body::after {
   content: "";
   position: fixed;
-  inset: 16px;
-  border: 3px solid #000;
-  border-radius: 26px;
+  inset: -18px;
+  border: 6px solid #000;
+  border-radius: 36px;
   pointer-events: none;
   z-index: 1;
 }
@@ -1140,6 +1140,7 @@ main {
   transform: translateX(-50%);
   display: flex;
   gap: 12px;
+  width: min(520px, 84vw);
   padding: 8px 12px;
   min-height: var(--nav-h);
   border-radius: 6px;
