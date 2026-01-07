@@ -1110,6 +1110,7 @@ const dom = {
   robotCaptureAudio: document.getElementById("robotCaptureAudio"),
   titleStartBtn: document.getElementById("titleStartBtn"),
   app: document.querySelector(".app"),
+  overlayFooter: document.querySelector(".overlay-footer"),
   dateLabel: document.getElementById("dateLabel"),
   roomMedia: document.getElementById("roomMedia"),
   currentRooms: document.querySelectorAll(".current-room"),
@@ -9834,6 +9835,20 @@ function revealIntroMap() {
       (event) => {
         if (event.propertyName !== "opacity") return;
         dom.app?.classList.remove("intro-reveal", "intro-reveal-active");
+      },
+      { once: true },
+    );
+  }
+  if (dom.overlayFooter) {
+    dom.overlayFooter.classList.add("intro-reveal");
+    requestAnimationFrame(() => {
+      dom.overlayFooter?.classList.add("intro-reveal-active");
+    });
+    dom.overlayFooter.addEventListener(
+      "transitionend",
+      (event) => {
+        if (event.propertyName !== "opacity") return;
+        dom.overlayFooter?.classList.remove("intro-reveal", "intro-reveal-active");
       },
       { once: true },
     );

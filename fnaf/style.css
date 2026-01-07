@@ -1222,9 +1222,19 @@ main {
 body.title-active .overlay-footer,
 body:has(#audioGate[aria-hidden="false"]) .overlay-footer,
 body:has(#titleScreen[aria-hidden="false"]) .overlay-footer,
-body:has(#titleScreen.title-fade-out) .overlay-footer {
+body:has(#titleScreen.title-fade-out) .overlay-footer,
+body.intro-blackout .overlay-footer {
   opacity: 0;
   pointer-events: none;
+}
+
+.overlay-footer.intro-reveal {
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+
+.overlay-footer.intro-reveal.intro-reveal-active {
+  opacity: 1;
 }
 
 .overlay-footer button {
@@ -1500,7 +1510,7 @@ body:has(#usePanel.active) #liveBtn {
 
 .overlay-footer {
   position: fixed;
-  z-index: 1000;
+  z-index: 300;
 }
 
 :is(
