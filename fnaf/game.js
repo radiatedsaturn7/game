@@ -6233,10 +6233,22 @@ function buildDebugStoryQueue() {
   const night4RoomId = pickStoryRoomId(new Set([PICKUP_START_ROOM]));
   const night4RoomName = rooms[night4RoomId]?.name ?? "a nearby room";
   const night6RoomName = rooms[PICKUP_START_ROOM]?.name ?? "a nearby room";
-  const entries = [
-    {
-      night: 1,
-      text: `Cait: Okay… you got what you went in for, right?
+  const night7RoomId = pickStoryRoomId(new Set([PICKUP_START_ROOM, night4RoomId]));
+  const night7RoomName = rooms[night7RoomId]?.name ?? "a nearby room";
+  const sampleObjective = OBJECTIVE_RECIPES.find((recipe) => !recipe.nightOnly) ?? OBJECTIVE_RECIPES[0];
+  const sampleObjectiveName = sampleObjective?.name ?? "the objective item";
+  const sampleObjectiveSchematic = sampleObjective?.schematic ?? "objective schematic";
+  const entries = [];
+  const pushEntry = (night, text, label) => {
+    if (!text) return;
+    const suffix = label ? ` (${label})` : "";
+    entries.push({
+      title: `CAIT - NIGHT ${night}${suffix}`,
+      text,
+    });
+  };
+
+  pushEntry(1, `Cait: Okay… you got what you went in for, right?
 Good. Then don’t linger.
 
 The husks breaking in were bad enough, but—
@@ -6244,11 +6256,13 @@ the robots are doing something out here.
 
 I can’t tell what yet.
 
-Get to the escape ⎋ workshop. Let’s get you out.`,
-    },
-    {
-      night: 2,
-      text: `Cait: Geist…
+Get to the escape ⎋ workshop. Let’s get you out.`, "Intro");
+  pushEntry(1, "Cait: Geist… stop. You’re ringing the halls.", "Comment");
+  pushEntry(1, NIGHT_DIALOGUE[1]?.escapeConsoleInspect, "Console");
+  pushEntry(1, NIGHT_DIALOGUE[1]?.objectiveComplete, "Objective Complete");
+  pushEntry(1, NIGHT_DIALOGUE[1]?.escapeReady, "Escape Ready");
+
+  pushEntry(2, `Cait: Geist…
 
 They’re building.
 Fast. Faster than I’ve ever seen.
@@ -6256,17 +6270,46 @@ Fast. Faster than I’ve ever seen.
 I wanted to tell you sooner, but the husks were all around me.
 
 I can see more frames going up.
-You need to get out.`,
-    },
-    {
-      night: 3,
-      text: `Cait: Geist… what did you do to piss them off?
+You need to get out.`, "Intro");
+  pushEntry(2, NIGHT_DIALOGUE[2]?.escapeConsoleInspect, "Console");
+  pushEntry(2, NIGHT_DIALOGUE[2]?.robotActivation, "Robot Online");
+  pushEntry(2, NIGHT_DIALOGUE[2]?.objectiveComplete, "Objective Complete");
+  pushEntry(
+    2,
+    "Cait: Lightning's been hammering the grid. That's why the surges keep popping.",
+    "Comment"
+  );
+
+  pushEntry(3, `Cait: Geist… what did you do to piss them off?
 They’re everywhere.
-Building like it’s the only thing they’ve ever loved.`,
-    },
-    {
-      night: 4,
-      text: `Cait: Robtergeist…?
+Building like it’s the only thing they’ve ever loved.`, "Intro");
+  pushEntry(
+    3,
+    `Cait: I can’t talk long. It’s still too dangerous out here.
+But listen— they’ve started installing alarms inside the rooms.
+If you find one, kill it. Shut it down.
+…Shit. I have to move.`,
+    "Comment"
+  );
+  pushEntry(3, "Cait: Alarm tripped. Lightning's been messing with the lines.", "Alarm");
+  pushEntry(3, "Cait: …that room just lit up. Move.", "Alarm");
+  pushEntry(3, "Cait: Override nodes are live. Line them up.", "Objective");
+  pushEntry(3, `Cait: Build ${sampleObjectiveName}, then install it at the console.`, "Objective");
+  pushEntry(3, "Cait: Stabilize the core systems.", "Objective");
+  pushEntry(3, "Cait: Recover the data fragments.", "Objective");
+  pushEntry(3, `Cait: Grab the ${sampleObjectiveSchematic} first.`, "Objective");
+  pushEntry(
+    3,
+    `Cait: I’ve got a minute— that’s it.
+I’m going to teach you a trick.
+If you rewire a room slow and careful, you can flood their feeds with static.
+It won’t hide you.
+But it can make you harder to pin down— for a moment.`,
+    "Comment"
+  );
+  pushEntry(3, NIGHT_DIALOGUE[3]?.robotActivation, "Robot Online");
+
+  pushEntry(4, `Cait: Robtergeist…?
 
 I— this is going to sound insane, so just— listen.
 I think I have skin.
@@ -6280,11 +6323,57 @@ A scanner. I think it was meant to search for you.
 
 Guess it didn’t work.
 
-Go pick it up. It’s in ${night4RoomName}.`,
-    },
-    {
-      night: 5,
-      text: `Cait: Geist…
+Go pick it up. It’s in ${night4RoomName}.`, "Intro");
+  pushEntry(4, "Cait: That’s it. Grab it— and move. Don’t think.", "Pickup Warning");
+  pushEntry(4, "Cait: Not yet. Grab the Pulse Scanner.", "Objective");
+  pushEntry(
+    4,
+    `Cait: Okay… slow down.
+
+It’s a diagnostic scanner.
+Meant to flag malfunctioning robots.
+Doesn’t light up on humans— so you’re still invisible.
+
+But it’s loud.
+Every time you use it, the factory will hear you.
+Only turn it on when you need eyes.`,
+    "Pickup"
+  );
+  pushEntry(
+    4,
+    `Cait: Geist… I saw one.
+No— I felt it.
+
+…Am I— shit. Am I becoming human?
+
+I think the robots are fucking with us.
+If it starts getting to you— talk to me.
+
+Just… be quiet when you do it. OK?`,
+    "Comment"
+  );
+  pushEntry(4, "Cait: Keep it tight. The signal's thinning.", "Cait Check-In");
+  pushEntry(4, "Cait: You're in control. Move on my mark.", "Cait Check-In");
+  pushEntry(4, "Cait: Stay light. The metal listens.", "Cait Check-In");
+  pushEntry(4, "Cait: Breathe. Count the beats, not the echoes.", "Cait Check-In");
+  pushEntry(4, "Cait: I'm here. Focus on the next door.", "Cait Check-In");
+  pushEntry(4, "Cait: You're not alone. Keep moving.", "Cait Check-In");
+  pushEntry(4, "Cait: Slow down. I’ve got you.", "Cait Check-In");
+  pushEntry(4, "Cait: Stay with me. One step, one breath.", "Cait Check-In");
+  pushEntry(4, "Cait: Hey. Look at me. Name three sounds.", "Cait Check-In");
+  pushEntry(4, "Cait: Stay with me. One breath at a time.", "Cait Check-In");
+  pushEntry(4, "Cait: I need you here. Anchor on the hum.", "Cait Check-In");
+  pushEntry(4, "Cait: Ground on the noise. Keep your name.", "Cait Check-In");
+  pushEntry(4, "Cait: You’re fading. Stay with my voice.", "Cait Check-In");
+  pushEntry(4, "Cait: Ground yourself. Five sounds. Then move.", "Cait Check-In");
+  pushEntry(4, "Cait: You're slipping. Grab the rail, listen.", "Cait Check-In");
+  pushEntry(4, "Cait: Stay present. I won't let you drown.", "Cait Check-In");
+  pushEntry(4, "Cait: You’re still here. Hold on to me.", "Cait Check-In");
+  pushEntry(4, "Cait: Don’t disappear. I’m right here.", "Cait Check-In");
+  pushEntry(4, NIGHT_DIALOGUE[4]?.objectiveComplete, "Objective Complete");
+
+  pushEntry(5, "Cait: The escape room isn’t empty.", "Comment");
+  pushEntry(5, `Cait: Geist…
 
 Out here, they don’t rush.
 They don’t corner things.
@@ -6307,11 +6396,20 @@ Take it.
 But remember—
 
 hope keeps you moving.
-And movement keeps you visible.`,
-    },
-    {
-      night: 6,
-      text: `Cait: Robtergeist? Are you there?
+And movement keeps you visible.`, "Intro");
+  pushEntry(
+    5,
+    `Cait: When you use it—
+
+don’t think of it as pulling them away.
+
+Think of it as being shown
+where you’re allowed to go.`,
+    "Pickup"
+  );
+  pushEntry(5, NIGHT_DIALOGUE[5]?.objectiveComplete, "Objective Complete");
+
+  pushEntry(6, `Cait: Robtergeist? Are you there?
 
 I can’t hear you. What happened?
 
@@ -6322,17 +6420,63 @@ I think they know.
 If you can hear me— get the door jam.
 It’s in ${night6RoomName}.
 
-Please.`,
-    },
-    {
-      night: 7,
-      text: `Cait: I’m sorry.
+Please.`, "Intro");
+  pushEntry(6, "Cait: …there— <static> …don’t— <static> …stay— <static>", "Pickup Warning");
+  pushEntry(
+    6,
+    `Cait: …<static>… my eyes… <static>…
+
+…burning…
+
+…<static>… I can’t— I can’t hold it— <static>`,
+    "Pickup"
+  );
+  pushEntry(6, NIGHT_DIALOGUE[6]?.objectiveComplete, "Objective Complete");
+
+  pushEntry(7, `Cait: I’m sorry.
+
+I’m so sorry.`, "Intro");
+  pushEntry(
+    7,
+    `Cait: I tried so hard.
 
 I’m so sorry.`,
-    },
-    {
-      night: 8,
-      text: `Cait: Geist…
+    "Comment"
+  );
+  pushEntry(
+    7,
+    `Cait: Geist?
+
+I… I found a blowtorch.
+It’s in ${night7RoomName}.
+
+Try it on the permanent door jams.
+
+I don’t know if this helps.
+
+But I don’t know what else we do now.`,
+    "Comment"
+  );
+  pushEntry(7, "Cait: Not yet. Grab the Blowtorch.", "Objective");
+  pushEntry(
+    7,
+    `Cait: Okay…
+
+If it works, it buys you a way through.
+
+If it doesn’t—
+
+…
+
+I don’t want to finish that thought.
+
+Just— pick the door carefully.`,
+    "Pickup"
+  );
+  pushEntry(7, "Cait: Not here. Wrong door.", "Comment");
+  pushEntry(7, NIGHT_DIALOGUE[7]?.objectiveComplete, "Objective Complete");
+
+  pushEntry(8, `Cait: Geist…
 
 Something’s different tonight.
 
@@ -6341,11 +6485,10 @@ It’s not correcting you.
 
 It’s just… letting things happen.
 
-That’s worse.`,
-    },
-    {
-      night: 9,
-      text: `Cait: Geist… listen to me.
+That’s worse.`, "Intro");
+  pushEntry(8, NIGHT_DIALOGUE[8]?.objectiveComplete, "Objective Complete");
+
+  pushEntry(9, `Cait: Geist… listen to me.
 
 If something tonight feels familiar—
 too familiar—
@@ -6353,11 +6496,10 @@ too familiar—
 don’t trust that feeling.
 
 I don’t think I’m the only thing
-that knows how you move anymore.`,
-    },
-    {
-      night: 10,
-      text: `Cait: Geist…
+that knows how you move anymore.`, "Intro");
+  pushEntry(9, NIGHT_DIALOGUE[9]?.objectiveComplete, "Objective Complete");
+
+  pushEntry(10, `Cait: Geist…
 
 I don’t think this ends
 with both of us in the same place.
@@ -6368,18 +6510,13 @@ it’s closer to me than it is to you.
 That doesn’t mean I’m leaving.
 
 It just means
-you might have to finish this without my voice.`,
-    },
-    {
-      night: 11,
-      text: "Cait: Leave.",
-    },
-  ];
+you might have to finish this without my voice.`, "Intro");
+  pushEntry(10, NIGHT_DIALOGUE[10]?.objectiveComplete, "Objective Complete");
+  pushEntry(10, NIGHT_DIALOGUE[10]?.escapeReady, "Escape Ready");
 
-  return entries.map(({ night, text }) => ({
-    title: `CAIT - NIGHT ${night}`,
-    text,
-  }));
+  pushEntry(11, "Cait: Leave.", "Final");
+
+  return entries;
 }
 
 function showNextDebugStoryModal() {
