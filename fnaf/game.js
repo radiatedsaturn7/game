@@ -9914,7 +9914,19 @@ function revealIntroMap() {
   state.selectedRoom = null;
   state.routePreviewRoom = null;
   if (dom.app) {
+    dom.app.classList.add("intro-reveal");
     dom.app.classList.remove("is-hidden");
+    requestAnimationFrame(() => {
+      dom.app?.classList.add("intro-reveal-active");
+    });
+    dom.app.addEventListener(
+      "transitionend",
+      (event) => {
+        if (event.propertyName !== "opacity") return;
+        dom.app?.classList.remove("intro-reveal", "intro-reveal-active");
+      },
+      { once: true },
+    );
   }
   openMap();
   updateUI();
