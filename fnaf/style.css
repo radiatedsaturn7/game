@@ -1192,6 +1192,14 @@ main {
   isolation: isolate;
 }
 
+body.title-active .overlay-footer,
+body:has(#audioGate[aria-hidden="false"]) .overlay-footer,
+body:has(#titleScreen[aria-hidden="false"]) .overlay-footer,
+body:has(#titleScreen.title-fade-out) .overlay-footer {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .overlay-footer button {
   flex: 1 1 0;
   min-width: 0;
