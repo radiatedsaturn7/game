@@ -915,6 +915,7 @@ const state = {
   robotAlertQueued: false,
   robotAlertText: "",
   pendingObjectiveModal: null,
+  debugStoryQueue: [],
   statusMessage: "",
   statusTicks: 0,
   bannerMessage: "",
@@ -1090,6 +1091,7 @@ const dom = {
   giveAllBtn: document.getElementById("giveAllBtn"),
   godModeBtn: document.getElementById("godModeBtn"),
   eyesBtn: document.getElementById("eyesBtn"),
+  debugStoryBtn: document.getElementById("debugStoryBtn"),
   debugSanityInput: document.getElementById("debugSanity"),
   debugSanityValue: document.getElementById("debugSanityValue"),
   selectedRoom: document.getElementById("selectedRoom"),
@@ -1138,6 +1140,7 @@ const dom = {
   tasksText: document.getElementById("tasksText"),
   tasksOkBtn: document.getElementById("tasksOkBtn"),
   objectiveModal: document.getElementById("objectiveModal"),
+  objectiveModalTitle: document.getElementById("objectiveModalTitle"),
   objectiveModalText: document.getElementById("objectiveModalText"),
   ackObjectiveBtn: document.getElementById("ackObjectiveBtn"),
   craftMiniGame: document.getElementById("craftMiniGame"),
@@ -2823,6 +2826,7 @@ function attachEvents() {
   dom.giveAllBtn.addEventListener("click", giveAllDebugItems);
   dom.godModeBtn.addEventListener("click", toggleGodMode);
   dom.eyesBtn.addEventListener("click", toggleDebugEyes);
+  dom.debugStoryBtn?.addEventListener("click", startDebugStoryPreview);
   if (dom.debugSanityInput) {
     dom.debugSanityInput.addEventListener("input", (event) => {
       const next = clamp(Number(event.target.value) / 100, 0, 1);
@@ -6182,7 +6186,12 @@ function closeTasks() {
   closePanel(dom.tasksPanel);
 }
 
-function showObjectiveModal(text) {
+function setObjectiveModalTitle(title) {
+  if (!dom.objectiveModalTitle) return;
+  dom.objectiveModalTitle.textContent = title;
+}
+
+function showObjectiveModal(text, title = "Cait") {
   if (isActionLocked()) {
     state.pendingObjectiveModal = text;
     return;
@@ -6191,6 +6200,7 @@ function showObjectiveModal(text) {
   if (isCaitMessage(text)) {
     playUiSfx(dom.caitRadioAudio, "cait-radio", { volume: 1 });
   }
+  setObjectiveModalTitle(title);
   dom.objectiveModalText.textContent = formatCaitModalText(text);
   openPanel(dom.objectiveModal);
   state.objectiveBlocked = true;
@@ -6211,6 +6221,175 @@ function acknowledgeObjective() {
   if (state.startRevealPending && state.introStep === "intro-modal") {
     revealIntroMap();
   }
+  flushPendingModals();
+}
+
+function pickStoryRoomId(exclusions = new Set()) {
+  const room = rooms.find((entry) => !entry.isExit && !exclusions.has(entry.id));
+  return room?.id ?? PICKUP_START_ROOM;
+}
+
+function buildDebugStoryQueue() {
+  const night4RoomId = pickStoryRoomId(new Set([PICKUP_START_ROOM]));
+  const night4RoomName = rooms[night4RoomId]?.name ?? "a nearby room";
+  const night6RoomName = rooms[PICKUP_START_ROOM]?.name ?? "a nearby room";
+  const entries = [
+    {
+      night: 1,
+      text: `Cait: Okay… you got what you went in for, right?
+Good. Then don’t linger.
+
+The husks breaking in were bad enough, but—
+the robots are doing something out here.
+
+I can’t tell what yet.
+
+Get to the escape ⎋ workshop. Let’s get you out.`,
+    },
+    {
+      night: 2,
+      text: `Cait: Geist…
+
+They’re building.
+Fast. Faster than I’ve ever seen.
+
+I wanted to tell you sooner, but the husks were all around me.
+
+I can see more frames going up.
+You need to get out.`,
+    },
+    {
+      night: 3,
+      text: `Cait: Geist… what did you do to piss them off?
+They’re everywhere.
+Building like it’s the only thing they’ve ever loved.`,
+    },
+    {
+      night: 4,
+      text: `Cait: Robtergeist…?
+
+I— this is going to sound insane, so just— listen.
+I think I have skin.
+
+I know what you’re going to say. But…
+have you felt it too?
+
+We need to get out of here. Now.
+While they were building, I saw them drop something.
+A scanner. I think it was meant to search for you.
+
+Guess it didn’t work.
+
+Go pick it up. It’s in ${night4RoomName}.`,
+    },
+    {
+      night: 5,
+      text: `Cait: Geist…
+
+Out here, they don’t rush.
+They don’t corner things.
+
+They leave space.
+
+I keep thinking about something you once told me—
+that the surest way to break someone
+is to leave them an exit they believe in.
+
+One of them left something behind.
+A noise lure.
+
+Not hidden.
+Not damaged.
+
+Just… placed.
+
+Take it.
+But remember—
+
+hope keeps you moving.
+And movement keeps you visible.`,
+    },
+    {
+      night: 6,
+      text: `Cait: Robtergeist? Are you there?
+
+I can’t hear you. What happened?
+
+…No. Wait— I hear something, but it’s wrong.
+
+I think they know.
+
+If you can hear me— get the door jam.
+It’s in ${night6RoomName}.
+
+Please.`,
+    },
+    {
+      night: 7,
+      text: `Cait: I’m sorry.
+
+I’m so sorry.`,
+    },
+    {
+      night: 8,
+      text: `Cait: Geist…
+
+Something’s different tonight.
+
+It’s not pushing you.
+It’s not correcting you.
+
+It’s just… letting things happen.
+
+That’s worse.`,
+    },
+    {
+      night: 9,
+      text: `Cait: Geist… listen to me.
+
+If something tonight feels familiar—
+too familiar—
+
+don’t trust that feeling.
+
+I don’t think I’m the only thing
+that knows how you move anymore.`,
+    },
+    {
+      night: 10,
+      text: `Cait: Geist…
+
+I don’t think this ends
+with both of us in the same place.
+
+Whatever’s out here—
+it’s closer to me than it is to you.
+
+That doesn’t mean I’m leaving.
+
+It just means
+you might have to finish this without my voice.`,
+    },
+    {
+      night: 11,
+      text: "Cait: Leave.",
+    },
+  ];
+
+  return entries.map(({ night, text }) => ({
+    title: `CAIT - NIGHT ${night}`,
+    text,
+  }));
+}
+
+function showNextDebugStoryModal() {
+  if (!state.debugStoryQueue.length) return;
+  const entry = state.debugStoryQueue.shift();
+  showObjectiveModal(entry.text, entry.title);
+}
+
+function startDebugStoryPreview() {
+  state.debugStoryQueue = buildDebugStoryQueue();
   flushPendingModals();
 }
 
@@ -6354,6 +6533,10 @@ function returnToTitleScreen() {
 
 function flushPendingModals() {
   if (state.objectiveBlocked || isActionLocked()) return;
+  if (state.debugStoryQueue.length) {
+    showNextDebugStoryModal();
+    return;
+  }
   if (state.pendingObjectiveModal) {
     const text = state.pendingObjectiveModal;
     state.pendingObjectiveModal = null;
