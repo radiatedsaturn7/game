@@ -294,6 +294,11 @@ body.title-active {
   background-image: none;
 }
 
+body.intro-blackout {
+  background-color: #000;
+  background-image: none;
+}
+
 :root {
   --fx: 0;
   --fx-grain: 0.08;
@@ -639,7 +644,7 @@ body.fx-critical .map-node text {
 .app.intro-reveal {
   opacity: 0;
   visibility: visible;
-  transition: opacity 1.8s ease;
+  transition: opacity 0.45s ease;
 }
 
 .app.intro-reveal.intro-reveal-active {

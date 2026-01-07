@@ -2388,6 +2388,7 @@ function startGameFromQuery() {
   state.introSequenceActive = false;
   state.introStep = null;
   state.introEscapeVisited = false;
+  document.body.classList.remove("intro-blackout");
   setCurrentNight(1);
   initHorrorFX();
   init();
@@ -2776,6 +2777,7 @@ function startGameFromTitle() {
   state.introSequenceActive = true;
   state.introStep = "intro-modal";
   state.introEscapeVisited = false;
+  document.body.classList.add("intro-blackout");
   setCurrentNight(1);
   initHorrorFX();
   init();
@@ -6316,6 +6318,7 @@ function returnToTitleScreen() {
   hasStartedGame = false;
   canStartAmbience = false;
   state.objectiveBlocked = false;
+  document.body.classList.remove("intro-blackout");
   if (dom.titleAudio) {
     dom.titleAudio.pause();
     dom.titleAudio.currentTime = 0;
@@ -9913,6 +9916,7 @@ function revealIntroMap() {
   clearMapTarget();
   state.selectedRoom = null;
   state.routePreviewRoom = null;
+  document.body.classList.remove("intro-blackout");
   if (dom.app) {
     dom.app.classList.add("intro-reveal");
     dom.app.classList.remove("is-hidden");
