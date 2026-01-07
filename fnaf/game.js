@@ -2791,6 +2791,7 @@ function startGameFromTitle() {
     AudioManager.setMusicVolume(MUSIC_BUS_DEFAULT);
     if (dom.titleScreen) {
       dom.titleScreen.setAttribute("aria-hidden", "true");
+      dom.titleScreen.classList.remove("title-fade-out");
     }
     document.body.classList.remove("title-active");
     if (dom.app && !state.startRevealPending) {
