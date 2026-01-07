@@ -41,6 +41,18 @@
   --room-max-width: 680px;
   --panel-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
   --app-pad-x: 16px;
+  --map-bg: rgba(8, 9, 10, 0.92);
+  --map-panel: rgba(14, 15, 16, 0.92);
+  --map-border: rgba(140, 140, 140, 0.35);
+  --map-text: rgba(228, 222, 209, 0.92);
+  --map-text-dim: rgba(190, 190, 190, 0.65);
+  --map-accent: rgba(180, 74, 60, 0.95);
+  --map-accent-deep: rgba(92, 28, 24, 0.95);
+  --calc-bg: rgba(5, 6, 6, 0.92);
+  --calc-border: rgba(210, 210, 210, 0.18);
+  --calc-glow: rgba(160, 220, 255, 0.12);
+  --calc-text: rgba(210, 240, 255, 0.92);
+  --calc-text-dim: rgba(170, 200, 210, 0.65);
 }
 
 @keyframes glitchPulse {
@@ -1580,13 +1592,18 @@ body:has(#usePanel.active) #liveBtn {
 
 .map-shell {
   background:
-    linear-gradient(160deg, rgba(22, 22, 18, 0.88), rgba(10, 12, 10, 0.95)),
-    repeating-linear-gradient(0deg, rgba(204, 186, 130, 0.04) 0, rgba(204, 186, 130, 0.04) 1px, transparent 1px, transparent 10px),
-    repeating-linear-gradient(90deg, rgba(204, 186, 130, 0.035) 0, rgba(204, 186, 130, 0.035) 1px, transparent 1px, transparent 12px),
+    linear-gradient(160deg, rgba(10, 11, 12, 0.92), rgba(3, 3, 3, 0.96)),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.03) 0,
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 10px
+    ),
     url("images/screen.png") center/cover no-repeat;
+  border: 1px solid var(--map-border);
   border-radius: 6px;
   padding: 10px;
-  border: 1px solid var(--panel-border);
   position: relative;
   overflow: hidden;
   display: flex;
@@ -1605,7 +1622,7 @@ body:has(#usePanel.active) #liveBtn {
 }
 
 #floorplanMap {
-  filter: sepia(0.22) saturate(0.7) contrast(1.05) brightness(0.92);
+  filter: saturate(0.95) contrast(1.08) brightness(0.9);
 }
 
 .map-shell::before,
@@ -1663,6 +1680,40 @@ body:has(#usePanel.active) #liveBtn {
   align-items: stretch;
 }
 
+.map-controls .quick-buttons button {
+  background:
+    linear-gradient(180deg, rgba(20, 20, 20, 0.95), rgba(6, 6, 6, 0.95)),
+    repeating-linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0.035) 0,
+      rgba(255, 255, 255, 0.035) 1px,
+      transparent 1px,
+      transparent 7px
+    );
+  border-color: rgba(160, 160, 160, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.75),
+    0 6px 14px rgba(0, 0, 0, 0.45);
+  color: var(--map-text);
+}
+
+body[data-move="sneak"] #sneakBtn,
+body[data-move="run"] #runBtn {
+  background:
+    linear-gradient(160deg, var(--map-accent), var(--map-accent-deep)),
+    repeating-linear-gradient(
+      120deg,
+      rgba(255, 255, 255, 0.06) 0,
+      rgba(255, 255, 255, 0.06) 1px,
+      transparent 1px,
+      transparent 6px
+    );
+  border-color: rgba(150, 60, 50, 0.9);
+  color: #1b0b09;
+  box-shadow: 0 0 16px rgba(168, 60, 50, 0.35);
+}
+
 .map-controls #scannerToggleBtn {
   grid-column: 3;
   grid-row: 1 / span 2;
@@ -1682,14 +1733,14 @@ body:has(#usePanel.active) #liveBtn {
 }
 
 .map-link {
-  stroke: rgba(140, 128, 108, 0.32);
+  stroke: rgba(170, 170, 170, 0.22);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-dasharray: 14 7;
 }
 
 .map-link.active {
-  stroke: rgba(214, 164, 86, 0.82);
+  stroke: rgba(220, 220, 220, 0.55);
   stroke-width: 3;
   stroke-dasharray: 10 5;
 }
@@ -1743,8 +1794,8 @@ body:has(#usePanel.active) #liveBtn {
 }
 
 .map-node circle {
-  fill: rgba(20, 18, 14, 0.9);
-  stroke: rgba(138, 126, 108, 0.75);
+  fill: rgba(12, 12, 12, 0.88);
+  stroke: rgba(190, 190, 190, 0.35);
   stroke-width: 2;
 }
 
@@ -1864,8 +1915,8 @@ body:has(#usePanel.active) #liveBtn {
 }
 
 .map-node.active circle {
-  fill: rgba(122, 96, 50, 0.9);
-  stroke: rgba(236, 198, 120, 0.9);
+  fill: rgba(36, 16, 14, 0.9);
+  stroke: rgba(180, 74, 60, 0.85);
 }
 
 .map-node.alert circle {
@@ -1884,10 +1935,10 @@ body:has(#usePanel.active) #liveBtn {
 }
 
 .map-node.action-selected circle {
-  fill: rgba(236, 198, 120, 0.35);
-  stroke: rgba(236, 198, 120, 0.9);
+  fill: rgba(180, 74, 60, 0.18);
+  stroke: rgba(180, 74, 60, 0.9);
   stroke-width: 3;
-  filter: drop-shadow(0 0 6px rgba(236, 198, 120, 0.5));
+  filter: drop-shadow(0 0 6px rgba(180, 74, 60, 0.5));
 }
 
 .map-node.action-disabled {
@@ -1994,6 +2045,50 @@ body.night-11 .map-node text {
 .floorplan-status .weather-symbol {
   font-size: 1.2rem;
   color: rgba(214, 172, 112, 0.9);
+}
+
+.floorplan-status.calc-display {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(8, 10, 10, 0.95), var(--calc-bg));
+  border: 1px solid var(--calc-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.75),
+    0 6px 14px rgba(0, 0, 0, 0.45);
+  position: relative;
+  overflow: hidden;
+}
+
+.floorplan-status.calc-display::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 70% 20%, var(--calc-glow), transparent 55%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.04) 0,
+      rgba(255, 255, 255, 0.04) 1px,
+      transparent 1px,
+      transparent 4px
+    );
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.floorplan-status.calc-display span {
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  color: var(--calc-text-dim);
+}
+
+.floorplan-status.calc-display strong {
+  font-family: "Courier New", ui-monospace, monospace;
+  font-size: 1.05rem;
+  letter-spacing: 0.18em;
+  color: var(--calc-text);
+  text-transform: uppercase;
 }
 
 .night-row {
@@ -2210,8 +2305,8 @@ body.night-11 .map-node text {
   position: fixed;
   inset: 0;
   background:
-    linear-gradient(rgba(12, 10, 8, 0.82), rgba(6, 6, 6, 0.92)),
-    radial-gradient(circle at 20% 15%, rgba(120, 112, 84, 0.18), transparent 55%),
+    linear-gradient(rgba(6, 6, 6, 0.88), rgba(0, 0, 0, 0.94)),
+    radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.06), transparent 55%),
     url("images/background.png") center/cover no-repeat;
   display: flex;
   align-items: stretch;
@@ -2239,9 +2334,9 @@ body.night-11 .map-node text {
 
 .map-card {
   background:
-    linear-gradient(160deg, rgba(26, 24, 18, 0.92), rgba(12, 12, 10, 0.96)),
+    linear-gradient(160deg, var(--map-panel), rgba(6, 6, 6, 0.96)),
     url("images/map.png") center/cover no-repeat;
-  border: 1px solid var(--panel-border);
+  border: 1px solid var(--map-border);
   border-radius: 4px;
   padding: 24px;
   width: min(500px, 100%);
