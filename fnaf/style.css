@@ -636,6 +636,16 @@ body.fx-critical .map-node text {
   overflow: hidden;
 }
 
+.app.intro-reveal {
+  opacity: 0;
+  visibility: visible;
+  transition: opacity 1.8s ease;
+}
+
+.app.intro-reveal.intro-reveal-active {
+  opacity: 1;
+}
+
 .app.is-hidden {
   opacity: 0;
   visibility: hidden;
