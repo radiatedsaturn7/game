@@ -3502,6 +3502,10 @@ function updateMoveButtons() {
   const blockMove = controlBlocked || isDeployMode || !canMove;
   const canCancel = isMoving || state.mapTargetMode || hasSelection;
   dom.cancelBtn.disabled = !canCancel || controlBlocked;
+  const highlightRun =
+    state.currentNight === 1 &&
+    state.introStep === "highlight-run" &&
+    !isDeployMode;
   if (dom.sneakBtn && dom.runBtn) {
     const sneakLabel = dom.sneakBtn.querySelector(".quick-label");
     const sneakSub = dom.sneakBtn.querySelector(".quick-sub");
@@ -3522,6 +3526,7 @@ function updateMoveButtons() {
       dom.sneakBtn.disabled = blockMove;
       dom.runBtn.disabled = blockMove;
     }
+    dom.runBtn.classList.toggle("objective-highlight", highlightRun);
   }
 }
 

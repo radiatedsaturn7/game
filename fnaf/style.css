@@ -40,6 +40,7 @@
   --app-max-width: 1080px;
   --room-max-width: 680px;
   --panel-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+  --app-pad-x: 16px;
 }
 
 @keyframes glitchPulse {
@@ -614,7 +615,7 @@ body.fx-critical .map-node text {
 .app {
   max-width: var(--app-max-width);
   margin: 0 auto;
-  padding: 0 16px;
+  padding: 0 var(--app-pad-x);
   position: relative;
   min-height: 100svh;
   height: 100svh;
@@ -739,7 +740,7 @@ main {
   height: 100%;
   min-height: 0;
   padding-top: calc(12px + env(safe-area-inset-top));
-  padding-bottom: 12px;
+  padding-bottom: calc(12px + var(--nav-h) + env(safe-area-inset-bottom));
   flex: 1 1 auto;
 }
 
@@ -750,6 +751,7 @@ main {
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  text-align: left;
   padding: 10px 24px;
   border-radius: 8px;
   color: var(--text-primary);
@@ -919,6 +921,10 @@ main {
   text-align: left;
   flex: 1 1 auto;
   display: block;
+}
+
+.room-hud .robot-status span {
+  text-align: left;
 }
 
 .robot-status span {
@@ -1162,15 +1168,15 @@ main {
 }
 
 .overlay-footer {
-  position: relative;
-  left: auto;
-  bottom: auto;
-  transform: none;
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
   display: flex;
   gap: 10px;
   padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
-  width: 100%;
-  max-width: none;
+  width: min(calc(100% - (var(--app-pad-x) * 2)), var(--app-max-width));
+  max-width: var(--app-max-width);
   min-height: var(--nav-h);
   justify-content: space-between;
   margin: 0 auto;
@@ -1182,7 +1188,8 @@ main {
     inset 0 1px 0 var(--panel-highlight),
     inset 0 -1px 0 var(--ui-border-lo),
     0 6px 18px rgba(0, 0, 0, 0.45);
-  z-index: 200;
+  z-index: 300;
+  isolation: isolate;
 }
 
 .overlay-footer button {
@@ -2181,7 +2188,8 @@ body.night-11 .map-node text {
   display: flex;
   align-items: stretch;
   justify-content: flex-start;
-  padding: calc(12px + env(safe-area-inset-top)) 16px 16px 16px;
+  padding: calc(12px + env(safe-area-inset-top)) 16px
+    calc(12px + var(--nav-h) + env(safe-area-inset-bottom)) 16px;
   z-index: 25;
   opacity: 0;
   visibility: hidden;
@@ -3011,8 +3019,8 @@ button.objective-highlight {
     border-width: 0;
   }
 
-  .app {
-    padding: 0 12px;
+  :root {
+    --app-pad-x: 12px;
   }
 
   .room-hud {
