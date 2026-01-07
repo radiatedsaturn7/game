@@ -5,10 +5,10 @@
   color: #e4ded1;
   --hud-h: 56px;
   --nav-h: 72px;
-  --inner-frame-inset: -32px;
-  --inner-frame-radius: 42px;
-  --inner-frame-border: 12px;
-  --camera-boost: 280px;
+  --inner-frame-inset: -10px;
+  --inner-frame-radius: 44px;
+  --inner-frame-border: 10px;
+  --camera-boost: 0px;
   --hud-height: var(--hud-h);
   --footer-height: var(--nav-h);
   --view-gap: 10px;
@@ -259,7 +259,7 @@ body::after {
   border: var(--inner-frame-border) solid #000;
   border-radius: var(--inner-frame-radius);
   pointer-events: none;
-  z-index: 1;
+  z-index: 95;
 }
 
 body[data-weather="rain"] {
@@ -784,18 +784,11 @@ main {
   position: relative;
   border-radius: 10px;
   width: 100%;
-  max-width: min(100%, 720px);
+  max-width: min(100%, 640px);
   flex: 1 1 auto;
   height: auto;
-  max-height: calc(
-    100svh
-    - var(--hud-h)
-    - var(--nav-h)
-    - env(safe-area-inset-bottom)
-    - 6px
-    - var(--view-gap)
-  );
-  min-height: clamp(360px, 55svh, 760px);
+  max-height: calc(100svh - var(--hud-h) - var(--nav-h) - env(safe-area-inset-bottom) - 12px);
+  min-height: clamp(320px, 50svh, 700px);
   margin: 0 auto;
   overflow: hidden;
   background: rgba(16, 14, 10, 0.4);
@@ -1165,8 +1158,8 @@ main {
   display: flex;
   gap: 12px;
   padding: 8px 12px;
-  width: min(calc(100% - 32px), 720px);
-  max-width: min(calc(100% - 32px), 720px);
+  width: min(calc(100% - 32px), 640px);
+  max-width: min(calc(100% - 32px), 640px);
   min-height: var(--nav-h);
   justify-content: space-between;
   box-sizing: border-box;
@@ -1177,7 +1170,7 @@ main {
     inset 0 1px 0 var(--panel-highlight),
     inset 0 -1px 0 var(--ui-border-lo),
     0 6px 18px rgba(0, 0, 0, 0.45);
-  z-index: 70;
+  z-index: 110;
 }
 
 .overlay-footer button {
