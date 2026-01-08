@@ -1056,6 +1056,7 @@ const state = {
   startRevealPending: false,
   introEscapeVisited: false,
   escapeMapSelected: false,
+  escapeRunPrompted: false,
   escapeArrivalPrompted: false,
   escapeArrivalAcknowledged: false,
 };
@@ -3597,7 +3598,7 @@ function updateMoveButtons() {
       (state.currentNight === 1 &&
         state.escapeConsoleInspected &&
         !state.runAcknowledgedNightOne) ||
-      state.escapeMapSelected) &&
+      state.escapeRunPrompted) &&
     !isDeployMode;
   if (dom.sneakBtn && dom.runBtn) {
     const sneakLabel = dom.sneakBtn.querySelector(".quick-label");
@@ -7759,6 +7760,7 @@ function moveSelected(isRun) {
 function clearSelectedRoom() {
   state.selectedRoom = null;
   state.escapeMapSelected = false;
+  state.escapeRunPrompted = false;
   updateUI();
 }
 
@@ -7825,6 +7827,7 @@ function handleMapSelection(roomId) {
     return;
   }
   state.escapeMapSelected = isExitRoom;
+  state.escapeRunPrompted = isExitRoom;
   setRoutePreview(roomId);
   setSelectedRoom(roomId);
 }
