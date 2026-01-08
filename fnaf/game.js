@@ -2865,10 +2865,12 @@ async function startGameFromTitle() {
     }
     canStartAmbience = true;
     updateWeatherAmbience();
-    if (state.pendingIntroModal) {
-      const introText = state.pendingIntroModal;
+    if (state.introSequenceActive && state.introStep === "intro-modal") {
+      const introText = state.pendingIntroModal ?? getInitialObjectiveModalText();
       state.pendingIntroModal = null;
-      showObjectiveModal(introText);
+      if (introText) {
+        requestAnimationFrame(() => showObjectiveModal(introText));
+      }
     }
   };
   Promise.allSettled([fadeOutMusicBus(TITLE_FADE_OUT_MS), waitForTitleFadeOut()]).then(finishStart);
