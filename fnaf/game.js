@@ -3600,13 +3600,7 @@ function updateMoveButtons() {
   const blockMove = controlBlocked || isDeployMode || !canMove;
   const canCancel = isMoving || state.mapTargetMode || hasSelection;
   dom.cancelBtn.disabled = !canCancel || controlBlocked;
-  const highlightRunBase =
-    (state.introStep === "highlight-run" ||
-      (state.currentNight === 1 &&
-        state.escapeConsoleInspected &&
-        !state.runAcknowledgedNightOne) ||
-      state.escapeRunPrompted) &&
-    !isDeployMode;
+  const highlightRunBase = state.escapeRunPrompted && !isDeployMode;
   if (!state.runHighlightConsumed) {
     if (highlightRunBase) {
       state.runHighlightActive = true;
