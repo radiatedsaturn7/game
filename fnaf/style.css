@@ -515,6 +515,23 @@ body.fx-critical .map-node text {
   pointer-events: none;
 }
 
+.intro-fade {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 59;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.45s ease, visibility 0s linear 0.45s;
+}
+
+.intro-fade.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.45s ease;
+}
+
 .title-video-stack {
   position: absolute;
   inset: 0;
@@ -1228,6 +1245,18 @@ body.intro-blackout .overlay-footer {
   pointer-events: none;
 }
 
+.map-panel.intro-reveal {
+  opacity: 0;
+  visibility: visible;
+  pointer-events: none;
+  transition: opacity 0.45s ease;
+}
+
+.map-panel.intro-reveal.intro-reveal-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .overlay-footer.intro-reveal {
   opacity: 0;
   transition: opacity 0.45s ease;
@@ -1708,6 +1737,16 @@ body:has(#usePanel.active) #liveBtn {
   color: var(--map-text);
 }
 
+.map-controls #sneakBtn:disabled,
+.map-controls #runBtn:disabled {
+  opacity: 1;
+}
+
+.map-title {
+  font-family: "Impact", "Haettenschweiler", "Franklin Gothic Medium", "Arial Narrow", sans-serif;
+  letter-spacing: 0.2em;
+}
+
 body[data-move="sneak"] #sneakBtn,
 body[data-move="run"] #runBtn {
   background:
@@ -1927,6 +1966,11 @@ body[data-move="run"] #runBtn {
 .map-node.active circle {
   fill: rgba(36, 16, 14, 0.9);
   stroke: rgba(180, 74, 60, 0.85);
+}
+
+body[data-move="run"] .map-node.active circle {
+  fill: rgba(248, 248, 248, 0.95);
+  stroke: rgba(248, 248, 248, 0.9);
 }
 
 .map-node.alert circle {
