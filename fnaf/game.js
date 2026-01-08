@@ -2832,6 +2832,10 @@ async function startGameFromTitle() {
     dom.introFade.classList.add("is-visible");
     dom.introFade.setAttribute("aria-hidden", "false");
   }
+  if (dom.titleAudio) {
+    dom.titleAudio.pause();
+    dom.titleAudio.currentTime = 0;
+  }
   state.startRevealPending = true;
   state.introSequenceActive = true;
   state.introStep = "intro-modal";
@@ -2856,7 +2860,7 @@ async function startGameFromTitle() {
       dom.titleScreen.classList.remove("title-fade-out");
     }
     document.body.classList.remove("title-active");
-    if (dom.app && !state.startRevealPending) {
+    if (dom.app) {
       dom.app.classList.remove("is-hidden");
     }
     canStartAmbience = true;
