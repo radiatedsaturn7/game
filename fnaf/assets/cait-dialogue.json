@@ -7,7 +7,7 @@
     "objectiveOverrideNodes": "Cait: Override nodes are live. Line them up.",
     "objectiveBuildItem": "Cait: Build {itemName}, then install it at the console.",
     "objectiveStabilize": "Cait: Stabilize the core systems.",
-    "objectiveRecoverData": "Cait: Recover the data fragments.",
+    "objectiveRecoverData": "Cait: That door can be unjammed. Find the data fragments— I’ll stitch the override from my side.",
     "objectiveGrabSchematic": "Cait: Grab the {schematic} first.",
     "objectiveTutorial": "Cait: I’ve got a minute— that’s it.\nI’m going to teach you a trick.\nIf you rewire a room slow and careful, you can flood their feeds with static.\nIt won’t hide you.\nBut it can make you harder to pin down— for a moment.",
     "pickupHold": "Cait: Not yet. Grab the {pickupName}.",
@@ -32,7 +32,7 @@
     },
     "3": {
       "intro": "Cait: Geist… what did you do to piss them off?\nThey’re everywhere.\nBuilding like it’s the only thing they’ve ever loved.",
-      "comment": "Cait: I can’t talk long. It’s still too dangerous out here.\nBut listen— they’ve started installing alarms inside the rooms.\nIf you find one, kill it. Shut it down.\n…Shit. I have to move.",
+      "comment": "Cait: I can’t talk long. It’s still too dangerous out here.\nBut listen— they’ve started installing alarms inside the rooms.\nIf you find one, kill it. Shut it down.",
       "robotActivation": "Cait: One more thing. Watch out. I think its following you.",
       "alarms": [
         "Cait: Alarm tripped. Lightning's been messing with the lines.",
