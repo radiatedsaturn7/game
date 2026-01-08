@@ -965,7 +965,7 @@ main {
 }
 
 .room-hud-title {
-  padding-left: 40px;
+  padding-left: 28px;
 }
 
 .room-view > .room-hud-title {
@@ -1778,7 +1778,7 @@ body:has(#usePanel.active) #liveBtn {
 
 .map-title {
   letter-spacing: 0.32em;
-  color: #ffffff;
+  color: #fff;
 }
 
 body[data-move="sneak"] #sneakBtn,
