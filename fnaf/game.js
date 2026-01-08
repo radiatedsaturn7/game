@@ -908,6 +908,9 @@ const state = {
   actionLock: null,
   escapeConsoleInspected: false,
   tasksAcknowledgedNightOne: false,
+  runAcknowledgedNightOne: false,
+  liveAcknowledgedNightOne: false,
+  liveEscapePrompted: false,
   noiseLureCharges: 0,
   playerPath: [],
   playerTravelMode: "sneak",
@@ -3244,7 +3247,11 @@ function updateUI() {
   }
   if (dom.liveBtn) {
     dom.liveBtn.disabled = controlBlocked;
-    dom.liveBtn.classList.toggle("objective-highlight", state.introStep === "highlight-live");
+    dom.liveBtn.classList.toggle(
+      "objective-highlight",
+      state.introStep === "highlight-live" ||
+        (state.currentNight === 1 && state.liveEscapePrompted && !state.liveAcknowledgedNightOne)
+    );
   }
   if (dom.systemMenuBtn) {
     dom.systemMenuBtn.disabled = controlBlocked;
@@ -3579,7 +3586,8 @@ function updateMoveButtons() {
   dom.cancelBtn.disabled = !canCancel || controlBlocked;
   const highlightRun =
     state.currentNight === 1 &&
-    state.introStep === "highlight-run" &&
+    state.escapeConsoleInspected &&
+    !state.runAcknowledgedNightOne &&
     !isDeployMode;
   if (dom.sneakBtn && dom.runBtn) {
     const sneakLabel = dom.sneakBtn.querySelector(".quick-label");
@@ -4206,6 +4214,9 @@ function setupNight11State() {
   state.escapeReady = false;
   state.escapeConsoleInspected = false;
   state.tasksAcknowledgedNightOne = false;
+  state.runAcknowledgedNightOne = false;
+  state.liveAcknowledgedNightOne = false;
+  state.liveEscapePrompted = false;
   state.stabilizeTargets = [];
   state.stabilizedTargets = new Set();
   state.dataFragmentsNeeded = 0;
@@ -5035,6 +5046,9 @@ function setCurrentNight(night) {
     state.selectedSchematic = null;
     state.escapeConsoleInspected = false;
     state.tasksAcknowledgedNightOne = false;
+    state.runAcknowledgedNightOne = false;
+    state.liveAcknowledgedNightOne = false;
+    state.liveEscapePrompted = false;
   }
   announceWeather();
   updateNextNightButton();
@@ -6072,6 +6086,10 @@ function returnToRoom() {
   if (state.introStep === "highlight-live") {
     state.introStep = "complete";
     state.introSequenceActive = false;
+  }
+  if (state.currentNight === 1 && state.liveEscapePrompted) {
+    state.liveAcknowledgedNightOne = true;
+    state.liveEscapePrompted = false;
   }
   clearSelectedRoom();
 }
@@ -7822,6 +7840,14 @@ function handleMapMove(isRun) {
     executeMapTargetAction(target, state.mapTargetMode);
     return;
   }
+  if (
+    isRun &&
+    state.currentNight === 1 &&
+    state.escapeConsoleInspected &&
+    !state.runAcknowledgedNightOne
+  ) {
+    state.runAcknowledgedNightOne = true;
+  }
   moveSelected(isRun);
 }
 
@@ -8665,6 +8691,9 @@ function resetGame({ preserveItems = false } = {}) {
   state.escapeReady = false;
   state.escapeConsoleInspected = false;
   state.tasksAcknowledgedNightOne = false;
+  state.runAcknowledgedNightOne = false;
+  state.liveAcknowledgedNightOne = false;
+  state.liveEscapePrompted = false;
   state.manualOverrideNeeded = 0;
   state.manualOverrideTargets = new Set();
   state.manualOverridesDone = new Set();
@@ -10970,6 +10999,9 @@ function tickPlayerTravel() {
   if (state.introStep === "await-escape" && rooms[nextRoom].isExit && !state.introEscapeVisited) {
     state.introEscapeVisited = true;
     state.introStep = "highlight-live";
+  }
+  if (state.currentNight === 1 && rooms[nextRoom].isExit && !state.liveAcknowledgedNightOne) {
+    state.liveEscapePrompted = true;
   }
   updatePlayerTrail(nextRoom);
   const profile = getNightProfile();
