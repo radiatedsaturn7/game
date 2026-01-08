@@ -968,6 +968,10 @@ main {
   padding-left: 40px;
 }
 
+.room-view > .room-hud-title {
+  padding-right: 24px;
+}
+
 .robot-status {
   margin: 0;
   padding: 12px 16px 6px 40px;
@@ -2001,6 +2005,19 @@ body[data-move="run"] #runBtn {
 body[data-move="run"] .map-node.active circle {
   fill: rgba(248, 248, 248, 0.95);
   stroke: rgba(248, 248, 248, 0.9);
+}
+
+body[data-move="sneak"] .map-node.active circle {
+  fill: rgba(248, 248, 248, 0.95);
+  stroke: rgba(248, 248, 248, 0.9);
+}
+
+body[data-move="run"] .map-node.active text,
+body[data-move="sneak"] .map-node.active text {
+  fill: #ffffff;
+  text-shadow:
+    0.6px 0 rgba(255, 255, 255, 0.4),
+    -0.6px 0 rgba(60, 60, 60, 0.45);
 }
 
 .map-node.alert circle {
