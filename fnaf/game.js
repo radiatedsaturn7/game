@@ -3091,7 +3091,11 @@ function updateUI() {
   const weatherType = state.weather?.type ?? "Clear";
   const weatherKey = weatherType === "Rain" || weatherType === "Storm" ? "rain" : "clear";
   document.body.dataset.weather = weatherKey;
-  document.body.dataset.move = state.playerTravelMode === "run" ? "run" : "sneak";
+  if (isPlayerTraveling()) {
+    document.body.dataset.move = state.playerTravelMode === "run" ? "run" : "sneak";
+  } else {
+    delete document.body.dataset.move;
+  }
   const threatValue = state.threat ?? 1;
   const threatKey = threatValue >= 4 ? "high" : threatValue >= 2.75 ? "med" : "low";
   document.body.dataset.threat = threatKey;
