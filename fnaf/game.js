@@ -1055,6 +1055,9 @@ const state = {
   introSequenceActive: false,
   startRevealPending: false,
   introEscapeVisited: false,
+  escapeMapSelected: false,
+  escapeArrivalPrompted: false,
+  escapeArrivalAcknowledged: false,
 };
 
 let travelAnimationId = null;
@@ -3254,6 +3257,7 @@ function updateUI() {
     dom.liveBtn.classList.toggle(
       "objective-highlight",
       state.introStep === "highlight-live" ||
+        state.escapeArrivalPrompted ||
         (state.currentNight === 1 && state.liveEscapePrompted && !state.liveAcknowledgedNightOne)
     );
   }
@@ -3592,7 +3596,8 @@ function updateMoveButtons() {
     (state.introStep === "highlight-run" ||
       (state.currentNight === 1 &&
         state.escapeConsoleInspected &&
-        !state.runAcknowledgedNightOne)) &&
+        !state.runAcknowledgedNightOne) ||
+      state.escapeMapSelected) &&
     !isDeployMode;
   if (dom.sneakBtn && dom.runBtn) {
     const sneakLabel = dom.sneakBtn.querySelector(".quick-label");
@@ -6092,6 +6097,9 @@ function returnToRoom() {
     state.introStep = "complete";
     state.introSequenceActive = false;
   }
+  if (state.escapeArrivalPrompted) {
+    state.escapeArrivalPrompted = false;
+  }
   if (state.currentNight === 1 && state.liveEscapePrompted) {
     state.liveAcknowledgedNightOne = true;
     state.liveEscapePrompted = false;
@@ -7750,6 +7758,7 @@ function moveSelected(isRun) {
 
 function clearSelectedRoom() {
   state.selectedRoom = null;
+  state.escapeMapSelected = false;
   updateUI();
 }
 
@@ -7804,7 +7813,8 @@ function getMapTargetCandidatesForBlowtorch() {
 }
 
 function handleMapSelection(roomId) {
-  if (state.introStep === "highlight-escape" && rooms[roomId].isExit) {
+  const isExitRoom = rooms[roomId].isExit;
+  if (state.introStep === "highlight-escape" && isExitRoom) {
     state.introStep = "highlight-run";
   }
   if (state.mapTargetMode) {
@@ -7814,6 +7824,7 @@ function handleMapSelection(roomId) {
     updateUI();
     return;
   }
+  state.escapeMapSelected = isExitRoom;
   setRoutePreview(roomId);
   setSelectedRoom(roomId);
 }
@@ -8827,6 +8838,9 @@ function resetGame({ preserveItems = false } = {}) {
   state.introSequenceActive = false;
   state.startRevealPending = false;
   state.introEscapeVisited = false;
+  state.escapeMapSelected = false;
+  state.escapeArrivalPrompted = false;
+  state.escapeArrivalAcknowledged = false;
   if (!preserveItems) {
     state.lastNightSpawnedParts = new Set();
   }
@@ -11004,6 +11018,10 @@ function tickPlayerTravel() {
   if (state.introStep === "await-escape" && rooms[nextRoom].isExit && !state.introEscapeVisited) {
     state.introEscapeVisited = true;
     state.introStep = "highlight-live";
+  }
+  if (rooms[nextRoom].isExit && !state.escapeArrivalAcknowledged) {
+    state.escapeArrivalPrompted = true;
+    state.escapeArrivalAcknowledged = true;
   }
   if (state.currentNight === 1 && rooms[nextRoom].isExit && !state.liveAcknowledgedNightOne) {
     state.liveEscapePrompted = true;
