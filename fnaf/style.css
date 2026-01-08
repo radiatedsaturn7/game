@@ -793,10 +793,12 @@ main {
   height: auto;
   min-height: var(--hud-h);
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: flex-start;
   text-align: left;
   padding: 10px 24px;
+  gap: 4px;
   border-radius: 8px;
   color: var(--text-primary);
   background:
@@ -960,6 +962,10 @@ main {
 .room-device-title {
   margin: 0;
   font-size: 0.95rem;
+}
+
+.room-hud-title {
+  padding-left: 40px;
 }
 
 .robot-status {
@@ -1768,6 +1774,7 @@ body:has(#usePanel.active) #liveBtn {
 
 .map-title {
   letter-spacing: 0.32em;
+  color: #ffffff;
 }
 
 body[data-move="sneak"] #sneakBtn,
