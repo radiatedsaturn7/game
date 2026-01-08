@@ -962,6 +962,7 @@ main {
 .room-device-title {
   margin: 0;
   font-size: 0.95rem;
+  font-family: "Rajdhani", "Orbitron", "Bahnschrift", "DIN Condensed", "Oswald", "Arial Narrow", sans-serif;
 }
 
 .room-hud-title {
@@ -1778,7 +1779,7 @@ body:has(#usePanel.active) #liveBtn {
 
 .map-title {
   letter-spacing: 0.32em;
-  color: #fff;
+  color: #ffffff;
 }
 
 body[data-move="sneak"] #sneakBtn,
@@ -2859,6 +2860,13 @@ body.night-11 .map-node text {
 .objective-highlight {
   border: 1px solid rgba(107, 255, 159, 0.95);
   background: linear-gradient(135deg, rgba(124, 255, 184, 0.85), rgba(40, 212, 120, 0.85));
+  color: #04110a;
+  box-shadow: 0 0 10px rgba(107, 255, 159, 0.35), 0 0 0 2px rgba(107, 255, 159, 0.35);
+}
+
+.map-controls .quick-buttons button.objective-highlight {
+  border: 1px solid rgba(107, 255, 159, 0.95);
+  background: linear-gradient(135deg, rgba(124, 255, 184, 0.9), rgba(40, 212, 120, 0.9));
   color: #04110a;
   box-shadow: 0 0 10px rgba(107, 255, 159, 0.35), 0 0 0 2px rgba(107, 255, 159, 0.35);
 }
