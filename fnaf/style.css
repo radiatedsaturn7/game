@@ -1782,6 +1782,10 @@ body:has(#usePanel.active) #liveBtn {
   color: #ffffff;
 }
 
+.menu-header .map-title {
+  color: #ffffff;
+}
+
 body[data-move="sneak"] #sneakBtn,
 body[data-move="run"] #runBtn {
   background:
@@ -2872,6 +2876,12 @@ body.night-11 .map-node text {
 }
 
 #liveBtn.objective-highlight {
+  background: linear-gradient(135deg, rgba(120, 255, 176, 0.95), rgba(52, 210, 122, 0.95));
+  color: #07140d;
+  box-shadow: 0 0 12px rgba(107, 255, 159, 0.75), 0 0 0 2px rgba(107, 255, 159, 0.4);
+}
+
+body:not(:has(.menu-panel.active, .map-panel.active)) #liveBtn.objective-highlight {
   background: linear-gradient(135deg, rgba(120, 255, 176, 0.95), rgba(52, 210, 122, 0.95));
   color: #07140d;
   box-shadow: 0 0 12px rgba(107, 255, 159, 0.75), 0 0 0 2px rgba(107, 255, 159, 0.4);
