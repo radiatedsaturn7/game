@@ -909,6 +909,8 @@ const state = {
   escapeConsoleInspected: false,
   tasksAcknowledgedNightOne: false,
   runAcknowledgedNightOne: false,
+  runHighlightActive: false,
+  runHighlightConsumed: false,
   liveAcknowledgedNightOne: false,
   liveEscapePrompted: false,
   noiseLureCharges: 0,
@@ -3598,13 +3600,22 @@ function updateMoveButtons() {
   const blockMove = controlBlocked || isDeployMode || !canMove;
   const canCancel = isMoving || state.mapTargetMode || hasSelection;
   dom.cancelBtn.disabled = !canCancel || controlBlocked;
-  const highlightRun =
+  const highlightRunBase =
     (state.introStep === "highlight-run" ||
       (state.currentNight === 1 &&
         state.escapeConsoleInspected &&
         !state.runAcknowledgedNightOne) ||
       state.escapeRunPrompted) &&
     !isDeployMode;
+  if (!state.runHighlightConsumed) {
+    if (highlightRunBase) {
+      state.runHighlightActive = true;
+    } else if (state.runHighlightActive) {
+      state.runHighlightConsumed = true;
+      state.runHighlightActive = false;
+    }
+  }
+  const highlightRun = highlightRunBase && !state.runHighlightConsumed;
   if (dom.sneakBtn && dom.runBtn) {
     const sneakLabel = dom.sneakBtn.querySelector(".quick-label");
     const sneakSub = dom.sneakBtn.querySelector(".quick-sub");
@@ -4231,6 +4242,8 @@ function setupNight11State() {
   state.escapeConsoleInspected = false;
   state.tasksAcknowledgedNightOne = false;
   state.runAcknowledgedNightOne = false;
+  state.runHighlightActive = false;
+  state.runHighlightConsumed = false;
   state.liveAcknowledgedNightOne = false;
   state.liveEscapePrompted = false;
   state.stabilizeTargets = [];
@@ -5063,6 +5076,8 @@ function setCurrentNight(night) {
     state.escapeConsoleInspected = false;
     state.tasksAcknowledgedNightOne = false;
     state.runAcknowledgedNightOne = false;
+    state.runHighlightActive = false;
+    state.runHighlightConsumed = false;
     state.liveAcknowledgedNightOne = false;
     state.liveEscapePrompted = false;
   }
@@ -8716,6 +8731,8 @@ function resetGame({ preserveItems = false } = {}) {
   state.escapeConsoleInspected = false;
   state.tasksAcknowledgedNightOne = false;
   state.runAcknowledgedNightOne = false;
+  state.runHighlightActive = false;
+  state.runHighlightConsumed = false;
   state.liveAcknowledgedNightOne = false;
   state.liveEscapePrompted = false;
   state.manualOverrideNeeded = 0;
