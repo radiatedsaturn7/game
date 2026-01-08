@@ -957,6 +957,7 @@ const state = {
   robotAlertQueued: false,
   robotAlertText: "",
   pendingObjectiveModal: null,
+  pendingIntroModal: null,
   debugStoryQueue: [],
   statusMessage: "",
   statusTicks: 0,
@@ -1092,6 +1093,7 @@ const dom = {
   titleVideo: document.getElementById("titleVideo"),
   titleVideos: document.querySelectorAll(".title-video"),
   titleAudio: document.getElementById("titleAudio"),
+  introFade: document.getElementById("introFade"),
   rainAudio: document.getElementById("rainAudio"),
   fogAudio: document.getElementById("fogAudio"),
   sunnyAudio: document.getElementById("sunnyAudio"),
@@ -2407,7 +2409,12 @@ async function init() {
   startGameLoop();
   applyScreenQuery();
   if (!isNight11()) {
-    showObjectiveModal(getInitialObjectiveModalText());
+    const introText = getInitialObjectiveModalText();
+    if (state.introSequenceActive && state.introStep === "intro-modal") {
+      state.pendingIntroModal = introText;
+    } else {
+      showObjectiveModal(introText);
+    }
   }
 }
 
@@ -2821,6 +2828,10 @@ async function startGameFromTitle() {
   if (dom.titleScreen) {
     dom.titleScreen.classList.add("title-fade-out");
   }
+  if (dom.introFade) {
+    dom.introFade.classList.add("is-visible");
+    dom.introFade.setAttribute("aria-hidden", "false");
+  }
   state.startRevealPending = true;
   state.introSequenceActive = true;
   state.introStep = "intro-modal";
@@ -2850,6 +2861,11 @@ async function startGameFromTitle() {
     }
     canStartAmbience = true;
     updateWeatherAmbience();
+    if (state.pendingIntroModal) {
+      const introText = state.pendingIntroModal;
+      state.pendingIntroModal = null;
+      showObjectiveModal(introText);
+    }
   };
   Promise.allSettled([fadeOutMusicBus(TITLE_FADE_OUT_MS), waitForTitleFadeOut()]).then(finishStart);
 }
@@ -2908,7 +2924,7 @@ function attachEvents() {
   dom.mapBtn.addEventListener("click", openMap);
   dom.liveBtn.addEventListener("click", returnToRoom);
   dom.tasksBtn.addEventListener("click", openTasks);
-  dom.tasksOkBtn.addEventListener("click", closeTasks);
+  dom.tasksOkBtn?.addEventListener("click", closeTasks);
   dom.componentOkBtn.addEventListener("click", closeComponent);
   dom.useBtn.addEventListener("click", openUse);
   dom.systemMenuBtn.addEventListener("click", openSystemMenu);
@@ -6381,6 +6397,10 @@ function returnToTitleScreen() {
   canStartAmbience = false;
   state.objectiveBlocked = false;
   document.body.classList.remove("intro-blackout");
+  if (dom.introFade) {
+    dom.introFade.classList.remove("is-visible");
+    dom.introFade.setAttribute("aria-hidden", "true");
+  }
   if (dom.titleAudio) {
     dom.titleAudio.pause();
     dom.titleAudio.currentTime = 0;
@@ -7690,6 +7710,10 @@ function moveSelected(isRun) {
   if (isActionLocked()) return;
   if (state.selectedRoom === null) return;
   movePlayer(state.selectedRoom, isRun);
+  if (isRun && state.introStep === "highlight-run" && state.playerPath.length > 0) {
+    state.introStep = "await-escape";
+    updateUI();
+  }
 }
 
 function clearSelectedRoom() {
@@ -9824,6 +9848,10 @@ function revealIntroMap() {
   state.selectedRoom = null;
   state.routePreviewRoom = null;
   document.body.classList.remove("intro-blackout");
+  if (dom.introFade) {
+    dom.introFade.classList.remove("is-visible");
+    dom.introFade.setAttribute("aria-hidden", "true");
+  }
   if (dom.app) {
     dom.app.classList.add("intro-reveal");
     dom.app.classList.remove("is-hidden");
@@ -9835,6 +9863,17 @@ function revealIntroMap() {
       (event) => {
         if (event.propertyName !== "opacity") return;
         dom.app?.classList.remove("intro-reveal", "intro-reveal-active");
+      },
+      { once: true },
+    );
+  }
+  if (dom.mapPanel) {
+    dom.mapPanel.classList.add("intro-reveal");
+    dom.mapPanel.addEventListener(
+      "transitionend",
+      (event) => {
+        if (event.propertyName !== "opacity") return;
+        dom.mapPanel?.classList.remove("intro-reveal", "intro-reveal-active");
       },
       { once: true },
     );
@@ -9854,6 +9893,9 @@ function revealIntroMap() {
     );
   }
   openMap();
+  requestAnimationFrame(() => {
+    dom.mapPanel?.classList.add("intro-reveal-active");
+  });
   updateUI();
 }
 
@@ -10913,6 +10955,10 @@ function tickPlayerTravel() {
     showCaitQuietModal();
   }
   if (state.introStep === "highlight-run" && rooms[nextRoom].isExit && !state.introEscapeVisited) {
+    state.introEscapeVisited = true;
+    state.introStep = "highlight-live";
+  }
+  if (state.introStep === "await-escape" && rooms[nextRoom].isExit && !state.introEscapeVisited) {
     state.introEscapeVisited = true;
     state.introStep = "highlight-live";
   }
