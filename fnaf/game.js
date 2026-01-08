@@ -3253,6 +3253,11 @@ function updateUI() {
         !state.tasksAcknowledgedNightOne
     );
   }
+  if (state.currentNight === 1 &&
+    rooms[state.playerRoom]?.isExit &&
+    !state.liveAcknowledgedNightOne) {
+    state.liveEscapePrompted = true;
+  }
   if (dom.liveBtn) {
     dom.liveBtn.disabled = controlBlocked;
     dom.liveBtn.classList.toggle(
