@@ -3589,9 +3589,10 @@ function updateMoveButtons() {
   const canCancel = isMoving || state.mapTargetMode || hasSelection;
   dom.cancelBtn.disabled = !canCancel || controlBlocked;
   const highlightRun =
-    state.currentNight === 1 &&
-    state.escapeConsoleInspected &&
-    !state.runAcknowledgedNightOne &&
+    (state.introStep === "highlight-run" ||
+      (state.currentNight === 1 &&
+        state.escapeConsoleInspected &&
+        !state.runAcknowledgedNightOne)) &&
     !isDeployMode;
   if (dom.sneakBtn && dom.runBtn) {
     const sneakLabel = dom.sneakBtn.querySelector(".quick-label");
