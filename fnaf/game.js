@@ -7313,6 +7313,9 @@ function revealEscapeSchematic() {
   } else {
     state.robotDisabled = true;
   }
+  if (state.currentNight === 1 && state.introSequenceActive) {
+    state.introStep = "highlight-run";
+  }
   schedulePowerSurge();
   updateEscapeReadiness();
   updateUI();
