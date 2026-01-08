@@ -3601,15 +3601,10 @@ function updateMoveButtons() {
   const canCancel = isMoving || state.mapTargetMode || hasSelection;
   dom.cancelBtn.disabled = !canCancel || controlBlocked;
   const highlightRunBase = state.escapeRunPrompted && !isDeployMode;
-  if (!state.runHighlightConsumed) {
-    if (highlightRunBase) {
-      state.runHighlightActive = true;
-    } else if (state.runHighlightActive) {
-      state.runHighlightConsumed = true;
-      state.runHighlightActive = false;
-    }
+  if (state.runHighlightActive && !highlightRunBase) {
+    state.runHighlightActive = false;
   }
-  const highlightRun = highlightRunBase && !state.runHighlightConsumed;
+  const highlightRun = state.runHighlightActive && highlightRunBase;
   if (dom.sneakBtn && dom.runBtn) {
     const sneakLabel = dom.sneakBtn.querySelector(".quick-label");
     const sneakSub = dom.sneakBtn.querySelector(".quick-sub");
@@ -7842,6 +7837,10 @@ function handleMapSelection(roomId) {
   }
   state.escapeMapSelected = isExitRoom;
   state.escapeRunPrompted = isExitRoom;
+  if (isExitRoom && !state.runHighlightConsumed) {
+    state.runHighlightActive = true;
+    state.runHighlightConsumed = true;
+  }
   setRoutePreview(roomId);
   setSelectedRoom(roomId);
 }
