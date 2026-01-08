@@ -63,6 +63,12 @@
     <audio id="typingAudio" preload="auto" loop data-audio-key="Typing.mp3">
       <source src="mp3_normalized/Typing.mp3" type="audio/mpeg" />
     </audio>
+    <audio id="alarmAudio" preload="auto" data-audio-key="alarm.mp3">
+      <source src="mp3_normalized/alarm.mp3" type="audio/mpeg" />
+    </audio>
+    <audio id="surgeAudio" preload="auto" data-audio-key="surge.mp3">
+      <source src="mp3_normalized/surge.mp3" type="audio/mpeg" />
+    </audio>
     <audio id="lightningAudio" preload="auto" data-audio-key="lightning_loud.mp3">
       <source src="mp3_normalized/lightning_loud.mp3" type="audio/mpeg" />
     </audio>
@@ -132,11 +138,11 @@
   </div>
 
   <div class="overlay-footer" role="navigation" aria-label="Primary">
-    <button id="menuBtn">Bag</button>
-    <button id="mapBtn">Map</button>
-    <button id="liveBtn" class="primary">Live</button>
-    <button id="tasksBtn">TASK</button>
-    <button id="useBtn">Use</button>
+    <button id="menuBtn" aria-label="Bag (hotkey B)"><u>B</u>ag</button>
+    <button id="mapBtn" aria-label="Map (hotkey M)"><u>M</u>ap</button>
+    <button id="liveBtn" class="primary" aria-label="Live (hotkey L)"><u>L</u>ive</button>
+    <button id="tasksBtn" aria-label="Task (hotkey T)"><u>T</u>ask</button>
+    <button id="useBtn" aria-label="Use (hotkey U)"><u>U</u>se</button>
   </div>
 
   <div id="deathScreen" class="death-screen" aria-hidden="true">
@@ -147,8 +153,8 @@
   </div>
 
   <div id="victoryScreen" class="victory-screen" aria-hidden="true">
-    <div class="victory-card">
-      <h2 id="victoryTitle">Breached Exit</h2>
+    <div class="victory-card panelized">
+      <h2 id="victoryTitle" class="device-title">Breached Exit</h2>
       <button id="nextNightBtn" class="primary">Continue</button>
     </div>
   </div>
@@ -201,6 +207,7 @@
       <div class="menu-tabs" role="tablist" aria-label="Menu tabs">
         <button id="systemTabSave" class="tab-button active" type="button" role="tab" aria-selected="true" data-system-tab="save">Save</button>
         <button id="systemTabLoad" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="load">Load</button>
+        <button id="systemTabHelp" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="help">Help</button>
         <button id="systemTabSettings" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="settings">Audio Settings</button>
         <button id="systemTabDebug" class="tab-button" type="button" role="tab" aria-selected="false" data-system-tab="debug">Debug</button>
       </div>
@@ -217,8 +224,29 @@
         </section>
         <section class="system-tab" data-system-panel="load" role="tabpanel" aria-labelledby="systemTabLoad">
           <div class="system-actions">
+            <button id="loadRecentBtn" class="primary" type="button">Load Most Recent</button>
             <ul id="saveList" class="list"></ul>
             <p id="loadStatus" class="menu-status">No save loaded.</p>
+          </div>
+        </section>
+        <section class="system-tab" data-system-panel="help" role="tabpanel" aria-labelledby="systemTabHelp">
+          <div class="system-actions">
+            <ul class="list help-list">
+              <li><span class="hotkey-label"><u>B</u></span> Bag</li>
+              <li><span class="hotkey-label"><u>M</u></span> Map</li>
+              <li><span class="hotkey-label"><u>L</u></span> Live</li>
+              <li><span class="hotkey-label"><u>T</u></span> Tasks</li>
+              <li><span class="hotkey-label"><u>U</u></span> Use</li>
+              <li><span class="hotkey-label"><u>S</u></span> Sneak (map open)</li>
+              <li><span class="hotkey-label"><u>R</u></span> Run (map open)</li>
+              <li><span class="hotkey-label"><u>C</u></span> Cancel movement / deploy</li>
+              <li><span class="hotkey-label"><u>E</u></span> Escape / Leave</li>
+              <li><span class="hotkey-label"><u>I</u></span> Inspect Escape Console</li>
+              <li><span class="hotkey-label"><u>A</u></span> Align Override Node</li>
+              <li><span class="hotkey-label"><u>D</u></span> Disable Alarm</li>
+              <li><span class="hotkey-label"><u>K</u></span> Talk to Cait</li>
+              <li><span class="hotkey-label">Esc</span> Close panels / cancel travel</li>
+            </ul>
           </div>
         </section>
         <section class="system-tab" data-system-panel="settings" role="tabpanel" aria-labelledby="systemTabSettings">
@@ -301,7 +329,10 @@
               <span class="quick-label">Deploy</span>
               <span id="deployStatus" class="quick-sub">Jam / Lure</span>
             </button>
-            <button id="cancelBtn" class="deploy-action">Cancel</button>
+            <button id="cancelBtn" class="deploy-action" type="button">
+              <span class="quick-label">Cancel</span>
+              <span class="quick-sub">Stop</span>
+            </button>
           </div>
         </div>
       </div>

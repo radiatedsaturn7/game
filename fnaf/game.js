@@ -995,10 +995,10 @@ const state = {
   scannerHighlight: false,
   alarmedRooms: new Set(),
   triggeredAlarms: new Set(),
+  alarmTriggerTTL: new Map(),
   disabledAlarmedRooms: new Set(),
   alarmDisableProgress: new Map(),
   alarmedRoomsRequired: 0,
-  alarmAlertShown: false,
   activeLures: new Map(),
   sunlitRooms: new Set(),
   specialPickups: new Map(),
@@ -1021,10 +1021,8 @@ const state = {
   surgeWarningLineShown: false,
   surgeMapFlashRoom: null,
   surgeMapFlashActive: false,
-  surgeAlertShown: false,
   lightningCooldown: null,
   vista: 0,
-  sunlightMemoryShown: false,
   hiddenTurns: 0,
   lastMoveType: "sneak",
   ohShitTriggered: false,
@@ -1035,12 +1033,12 @@ const state = {
   sanityScanCooldown: 0,
   phantomCueShown: false,
   lastSanityRecoveryTick: -999,
-  caitFrayedTutorialShown: false,
   caitCooldown: 0,
   caitTalkCount: 0,
   caitQuietRoomId: null,
   caitQuietSeen: false,
   night11CreditsRolling: false,
+  meta: getDefaultMetaFlags(),
   runMoments: [],
   runSummary: "",
   mapTargetMode: null,
@@ -1066,8 +1064,11 @@ const state = {
 let travelAnimationId = null;
 let actionLockTimeoutId = null;
 let actionLockStepTimeoutId = null;
+let lastActionLockStart = null;
 let pendingMoveTimeoutId = null;
 const ACTION_LOCK_MS = 1200;
+const ALARM_TRIGGER_TTL_MIN = 4;
+const ALARM_TRIGGER_TTL_MAX = 6;
 let schematicSpriteReady = false;
 let schematicSpriteLoading = false;
 let schematicSpriteFailed = false;
@@ -1109,6 +1110,8 @@ const dom = {
   sneakAudio: document.getElementById("sneakAudio"),
   runningAudio: document.getElementById("runningAudio"),
   typingAudio: document.getElementById("typingAudio"),
+  alarmAudio: document.getElementById("alarmAudio"),
+  surgeAudio: document.getElementById("surgeAudio"),
   lightningAudio: document.getElementById("lightningAudio"),
   menuPressAudio: document.getElementById("menuPressAudio"),
   caitRadioAudio: document.getElementById("caitRadioAudio"),
@@ -1166,6 +1169,7 @@ const dom = {
   systemMenuPanel: document.getElementById("systemMenuPanel"),
   systemTabSave: document.getElementById("systemTabSave"),
   systemTabLoad: document.getElementById("systemTabLoad"),
+  systemTabHelp: document.getElementById("systemTabHelp"),
   systemTabSettings: document.getElementById("systemTabSettings"),
   systemTabDebug: document.getElementById("systemTabDebug"),
   saveGameBtn: document.getElementById("saveGameBtn"),
@@ -1173,6 +1177,7 @@ const dom = {
   saveList: document.getElementById("saveList"),
   saveStatus: document.getElementById("saveStatus"),
   loadStatus: document.getElementById("loadStatus"),
+  loadRecentBtn: document.getElementById("loadRecentBtn"),
   masterVolumeSlider: document.getElementById("masterVolumeSlider"),
   musicVolumeSlider: document.getElementById("musicVolumeSlider"),
   ambienceVolumeSlider: document.getElementById("ambienceVolumeSlider"),
@@ -1243,11 +1248,58 @@ const AUDIO_SOURCE_MAP = [
   { element: dom.sneakAudio, filename: "sneak.mp3" },
   { element: dom.runningAudio, filename: "running.mp3" },
   { element: dom.typingAudio, filename: "Typing.mp3" },
+  { element: dom.alarmAudio, filename: "alarm.mp3" },
+  { element: dom.surgeAudio, filename: "surge.mp3" },
   { element: dom.lightningAudio, filename: "lightning_loud.mp3" },
 ];
 const SAVE_LIST_KEY = "robtergeist_saves_v2";
 const SAVE_COUNTER_KEY = "robtergeist_save_counter_v1";
 const LEGACY_SAVE_KEY = "robtergeist_save_v1";
+const META_STORAGE_KEY = "robtergeist_meta_v1";
+
+function getDefaultMetaFlags() {
+  return {
+    surgeAlertShown: false,
+    alarmAlertShown: false,
+    caitFrayedTutorialShown: false,
+    sunlightMemoryShown: false,
+  };
+}
+
+function loadMetaFlags() {
+  try {
+    const raw = window.localStorage.getItem(META_STORAGE_KEY);
+    if (!raw) return getDefaultMetaFlags();
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return getDefaultMetaFlags();
+    return { ...getDefaultMetaFlags(), ...parsed };
+  } catch (error) {
+    console.warn("Failed to load meta flags:", error);
+    return getDefaultMetaFlags();
+  }
+}
+
+function saveMetaFlags() {
+  try {
+    window.localStorage.setItem(META_STORAGE_KEY, JSON.stringify(state.meta));
+  } catch (error) {
+    console.warn("Failed to save meta flags:", error);
+  }
+}
+
+function markMetaFlag(flag) {
+  if (!state.meta) {
+    state.meta = getDefaultMetaFlags();
+  }
+  if (state.meta[flag]) return;
+  state.meta[flag] = true;
+  saveMetaFlags();
+}
+
+function clearMetaFlags() {
+  state.meta = getDefaultMetaFlags();
+  saveMetaFlags();
+}
 const STATE_MAP_KEYS = [
   "hideHistory",
   "inventory",
@@ -1262,6 +1314,7 @@ const STATE_MAP_KEYS = [
   "persistentSignals",
   "roomNoisePenalty",
   "jammedEdges",
+  "alarmTriggerTTL",
   "alarmDisableProgress",
   "activeLures",
   "specialPickups",
@@ -1532,6 +1585,7 @@ registerLoopTrack("fog", dom.fogAudio, "ambience", 0.5);
 registerLoopTrack("sunny", dom.sunnyAudio, "ambience", 0.5);
 registerLoopTrack("run", dom.runningAudio, "movement", RUN_AUDIO_VOLUME);
 registerLoopTrack("sneak", dom.sneakAudio, "movement", SNEAK_AUDIO_VOLUME);
+registerLoopTrack("alarm", dom.alarmAudio, "sfx", 0.35);
 
 const fxState = {
   overlay: null,
@@ -1686,6 +1740,24 @@ const ROBOT_SFX_VOLUMES = {
   rerouteScrape: 0.45,
   captureImpact: 0.65,
 };
+const ROBOT_SFX_LABELS = new Set([
+  "robot-distant-move",
+  "robot-near-move",
+  "robot-enter-room",
+  "robot-inspect",
+  "robot-lock-on",
+  "robot-reroute",
+  "robot-capture",
+]);
+
+function getRobotSfxDistanceMultiplier(label) {
+  if (!ROBOT_SFX_LABELS.has(label)) return 1;
+  const distance = getRobotDistance();
+  if (distance === null || distance <= 0) return 1;
+  if (distance === 1) return 0.7;
+  if (distance === 2) return 0.45;
+  return 0.25;
+}
 
 function playSfx(
   audioEl,
@@ -1699,10 +1771,11 @@ function playSfx(
   if (skipIfPlaying && !audioEl.paused && !audioEl.ended) return;
   audioEl.currentTime = 0;
   audioEl.muted = false;
+  const distanceMultiplier = getRobotSfxDistanceMultiplier(label);
   const maxVolume = getSoundSettingVolumeForElement(audioEl);
   const busVolume = audioBuses.sfx ?? 1;
   const masterVolume = audioBuses.master ?? 1;
-  audioEl.volume = clamp(volume * maxVolume * busVolume * masterVolume, 0, 1);
+  audioEl.volume = clamp(volume * distanceMultiplier * maxVolume * busVolume * masterVolume, 0, 1);
   attemptPlayAudio(audioEl, label);
   if (cooldownTicks > 0 && cooldowns) {
     cooldowns.set(label, cooldownTicks);
@@ -1736,6 +1809,34 @@ function shouldSuppressMenuPress(button) {
   if (isPlayerTraveling()) return true;
   if (state.hasEscaped) return true;
   return false;
+}
+
+function isHotkeyBlocked() {
+  const active = document.activeElement;
+  if (active) {
+    const tag = active.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || active.isContentEditable) {
+      return true;
+    }
+  }
+  const modals = [
+    dom.objectiveModal,
+    dom.robotAlertModal,
+    dom.craftMiniGame,
+    dom.caitQuietModal,
+    dom.deathScreen,
+    dom.victoryScreen,
+    dom.creditsScreen,
+  ];
+  return modals.some((modal) => modal?.classList.contains("active"));
+}
+
+function triggerRoomAction(actionKey) {
+  if (!actionKey) return false;
+  const button = dom.roomActions?.querySelector(`button[data-action-key="${actionKey}"]`);
+  if (!button || button.disabled) return false;
+  button.click();
+  return true;
 }
 
 function applySoundSettingsToTracks() {
@@ -2475,6 +2576,7 @@ async function startGameFromQuery() {
 
 async function initTitleScreen() {
   const screenQuery = getScreenQuery();
+  state.meta = loadMetaFlags();
   initSchematicSprite();
   mirrorConsole();
   setNormalizedAudioSources();
@@ -2811,6 +2913,7 @@ async function startGameFromTitle() {
   if (hasStartedGame) return;
   hasStartedGame = true;
   canStartAmbience = true;
+  clearMetaFlags();
   primeLoopTracksInGesture();
   stopTitleSyncLoop();
   const waitForTitleFadeOut = () =>
@@ -3003,6 +3106,7 @@ function attachEvents() {
   });
   dom.systemTabSave?.addEventListener("click", () => setSystemTab("save"));
   dom.systemTabLoad?.addEventListener("click", () => setSystemTab("load"));
+  dom.systemTabHelp?.addEventListener("click", () => setSystemTab("help"));
   dom.systemTabSettings?.addEventListener("click", () => setSystemTab("settings"));
   dom.systemTabDebug?.addEventListener("click", () => {
     if (!DEBUG_UI) return;
@@ -3010,6 +3114,7 @@ function attachEvents() {
     closeSystemMenu();
   });
   dom.saveGameBtn?.addEventListener("click", saveGame);
+  dom.loadRecentBtn?.addEventListener("click", loadMostRecentSave);
   dom.saveList?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-save-id]");
     if (!button) return;
@@ -3029,6 +3134,83 @@ function attachEvents() {
     }
     if (shouldSuppressMenuPress(button)) return;
     playUiSfx(dom.menuPressAudio, "menu-press", { volume: 0.6, allowBeforeStart: true });
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.defaultPrevented) return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (isHotkeyBlocked()) return;
+    const key = event.key;
+    const lower = key.toLowerCase();
+    const mapActive = dom.mapPanel?.classList.contains("active");
+    const hasMapSelection = state.selectedRoom !== null || state.mapTargetSelection !== null;
+    let handled = true;
+    switch (lower) {
+      case "b":
+        openMenu();
+        break;
+      case "m":
+        openMap();
+        break;
+      case "l":
+        returnToRoom();
+        break;
+      case "t":
+        openTasks();
+        break;
+      case "u":
+        openUse();
+        break;
+      case "s":
+        if (mapActive && hasMapSelection) {
+          handleMapMove(false);
+        } else {
+          handled = false;
+        }
+        break;
+      case "r":
+        if (mapActive && hasMapSelection) {
+          handleMapMove(true);
+        } else {
+          handled = false;
+        }
+        break;
+      case "c":
+        if (isPlayerTraveling() || state.mapTargetMode || state.selectedRoom !== null) {
+          cancelMovement();
+        } else {
+          handled = false;
+        }
+        break;
+      case "e":
+        handled = triggerRoomAction("escape");
+        break;
+      case "i":
+        handled = triggerRoomAction("inspect-console");
+        break;
+      case "a":
+        handled = triggerRoomAction("align-override");
+        break;
+      case "d":
+        handled = triggerRoomAction("disable-alarm");
+        break;
+      case "k":
+        handled = triggerRoomAction("talk-cait");
+        break;
+      default:
+        handled = false;
+        break;
+    }
+    if (key === "Escape") {
+      handled = true;
+      if (isPlayerTraveling()) {
+        cancelMovement();
+      } else {
+        closePanels();
+      }
+    }
+    if (handled) {
+      event.preventDefault();
+    }
   });
   const handleVolumeInput = async (event, busName) => {
     if (!event) return;
@@ -3080,14 +3262,13 @@ function updateAlarmFx(isActive) {
   if (isActive) {
     fxController.toggleRootClass("alarm-active");
     startAlarmDrone();
-    if (!alarmFxActive) {
-      fxController.playSfx("alarm-chirp", 0.6);
-    }
+    fadeTrackTo("alarm", 1, 150);
   } else {
     fxController.clearRootClass("alarm-active");
     if (alarmFxActive) {
       stopAlarmDrone();
     }
+    fadeTrackTo("alarm", 0, 200);
   }
   alarmFxActive = isActive;
 }
@@ -3228,6 +3409,7 @@ function updateUI() {
   updateDeployButton();
   if (dom.mapPanel) {
     dom.mapPanel.classList.toggle("deploy-mode", state.mapTargetMode !== null);
+    dom.mapPanel.classList.toggle("is-traveling", isPlayerTraveling());
   }
   if (dom.toggleRobotBtn) {
     dom.toggleRobotBtn.textContent = state.robotDisabled ? "Enable Robot" : "Disable Robot";
@@ -3600,7 +3782,7 @@ function updateMoveButtons() {
   const blockMove = controlBlocked || isDeployMode || !canMove;
   const canCancel = isMoving || state.mapTargetMode || hasSelection;
   dom.cancelBtn.disabled = !canCancel || controlBlocked;
-  const highlightRunBase = state.escapeRunPrompted && !isDeployMode;
+  const highlightRunBase = state.currentNight === 1 && state.escapeRunPrompted && !isDeployMode;
   if (state.runHighlightActive && !highlightRunBase) {
     state.runHighlightActive = false;
   }
@@ -4058,10 +4240,10 @@ function sanityPressurePhrase() {
 }
 
 function maybeTriggerCaitFrayedTutorial() {
-  if (state.caitFrayedTutorialShown) return;
+  if (state.meta.caitFrayedTutorialShown) return;
   if (state.currentNight < 4) return;
   if (!(state.prevSanity > 0.4 && state.sanity < 0.4)) return;
-  state.caitFrayedTutorialShown = true;
+  markMetaFlag("caitFrayedTutorialShown");
   state.robotDormant = Math.max(state.robotDormant, 3);
   state.robotPath = [];
   state.robotLinger = 0;
@@ -4139,7 +4321,6 @@ function listNewUnlockMessages(prevUnlocks, nextUnlocks) {
   const messages = [];
   const labelMap = {
     showMap: "Map access unlocked.",
-    robotActive: "Robot systems restored. Expect patrols after the console.",
     allowSirens: "Room sirens can now be triggered.",
     allowSlowRewire: "Slow Rewire unlocked: reduce signal after sneaking.",
     allowScannerToggle: "Pulse Scanner unlocked.",
@@ -4244,10 +4425,10 @@ function setupNight11State() {
   state.manualOverridesDone = new Set();
   state.alarmedRooms = new Set();
   state.triggeredAlarms = new Set();
+  state.alarmTriggerTTL = new Map();
   state.disabledAlarmedRooms = new Set();
   state.alarmDisableProgress = new Map();
   state.alarmedRoomsRequired = 0;
-  state.alarmAlertShown = false;
   state.activeLures = new Map();
   state.sunlitRooms = new Set(rooms.map((room) => room.id));
   state.specialPickups = new Map();
@@ -4267,7 +4448,6 @@ function setupNight11State() {
   state.surgeWarningLineShown = false;
   state.surgeMapFlashRoom = null;
   state.surgeMapFlashActive = false;
-  state.surgeAlertShown = false;
   state.weather = WEATHER_TYPES.find((entry) => entry.type === "Clear") ?? WEATHER_TYPES[0];
   state.weatherAnnounced = true;
   updateWeatherAmbience({ forceRestart: true });
@@ -5088,7 +5268,9 @@ function configureRobotStart() {
     state.robotDisabled = false;
     state.robotDormant = Math.max(state.robotDormant, 3);
     pushStatus("The escape room isn’t empty.", 4);
-    schedulePowerSurge();
+    if (state.weather?.type === "Storm") {
+      schedulePowerSurge();
+    }
   }
 }
 
@@ -5241,6 +5423,7 @@ function schedulePowerSurge() {
   if (state.ohShitTriggered && state.surgeCharges <= 0) return;
   if (state.robotDisabled) return;
   if (isNight11()) return;
+  if (state.weather?.type !== "Storm") return;
   const minTurns = state.currentNight <= 3 ? 6 : state.currentNight <= 6 ? 4 : 3;
   const maxTurns = state.currentNight <= 3 ? 9 : state.currentNight <= 6 ? 7 : 6;
   const weatherMods = getWeatherModifiers();
@@ -5320,16 +5503,13 @@ function triggerPowerSurge(roomId) {
   } else {
     fxController.showHudLine("Somewhere nearby, something pops—hard.", 2200);
   }
-  fxController.playSfx("surge-pop", inSurgeRoom ? 1 : 0.85, { inRoom: inSurgeRoom });
-  if (inSurgeRoom) {
-    fxController.playSfx("surge-buzz", 0.7);
-  }
-  if (!state.surgeAlertShown) {
+  playSfx(dom.surgeAudio, "surge", { volume: 0.8, skipIfPlaying: true });
+  if (!state.meta.surgeAlertShown) {
     showObjectiveModal(getCaitLine("surgeAlert"));
-    state.surgeAlertShown = true;
+    markMetaFlag("surgeAlertShown");
   }
   if (isAlarmCapable(roomId)) {
-    state.triggeredAlarms.add(roomId);
+    setAlarmTriggered(roomId);
     if (roomId === state.playerRoom) {
       onAlarmTriggered(roomId);
     }
@@ -5361,6 +5541,11 @@ function triggerPowerSurge(roomId) {
 }
 
 function tickPowerSurge() {
+  if (state.weather?.type !== "Storm") {
+    state.surgeCountdown = null;
+    clearSurgeWarning();
+    return;
+  }
   if (state.surgeCountdown === null) return;
   if (state.robotDisabled) return;
   if (isNight11()) return;
@@ -5542,11 +5727,25 @@ function updateActionLockUI() {
   if (!dom.actionLock) return;
   if (!state.actionLock) {
     dom.actionLock.classList.add("hidden");
+    dom.actionLock.hidden = true;
+    lastActionLockStart = null;
     return;
   }
   dom.actionLockLabel.textContent = state.actionLock.label;
   dom.actionLock.style.setProperty("--action-duration", `${state.actionLock.durationMs}ms`);
   dom.actionLock.classList.remove("hidden");
+  dom.actionLock.hidden = false;
+  if (state.actionLock.startedAt !== lastActionLockStart) {
+    const bar = dom.actionLock.querySelector(".action-bar");
+    if (bar) {
+      const span = bar.querySelector("span");
+      if (span) {
+        const reset = span.cloneNode(false);
+        bar.replaceChild(reset, span);
+      }
+    }
+    lastActionLockStart = state.actionLock.startedAt;
+  }
 }
 
 function runLockedAction({ label, steps, onStep }) {
@@ -5745,6 +5944,7 @@ function updateBagTabs() {
 const systemTabPanels = {
   save: document.querySelector('[data-system-panel="save"]'),
   load: document.querySelector('[data-system-panel="load"]'),
+  help: document.querySelector('[data-system-panel="help"]'),
   settings: document.querySelector('[data-system-panel="settings"]'),
   debug: document.querySelector('[data-system-panel="debug"]'),
 };
@@ -5759,6 +5959,7 @@ function updateSystemTabs() {
   const tabs = [
     { name: "save", button: dom.systemTabSave, panel: systemTabPanels.save },
     { name: "load", button: dom.systemTabLoad, panel: systemTabPanels.load },
+    { name: "help", button: dom.systemTabHelp, panel: systemTabPanels.help },
     { name: "settings", button: dom.systemTabSettings, panel: systemTabPanels.settings },
     { name: "debug", button: dom.systemTabDebug, panel: systemTabPanels.debug },
   ];
@@ -5925,6 +6126,12 @@ function applySerializedState(serialized) {
   STATE_SET_KEYS.forEach((key) => {
     state[key] = new Set(serialized[key] ?? []);
   });
+  if (!state.meta || typeof state.meta !== "object") {
+    state.meta = getDefaultMetaFlags();
+  } else {
+    state.meta = { ...getDefaultMetaFlags(), ...state.meta };
+  }
+  saveMetaFlags();
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
   updateDebugUI();
@@ -5999,6 +6206,7 @@ function saveGame() {
     renderSaveList();
     updateSaveStatus(`Saved ${saveName} at ${new Date(payload.savedAt).toLocaleTimeString()}.`);
     updateLoadStatus("Save ready to load.");
+    updateLoadMostRecentButton();
   } catch (error) {
     console.warn("Failed to save game:", error);
     updateSaveStatus("Save failed.");
@@ -6046,6 +6254,22 @@ function loadGameById(saveId) {
   loadGame(entry);
 }
 
+function loadMostRecentSave() {
+  const saves = getSortedSaveList();
+  const latest = saves[0];
+  if (!latest) {
+    updateLoadStatus("No saves to load.");
+    return;
+  }
+  loadGame(latest);
+}
+
+function updateLoadMostRecentButton() {
+  if (!dom.loadRecentBtn) return;
+  const hasSaves = getSortedSaveList().length > 0;
+  dom.loadRecentBtn.disabled = !hasSaves;
+}
+
 function syncSystemMenuFromAudio() {
   if (dom.masterVolumeSlider) {
     dom.masterVolumeSlider.value = String(Math.round((audioBuses.master ?? 1) * 100));
@@ -6074,6 +6298,7 @@ function refreshSaveStatus() {
     updateLoadStatus("No save loaded.");
     renderSaveList();
     setSaveNameInputDefault();
+    updateLoadMostRecentButton();
     return;
   }
   const latest = saves[0];
@@ -6086,6 +6311,7 @@ function refreshSaveStatus() {
   }
   renderSaveList();
   setSaveNameInputDefault();
+  updateLoadMostRecentButton();
 }
 
 function openMap() {
@@ -6436,13 +6662,16 @@ function finishNight11Credits() {
     dom.creditsScreen.setAttribute("aria-hidden", "true");
   }
   state.night11CreditsRolling = false;
-  returnToTitleScreen();
+  returnToTitleScreen({ clearMeta: true });
 }
 
-function returnToTitleScreen() {
+function returnToTitleScreen({ clearMeta = false } = {}) {
   hasStartedGame = false;
   canStartAmbience = false;
   state.objectiveBlocked = false;
+  if (clearMeta) {
+    clearMetaFlags();
+  }
   document.body.classList.remove("intro-blackout");
   if (dom.introFade) {
     dom.introFade.classList.remove("is-visible");
@@ -6503,7 +6732,42 @@ function isAlarmCapable(roomId) {
 }
 
 function isAlarmTriggered(roomId) {
-  return state.triggeredAlarms.has(roomId) && isAlarmCapable(roomId);
+  if (!isAlarmCapable(roomId)) return false;
+  const ttl = state.alarmTriggerTTL.get(roomId) || 0;
+  return ttl > 0 && state.triggeredAlarms.has(roomId);
+}
+
+function getAlarmTriggerTTL() {
+  return ALARM_TRIGGER_TTL_MIN +
+    Math.floor(Math.random() * (ALARM_TRIGGER_TTL_MAX - ALARM_TRIGGER_TTL_MIN + 1));
+}
+
+function setAlarmTriggered(roomId) {
+  if (!isAlarmCapable(roomId)) return;
+  state.triggeredAlarms.add(roomId);
+  state.alarmTriggerTTL.set(roomId, getAlarmTriggerTTL());
+}
+
+function clearAlarmTrigger(roomId) {
+  state.triggeredAlarms.delete(roomId);
+  state.alarmTriggerTTL.delete(roomId);
+  state.alarmDisableProgress.delete(roomId);
+}
+
+function tickAlarms() {
+  if (state.alarmTriggerTTL.size === 0) return;
+  state.alarmTriggerTTL.forEach((ttl, roomId) => {
+    if (!isAlarmCapable(roomId)) {
+      clearAlarmTrigger(roomId);
+      return;
+    }
+    const next = ttl - 1;
+    if (next <= 0) {
+      clearAlarmTrigger(roomId);
+    } else {
+      state.alarmTriggerTTL.set(roomId, next);
+    }
+  });
 }
 
 function getActiveLure(roomId) {
@@ -6549,13 +6813,21 @@ function pickHighestPressureNonAlarmedRoom() {
 }
 
 function shouldForceAlarmBreak() {
-  return state.robotAlarmStreak >= 3 || state.robotAlarmLoopTurns >= 2;
+  return state.robotAlarmStreak >= 2 || state.robotAlarmLoopTurns >= 2;
 }
 
 function forceAlarmBreak() {
   const neighbor = pickNonAlarmedNeighbor(state.robotRoom);
   const target = neighbor ?? pickHighestPressureNonAlarmedRoom();
-  if (target === null || target === undefined) return false;
+  if (target === null || target === undefined) {
+    if (state.robotAlarmStreak >= 2 && isAlarmTriggered(state.robotRoom)) {
+      clearAlarmTrigger(state.robotRoom);
+      state.robotAlarmStreak = 0;
+      state.robotAlarmLoopTurns = 0;
+      state.robotAlarmLoopEdge = null;
+    }
+    return false;
+  }
   state.robotPlannedTarget = target;
   state.robotPath = getShortestPath(state.robotRoom, target).slice(1);
   if (state.robotPath.length > 0) {
@@ -6601,8 +6873,7 @@ function applyAlarmDisableStep(roomId, step, totalSteps) {
     return;
   }
   state.disabledAlarmedRooms.add(roomId);
-  state.triggeredAlarms.delete(roomId);
-  state.alarmDisableProgress.delete(roomId);
+  clearAlarmTrigger(roomId);
   state.threat = Math.max(1, state.threat - 0.2);
   pushStatus("Alarm silenced. The air thins.", 3);
   updateEscapeReadiness();
@@ -6622,9 +6893,12 @@ function disableAlarm(roomId) {
 
 function onAlarmTriggered(roomId) {
   if (state.robotDisabled) return;
-  if (!state.alarmAlertShown) {
+  if (!isAlarmTriggered(roomId)) {
+    setAlarmTriggered(roomId);
+  }
+  if (!state.meta.alarmAlertShown) {
     showObjectiveModal(getCaitLine("alarmTripped"));
-    state.alarmAlertShown = true;
+    markMetaFlag("alarmAlertShown");
   }
   const night = state.currentNight;
   const profile = getNightProfile();
@@ -6664,6 +6938,7 @@ function updateRoomActions() {
       highlight: true,
       className: "escape-button",
       suppressMenuPress: true,
+      actionKey: "escape",
     });
   } else if (canEscape) {
     actions.push({
@@ -6673,6 +6948,7 @@ function updateRoomActions() {
       highlight: true,
       className: "escape-button",
       suppressMenuPress: true,
+      actionKey: "escape",
     });
   }
 
@@ -6684,6 +6960,9 @@ function updateRoomActions() {
       button.appendChild(label);
       if (action.className) {
         button.classList.add(action.className);
+      }
+      if (action.actionKey) {
+        button.dataset.actionKey = action.actionKey;
       }
       button.disabled = action.disabled;
       if (action.highlight) {
@@ -6741,10 +7020,14 @@ function updateRoomActions() {
 
   if (room.schematic && !state.foundSchematics.has(room.schematic)) {
     const isDataMission = state.missionType === MISSION_TYPES.DATA;
+    const isRecoveredFragment = isDataMission &&
+      room.schematic === DATA_FRAGMENT_SCHEMATIC &&
+      state.dataFragmentsFound.has(room.id);
     const isObjectiveSchematic = state.requiredEscapeSchematic === room.schematic;
     const canScanSchematic = state.unlocks.allowCrafting || isDataMission || isObjectiveSchematic;
     const allowScanBeforeConsole = isObjectiveSchematic && state.objectiveBlocksEscapeConsole;
-    if (!state.objectiveItemInstalled &&
+    if (!isRecoveredFragment &&
+      !state.objectiveItemInstalled &&
       (state.escapeConsoleInspected || isDataMission || allowScanBeforeConsole)) {
       const scanLabel = isDataMission
         ? "Recover Data Fragment"
@@ -6753,7 +7036,7 @@ function updateRoomActions() {
           : `Schematic Scan (Night ${getNextUnlockNightFromNow("allowCrafting") ?? "?"})`;
       actions.push({
         label: scanLabel,
-      onClick: (event) => startSchematicScan(room.id, event),
+        onClick: (event) => startSchematicScan(room.id, event),
         disabled: state.hidden || blocked || (!isDataMission && !canScanSchematic),
         risk: "Quiet",
         highlight: isDataMission || isObjectiveSchematic,
@@ -6774,6 +7057,7 @@ function updateRoomActions() {
       disabled: state.hidden || blocked,
       highlight: !(requiredBlocked || objectiveBlocked),
       risk: "Exposed",
+      actionKey: "inspect-console",
     });
   }
 
@@ -6813,6 +7097,8 @@ function updateRoomActions() {
       disabled: state.hidden || blocked,
       highlight: true,
       risk: "Quiet",
+      suppressMenuPress: true,
+      actionKey: "align-override",
     });
   }
 
@@ -6823,6 +7109,7 @@ function updateRoomActions() {
       disabled: state.hidden || blocked,
       highlight: state.alarmedRoomsRequired > 0,
       risk: "Trace",
+      actionKey: "disable-alarm",
     });
   }
 
@@ -6833,6 +7120,7 @@ function updateRoomActions() {
         onClick: () => talkToCait(),
         disabled: blocked,
         risk: "Trace",
+        actionKey: "talk-cait",
       });
     } else {
       actions.push({
@@ -6932,6 +7220,9 @@ function updateRoomActions() {
     }
     if (action.suppressMenuPress) {
       button.dataset.suppressMenuPress = "true";
+    }
+    if (action.actionKey) {
+      button.dataset.actionKey = action.actionKey;
     }
     button.disabled = action.disabled;
     if (action.highlight) {
@@ -7836,10 +8127,12 @@ function handleMapSelection(roomId) {
     return;
   }
   state.escapeMapSelected = isExitRoom;
-  state.escapeRunPrompted = isExitRoom;
-  if (isExitRoom && !state.runHighlightConsumed) {
-    state.runHighlightActive = true;
-    state.runHighlightConsumed = true;
+  if (state.currentNight === 1) {
+    state.escapeRunPrompted = isExitRoom;
+    if (isExitRoom && !state.runHighlightConsumed) {
+      state.runHighlightActive = true;
+      state.runHighlightConsumed = true;
+    }
   }
   setRoutePreview(roomId);
   setSelectedRoom(roomId);
@@ -8076,6 +8369,9 @@ async function startAlignManualOverride(roomId, event) {
   if (!audioUnlockedOnce) {
     const unlocked = await ensureAudioUnlockedFromGesture(event);
     if (!unlocked) return;
+  }
+  if (audioUnlockedOnce) {
+    startTypingAudio(ACTION_LOCK_MS);
   }
   runLockedActionWithTypingSfx({
     label: "Aligning override node…",
@@ -8646,6 +8942,9 @@ function advanceNight() {
   } else {
     state.currentNight = Math.min(11, state.currentNight + 1);
   }
+  if (previousNight >= 11) {
+    clearMetaFlags();
+  }
   state.nightProfile = getNightProfile();
   state.unlocks = getUnlocks();
   const prevUnlocks = getUnlocksForNight(previousNight);
@@ -8667,8 +8966,6 @@ function resetGame({ preserveItems = false } = {}) {
   const savedDeployableUnlocks = preserveItems ? { ...state.deployableUnlocks } : null;
   const savedDoorJams = preserveItems ? state.doorJamCharges : null;
   const savedNoiseLures = preserveItems ? state.noiseLureCharges : null;
-  const savedCaitFrayedTutorialShown = preserveItems ? state.caitFrayedTutorialShown : null;
-  const savedSunlightMemoryShown = preserveItems ? state.sunlightMemoryShown : null;
   const savedVista = preserveItems ? state.vista : null;
   clearActionLock();
   closePanel(dom.craftMiniGame);
@@ -8816,6 +9113,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.scannerHighlight = false;
   state.alarmedRooms = new Set();
   state.triggeredAlarms = new Set();
+  state.alarmTriggerTTL = new Map();
   state.disabledAlarmedRooms = new Set();
   state.alarmDisableProgress = new Map();
   state.alarmedRoomsRequired = 0;
@@ -8824,9 +9122,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.specialPickups = new Map();
   state.requiredPickup = null;
   state.toolCollected = new Set();
-  state.alarmAlertShown = false;
   state.deployableUnlocks = { noiseLure: false, doorJam: false };
-  state.surgeAlertShown = false;
   state.nightIntroLine = null;
   state.storyQueue = [];
   state.objectiveHoldUntil = 0;
@@ -8844,7 +9140,6 @@ function resetGame({ preserveItems = false } = {}) {
   state.surgeMapFlashRoom = null;
   state.surgeMapFlashActive = false;
   state.vista = 0;
-  state.sunlightMemoryShown = false;
   state.hiddenTurns = 0;
   state.lastMoveType = "sneak";
   state.mapTargetMode = null;
@@ -8873,7 +9168,6 @@ function resetGame({ preserveItems = false } = {}) {
   state.sanityScanCooldown = 0;
   state.phantomCueShown = false;
   state.lastSanityRecoveryTick = -999;
-  state.caitFrayedTutorialShown = false;
   state.caitCooldown = 0;
   state.caitTalkCount = 0;
   state.caitQuietRoomId = null;
@@ -8887,8 +9181,6 @@ function resetGame({ preserveItems = false } = {}) {
     state.deployableUnlocks = { ...savedDeployableUnlocks };
     state.doorJamCharges = savedDoorJams;
     state.noiseLureCharges = savedNoiseLures;
-    state.caitFrayedTutorialShown = savedCaitFrayedTutorialShown;
-    state.sunlightMemoryShown = savedSunlightMemoryShown;
     state.vista = savedVista;
   }
   applyNightLayout();
@@ -10750,6 +11042,7 @@ function startGameLoop() {
     }
     tickRobotTravel();
     processPendingSignals();
+    tickAlarms();
     tickAlarmedRooms();
     tickSunlitRooms();
     tickPowerSurge();
@@ -10986,7 +11279,7 @@ function handleEscape() {
 
 function canTriggerSunlightMemory(roomId) {
   if (isNight11()) return false;
-  if (state.sunlightMemoryShown) return false;
+  if (state.meta.sunlightMemoryShown) return false;
   if (state.currentNight <= 4) return false;
   if (state.vista <= 3) return false;
   if (!state.sunlitRooms.has(roomId)) return false;
@@ -11000,7 +11293,7 @@ function canTriggerSunlightMemory(roomId) {
 
 function maybeTriggerSunlightMemory(roomId) {
   if (!canTriggerSunlightMemory(roomId)) return;
-  state.sunlightMemoryShown = true;
+  markMetaFlag("sunlightMemoryShown");
   showThought(SUNLIGHT_MEMORY_TEXT, SUNLIGHT_MEMORY_TICKS);
 }
 
@@ -11095,7 +11388,7 @@ function tickPlayerTravel() {
     }
   }
   if (isAlarmCapable(nextRoom) && !isAlarmTriggered(nextRoom)) {
-    state.triggeredAlarms.add(nextRoom);
+    setAlarmTriggered(nextRoom);
     showObjectiveModal(getCaitLine("alarmRoomLit"));
     onAlarmTriggered(nextRoom);
   }
