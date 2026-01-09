@@ -1584,6 +1584,7 @@ let lastActionLockStart = null;
 let pendingMoveTimeoutId = null;
 let miniGameAnimationId = null;
 let miniGameAnimationToken = 0;
+let miniGameStylesInjected = false;
 const ACTION_LOCK_MS = 1200;
 const ALARM_TRIGGER_TTL_MIN = 4;
 const ALARM_TRIGGER_TTL_MAX = 6;
@@ -11671,10 +11672,12 @@ function cancelMiniGame() {
 function renderMiniGame() {
   const game = state.miniGame;
   if (!game || !dom.miniGameTitle || !dom.miniGameText || !dom.miniGameOptions) return;
+  ensureMiniGameStylesInjected();
   dom.miniGameTitle.textContent = game.title;
   dom.miniGameText.textContent = game.ui?.text || game.roomHintText || "";
   dom.miniGameOptions.innerHTML = "";
   stopMiniGameAnimation();
+  setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
   switch (game.type) {
     case "signal_tuner":
       renderSignalTuner(game);
@@ -11700,6 +11703,7 @@ function renderMiniGame() {
     default:
       break;
   }
+  applyMiniGameMobileLayout();
 }
 
 function stopMiniGameAnimation() {
@@ -11726,6 +11730,80 @@ function setMiniGameSubmitButton({ label, enabled = true, visible = true } = {})
   dom.miniGameSubmitBtn.textContent = label ?? dom.miniGameSubmitBtn.textContent;
   dom.miniGameSubmitBtn.disabled = !enabled;
   dom.miniGameSubmitBtn.style.display = visible ? "" : "none";
+}
+
+function setMiniGameCancelVisibility({ showBottomBar, showInline }) {
+  if (!dom.miniGameCancelBtn) return;
+  dom.miniGameCancelBtn.style.display = showBottomBar ? "" : "none";
+  const actions = dom.miniGameCancelBtn.closest(".mini-game-actions");
+  if (actions) {
+    const submitVisible = dom.miniGameSubmitBtn && dom.miniGameSubmitBtn.style.display !== "none";
+    actions.style.display = showBottomBar || submitVisible ? "" : "none";
+  }
+  if (dom.miniGamePanel) {
+    dom.miniGamePanel.dataset.inlineCancel = showInline ? "true" : "false";
+  }
+}
+
+function isMiniGameMobile() {
+  return window.matchMedia?.("(pointer:coarse)")?.matches || window.innerWidth < 520;
+}
+
+function applyMiniGameMobileLayout() {
+  if (!dom.miniGamePanel) return false;
+  const isMobile = isMiniGameMobile();
+  dom.miniGamePanel.classList.toggle("miniGameMobile", isMobile);
+  const footerHeight = dom.overlayFooter?.getBoundingClientRect().height ?? 0;
+  dom.miniGamePanel.style.setProperty("--mini-game-footer-height", `${Math.round(footerHeight)}px`);
+  return isMobile;
+}
+
+function ensureMiniGameStylesInjected() {
+  if (miniGameStylesInjected) return;
+  const style = document.createElement("style");
+  style.id = "miniGameMobileStyles";
+  style.textContent = `
+    #miniGamePanel.miniGameMobile .mini-game-content {
+      max-height: calc(100vh - var(--mini-game-footer-height, 0px) - env(safe-area-inset-bottom, 0px));
+      overflow: hidden;
+      display: grid;
+      gap: 8px;
+    }
+    #miniGamePanel.miniGameMobile .mini-game-options {
+      overflow: hidden;
+    }
+    #miniGamePanel.miniGameMobile #miniGameTitle { font-size: 18px; letter-spacing: 2px; }
+    #miniGamePanel.miniGameMobile #miniGameText  { font-size: 14px; line-height: 1.25; margin-bottom: 8px; }
+    #miniGamePanel.miniGameMobile button         { min-height: 44px; padding: 10px 12px; }
+    #miniGamePanel.miniGameMobile .btnRow        { display:flex; gap:10px; flex-wrap:wrap; }
+    #miniGamePanel.miniGameMobile .btnRow > button { flex:1; }
+    #miniGamePanel .mini-game-content button { min-height: 44px; }
+    #miniGamePanel.miniGameMobile input[type="range"] { height: 32px; }
+    #miniGamePanel.miniGameMobile .chem-beaker { height: 120px; }
+    #miniGamePanel .patch-output { font-family: ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    #miniGamePanel .patch-output { background: rgba(8, 12, 18, 0.65); border: 1px solid rgba(255,255,255,0.2); padding: 6px 8px; white-space: pre-line; }
+    #miniGamePanel .patch-tile.selected { border: 1px solid rgba(140, 220, 255, 0.9); box-shadow: 0 0 10px rgba(140, 220, 255, 0.7); }
+    #miniGamePanel .patch-tile.disabled { opacity: 0.45; cursor: not-allowed; }
+    #miniGamePanel .commit-pulse { animation: miniGameCommitPulse 0.6s ease-out; }
+    @keyframes miniGameCommitPulse {
+      0% { box-shadow: 0 0 0 0 rgba(140, 220, 255, 0.9); }
+      100% { box-shadow: 0 0 0 12px rgba(140, 220, 255, 0); }
+    }
+  `;
+  document.head.appendChild(style);
+  miniGameStylesInjected = true;
+}
+
+function makeBtnRow(buttons, opts = {}) {
+  const { wrap = true, align = "center" } = opts;
+  const row = document.createElement("div");
+  row.className = "btnRow";
+  row.style.display = "flex";
+  row.style.gap = "8px";
+  row.style.flexWrap = wrap ? "wrap" : "nowrap";
+  row.style.justifyContent = align;
+  buttons.forEach((button) => row.appendChild(button));
+  return row;
 }
 
 function getSignalSweepPosition(game) {
@@ -12189,47 +12267,42 @@ function renderCircuitStabilizeNumeric(game) {
   const { V, I_target, tolerance, Pmax, R_min, R_max } = instanceSolution;
   dom.miniGameText.innerHTML =
     "Set resistor so current hits target without overheating.<br>I = V/R";
+  setMiniGameCancelVisibility({ showBottomBar: false, showInline: true });
 
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";
-  wrapper.style.gap = "10px";
+  wrapper.style.gap = "8px";
   wrapper.style.justifyItems = "center";
 
   const stats = document.createElement("div");
+  stats.style.fontSize = "12px";
   stats.textContent = `Supply V=${V}V | Target I=${I_target.toFixed(2)}A | Pmax=${Pmax}W`;
 
   const resistorReadout = document.createElement("div");
+  resistorReadout.style.fontWeight = "600";
   resistorReadout.textContent = `Resistor: ${instanceState.R_selected}Ω`;
-
-  const stepRow = document.createElement("div");
-  stepRow.style.display = "flex";
-  stepRow.style.flexWrap = "wrap";
-  stepRow.style.gap = "6px";
-  stepRow.style.justifyContent = "center";
 
   const adjustResistor = (delta) => {
     instanceState.R_selected = clamp(instanceState.R_selected + delta, R_min, R_max);
     renderMiniGame();
   };
 
-  [1, 10].forEach((step) => {
-    const down = document.createElement("button");
-    down.type = "button";
-    down.textContent = `-${step}Ω`;
-    down.addEventListener("click", () => adjustResistor(-step));
-    const up = document.createElement("button");
-    up.type = "button";
-    up.textContent = `+${step}Ω`;
-    up.addEventListener("click", () => adjustResistor(step));
-    stepRow.appendChild(down);
-    stepRow.appendChild(up);
+  const stepButtons = [-1, 1, -5, 5].map((step) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = `${step > 0 ? "+" : ""}${step}Ω`;
+    button.addEventListener("click", () => adjustResistor(step));
+    return button;
   });
+  const stepRow = makeBtnRow(stepButtons);
 
   const slider = document.createElement("input");
   slider.type = "range";
   slider.min = String(R_min);
   slider.max = String(R_max);
   slider.value = String(instanceState.R_selected);
+  slider.className = "mini-game-slider";
+  slider.style.width = "100%";
   slider.addEventListener("input", (event) => {
     const value = Number(event.target.value);
     instanceState.R_selected = value;
@@ -12238,10 +12311,45 @@ function renderCircuitStabilizeNumeric(game) {
 
   const Icalc = V / instanceState.R_selected;
   const Pcalc = (V * V) / instanceState.R_selected;
+  const isOverheat = Pcalc > Pmax;
+  const isHigh = Icalc > I_target + tolerance || isOverheat;
+  const isLow = Icalc < I_target - tolerance;
+  const statusText = isOverheat ? "OVERHEAT" : isHigh ? "HIGH" : isLow ? "LOW" : "OK";
+  const statusColor = isOverheat
+    ? "rgba(220, 140, 60, 0.9)"
+    : isHigh
+      ? "rgba(200, 80, 80, 0.85)"
+      : isLow
+        ? "rgba(150, 150, 150, 0.85)"
+        : "rgba(80, 200, 120, 0.9)";
+
+  const statusPill = document.createElement("div");
+  statusPill.textContent = statusText;
+  statusPill.style.padding = "6px 12px";
+  statusPill.style.borderRadius = "999px";
+  statusPill.style.fontWeight = "700";
+  statusPill.style.letterSpacing = "1px";
+  statusPill.style.background = statusColor;
+  statusPill.style.color = "#0b0f12";
+
+  const formatSigned = (value, digits = 2) => `${value >= 0 ? "+" : ""}${value.toFixed(digits)}`;
+  const deltaRow = document.createElement("div");
+  deltaRow.style.fontSize = "12px";
+  deltaRow.textContent = `ΔI: ${formatSigned(Icalc - I_target)}A | P margin: ${formatSigned(
+    Pmax - Pcalc
+  )}W`;
+
   const currentReadout = document.createElement("div");
   currentReadout.textContent = `Icalc: ${Icalc.toFixed(2)}A`;
   const powerReadout = document.createElement("div");
   powerReadout.textContent = `Pcalc: ${Pcalc.toFixed(2)}W`;
+  const readoutRow = document.createElement("div");
+  readoutRow.style.display = "flex";
+  readoutRow.style.gap = "10px";
+  readoutRow.style.flexWrap = "wrap";
+  readoutRow.style.justifyContent = "center";
+  readoutRow.appendChild(currentReadout);
+  readoutRow.appendChild(powerReadout);
 
   const meter = document.createElement("div");
   meter.style.position = "relative";
@@ -12267,8 +12375,6 @@ function renderCircuitStabilizeNumeric(game) {
   meterFill.style.bottom = "0";
   const meterFillPct = clamp(Icalc / scaleMax, 0, 1) * 100;
   meterFill.style.width = `${Math.round(meterFillPct)}%`;
-  const isHigh = Icalc > I_target + tolerance || Pcalc > Pmax;
-  const isLow = Icalc < I_target - tolerance;
   meterFill.style.background = isHigh
     ? "rgba(200, 80, 80, 0.85)"
     : isLow
@@ -12277,11 +12383,6 @@ function renderCircuitStabilizeNumeric(game) {
   meter.appendChild(meterFill);
   meter.appendChild(band);
 
-  const bandLabel = document.createElement("div");
-  bandLabel.style.fontSize = "12px";
-  bandLabel.textContent = isHigh ? "HIGH" : isLow ? "LOW" : "OK";
-
-  const resetRow = document.createElement("div");
   const resetButton = document.createElement("button");
   resetButton.type = "button";
   resetButton.textContent = "RESET";
@@ -12289,30 +12390,43 @@ function renderCircuitStabilizeNumeric(game) {
     instanceState.R_selected = instanceState.R_initial;
     renderMiniGame();
   });
-  resetRow.appendChild(resetButton);
+  const isMobileLayout = isMiniGameMobile();
+  const mobileRowButtons = [-10, 10].map((step) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = `${step > 0 ? "+" : ""}${step}Ω`;
+    button.addEventListener("click", () => adjustResistor(step));
+    return button;
+  });
+  const mobileRow = isMobileLayout ? makeBtnRow([...mobileRowButtons, resetButton]) : null;
 
   wrapper.appendChild(stats);
   wrapper.appendChild(resistorReadout);
-  wrapper.appendChild(stepRow);
-  wrapper.appendChild(slider);
-  wrapper.appendChild(currentReadout);
-  wrapper.appendChild(powerReadout);
+  wrapper.appendChild(statusPill);
+  wrapper.appendChild(deltaRow);
   wrapper.appendChild(meter);
-  wrapper.appendChild(bandLabel);
-  wrapper.appendChild(resetRow);
+  wrapper.appendChild(readoutRow);
+  wrapper.appendChild(stepRow);
+  if (mobileRow) wrapper.appendChild(mobileRow);
+  wrapper.appendChild(slider);
+  if (!mobileRow) {
+    const resetRow = makeBtnRow([resetButton], { wrap: false });
+    wrapper.appendChild(resetRow);
+  }
 
   dom.miniGameOptions.appendChild(wrapper);
-  const actionRow = document.createElement("div");
-  actionRow.style.display = "flex";
-  actionRow.style.gap = "8px";
-  actionRow.style.justifyContent = "center";
 
   const applyButton = document.createElement("button");
   applyButton.type = "button";
   applyButton.textContent = "Apply";
   applyButton.addEventListener("click", () => submitCircuitStabilizeNumeric(game));
 
-  actionRow.appendChild(applyButton);
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.addEventListener("click", cancelMiniGame);
+
+  const actionRow = makeBtnRow([applyButton, cancelButton], { wrap: false });
   dom.miniGameOptions.appendChild(actionRow);
   setMiniGameSubmitButton({ visible: false });
 }
@@ -12328,10 +12442,11 @@ function renderTitrationQuick(game) {
   const { variant, displayValues, targetMl, tolerancePct } = instanceSolution;
   dom.miniGameText.innerHTML =
     "Set the pump with the slider, pour, then test the mix.<br>C1V1 = C2V2";
+  setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
 
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";
-  wrapper.style.gap = "10px";
+  wrapper.style.gap = "8px";
 
   const description = document.createElement("div");
   if (variant === "dilution") {
@@ -12343,6 +12458,7 @@ function renderTitrationQuick(game) {
       2
     )}M acid with ${displayValues.M2.toFixed(2)}M base.`;
   }
+  description.style.fontSize = "12px";
 
   const equation = document.createElement("div");
   equation.style.fontSize = "12px";
@@ -12351,14 +12467,25 @@ function renderTitrationQuick(game) {
       ? "Equation: C1·<strong>V1</strong> = C2·V2"
       : "Equation: M1·V1 = M2·<strong>V2</strong>";
 
+  const instruction = document.createElement("div");
+  instruction.style.fontSize = "13px";
+  instruction.style.fontWeight = "600";
+  const pouredAmount = instanceState.mlPoured ?? 0;
+  instruction.textContent =
+    pouredAmount <= 0
+      ? "Set pump amount, then POUR."
+      : "TEST MIX to check strength. Adjust + pour again.";
+
   const beakerRow = document.createElement("div");
   beakerRow.style.display = "flex";
   beakerRow.style.gap = "12px";
+  beakerRow.style.alignItems = "center";
 
   const beaker = document.createElement("div");
+  beaker.className = "chem-beaker";
   beaker.style.position = "relative";
   beaker.style.width = "90px";
-  beaker.style.height = "120px";
+  beaker.style.height = "150px";
   beaker.style.border = "1px solid rgba(255,255,255,0.4)";
   beaker.style.background = "rgba(12, 18, 24, 0.6)";
   const fill = document.createElement("div");
@@ -12371,10 +12498,15 @@ function renderTitrationQuick(game) {
   beaker.appendChild(fill);
 
   const beakerLabel = document.createElement("div");
+  beakerLabel.style.fontSize = "16px";
+  beakerLabel.style.fontWeight = "600";
   beakerLabel.textContent = `Poured: ${instanceState.mlPoured ?? 0} mL`;
 
   const indicator = document.createElement("div");
-  indicator.textContent = `Pump setting: ${instanceState.mlSelected} mL`;
+  indicator.style.fontSize = "16px";
+  indicator.style.fontWeight = "600";
+  indicator.style.textAlign = "center";
+  indicator.textContent = `Pump: ${instanceState.mlSelected} mL`;
 
   const setFillLevel = (ml) => {
     const percent = clamp(ml / 200, 0, 1) * 100;
@@ -12390,6 +12522,7 @@ function renderTitrationQuick(game) {
   slider.min = "0";
   slider.max = "200";
   slider.value = String(instanceState.mlSelected);
+  slider.style.width = "100%";
   slider.addEventListener("input", (event) => {
     instanceState.mlSelected = Number(event.target.value);
     instanceState.lastSuccess = false;
@@ -12398,19 +12531,45 @@ function renderTitrationQuick(game) {
 
   const feedback = document.createElement("div");
   feedback.textContent = instanceState.lastFeedback || "Test the mix to check strength.";
+  feedback.style.fontSize = "12px";
 
-  const actionRow = document.createElement("div");
-  actionRow.style.display = "flex";
-  actionRow.style.gap = "8px";
-  actionRow.style.flexWrap = "wrap";
+  const pumpRowButtons = [-10, -5, 5, 10].map((step) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = `${step > 0 ? "+" : ""}${step}`;
+    button.addEventListener("click", () => {
+      instanceState.mlSelected = clamp(instanceState.mlSelected + step, 0, 200);
+      instanceState.lastSuccess = false;
+      renderMiniGame();
+    });
+    return button;
+  });
+  const pumpRow = makeBtnRow(pumpRowButtons);
+
+  const quickPourRow = makeBtnRow(
+    [5, 10].map((step) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = `POUR +${step} mL`;
+      button.style.fontSize = "12px";
+      button.addEventListener("click", () => {
+        instanceState.mlSelected = clamp(instanceState.mlSelected + step, 0, 200);
+        instanceState.mlPoured = instanceState.mlSelected;
+        instanceState.lastSuccess = false;
+        renderMiniGame();
+      });
+      return button;
+    }),
+    { wrap: true }
+  );
 
   const pourButton = document.createElement("button");
   pourButton.type = "button";
-  pourButton.textContent = "Pour";
+  pourButton.textContent = "POUR";
   pourButton.addEventListener("click", () => {
     instanceState.mlPoured = instanceState.mlSelected;
     instanceState.lastSuccess = false;
-    setFillLevel(instanceState.mlPoured);
+    renderMiniGame();
   });
 
   const testButton = document.createElement("button");
@@ -12450,30 +12609,59 @@ function renderTitrationQuick(game) {
     submitTitrationQuick(game);
   });
 
-  actionRow.appendChild(pourButton);
-  actionRow.appendChild(testButton);
-  actionRow.appendChild(commitButton);
+  const actionRow = makeBtnRow([pourButton, testButton, commitButton], { wrap: false });
+  actionRow.style.width = "100%";
+  [pourButton, testButton, commitButton].forEach((button) => {
+    button.style.flex = "1";
+  });
 
   beakerRow.appendChild(beaker);
 
   wrapper.appendChild(description);
   wrapper.appendChild(equation);
+  wrapper.appendChild(instruction);
   wrapper.appendChild(beakerRow);
   wrapper.appendChild(beakerLabel);
   wrapper.appendChild(indicator);
+  wrapper.appendChild(pumpRow);
   wrapper.appendChild(slider);
   wrapper.appendChild(feedback);
+  wrapper.appendChild(quickPourRow);
   wrapper.appendChild(actionRow);
 
   dom.miniGameOptions.appendChild(wrapper);
   setMiniGameSubmitButton({ visible: false });
 }
 
+const PATCH_OP_ORDER = ["NOP", "DEC", "INC", "ADD", "XOR", "JNZ", "RET"];
+
+function getPatchOpLabel(op) {
+  return op === "XOR" ? "CLR" : op;
+}
+
+function getPatchAvailableOps(game) {
+  const available = new Set(game.instanceState.tiles.map((tile) => tile.op));
+  available.add("NOP");
+  return available;
+}
+
+function getPatchSimStatus(sim) {
+  if (sim.status === "success") return "Success";
+  if (sim.status === "running") return "Running";
+  if (sim.status === "fail") {
+    if (sim.failReason === "loop") return "Loop detected";
+    if (sim.failReason === "ret_fail") return "RET too early";
+    if (sim.failReason === "ran_off_end") return "Ran off end";
+    return "Fail";
+  }
+  return "Idle";
+}
+
 function selectPatchOp(op) {
   const game = state.miniGame;
   if (!game) return;
   const tiles = game.instanceState.tiles;
-  if (!tiles.some((tile) => tile.op === op)) return;
+  if (op !== "NOP" && !tiles.some((tile) => tile.op === op)) return;
   game.instanceState.selectedOp = game.instanceState.selectedOp === op ? null : op;
   renderMiniGame();
 }
@@ -12484,6 +12672,7 @@ function placePatchOp(op, slotIndex) {
   const { slots } = game.instanceState;
   slots[slotIndex] = op;
   game.instanceState.selectedOp = null;
+  game.instanceState.focusedSlot = slotIndex;
   resetPatchSim(game);
   game.instanceState.simMessage = "";
   renderMiniGame();
@@ -12493,9 +12682,27 @@ function clearPatchSlot(slotIndex) {
   const game = state.miniGame;
   if (!game) return;
   game.instanceState.slots[slotIndex] = null;
+  game.instanceState.focusedSlot = slotIndex;
   resetPatchSim(game);
   game.instanceState.simMessage = "";
   renderMiniGame();
+}
+
+function cyclePatchSlot(game, slotIndex) {
+  const available = getPatchAvailableOps(game);
+  const currentOp = game.instanceState.slots[slotIndex] ?? "NOP";
+  const startIndex = PATCH_OP_ORDER.indexOf(currentOp);
+  for (let i = 1; i <= PATCH_OP_ORDER.length; i += 1) {
+    const nextOp = PATCH_OP_ORDER[(startIndex + i) % PATCH_OP_ORDER.length];
+    if (nextOp === "NOP" || available.has(nextOp)) {
+      game.instanceState.slots[slotIndex] = nextOp === "NOP" ? "NOP" : nextOp;
+      game.instanceState.focusedSlot = slotIndex;
+      resetPatchSim(game);
+      game.instanceState.simMessage = "";
+      renderMiniGame();
+      return;
+    }
+  }
 }
 
 function handlePatchSlotClick(event) {
@@ -12508,7 +12715,12 @@ function handlePatchSlotClick(event) {
     placePatchOp(selected, slotIndex);
     return;
   }
-  clearPatchSlot(slotIndex);
+  if (isMiniGameMobile()) {
+    cyclePatchSlot(game, slotIndex);
+    return;
+  }
+  game.instanceState.focusedSlot = slotIndex;
+  renderMiniGame();
 }
 
 function handlePatchSlotDrop(event) {
@@ -12518,7 +12730,8 @@ function handlePatchSlotDrop(event) {
   const op = event.dataTransfer?.getData("text/plain");
   if (!op) return;
   const game = state.miniGame;
-  if (!game || !game.instanceState.tiles.some((tile) => tile.op === op)) return;
+  if (!game) return;
+  if (op !== "NOP" && !game.instanceState.tiles.some((tile) => tile.op === op)) return;
   placePatchOp(op, slotIndex);
 }
 
@@ -12542,6 +12755,7 @@ function resetPatchSim(game) {
   };
   game.instanceState.lastTestSuccess = false;
   game.instanceState.simMessage = "";
+  game.instanceState.commitPulse = false;
 }
 
 function updatePatchLatch(sim, prevCx, prevPc, nextCx, nextPc) {
@@ -12657,7 +12871,7 @@ function runPatchSim(game, maxStepsOverride) {
 }
 
 function submitPatchDrag(game) {
-  if (game.instanceState.slots.some((slot) => !slot)) return;
+  if (game.instanceState.slots.some((slot) => slot === null)) return;
   if (!game.instanceState.lastTestSuccess) return;
   resetPatchSim(game);
   const status = runPatchSim(game);
@@ -12669,9 +12883,10 @@ function submitPatchDrag(game) {
 }
 
 function renderPatchDrag(game) {
-  const { tiles, slots, selectedOp, initialCx, sim } = game.instanceState;
+  const { slots, selectedOp, initialCx, sim } = game.instanceState;
   dom.miniGameText.innerHTML =
     "Patch the loop so CX returns to 0 and unlocks the latch.<br>Step/Test to see what the program does.";
+  setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
   const board = document.createElement("div");
   board.className = "patch-board";
   board.style.display = "grid";
@@ -12711,6 +12926,13 @@ function renderPatchDrag(game) {
     if (status === "success") {
       game.instanceState.lastTestSuccess = true;
       game.instanceState.simMessage = "Latch: 100% — door unlock sequence valid.";
+      game.instanceState.commitPulse = true;
+      setTimeout(() => {
+        if (!state.miniGameActive) return;
+        if (state.miniGame?.id !== game.id) return;
+        game.instanceState.commitPulse = false;
+        renderMiniGame();
+      }, 650);
     } else {
       game.instanceState.lastTestSuccess = false;
       if (simState.failReason === "loop") {
@@ -12729,13 +12951,34 @@ function renderPatchDrag(game) {
   const commitButton = document.createElement("button");
   commitButton.type = "button";
   commitButton.textContent = "COMMIT PATCH";
-  commitButton.disabled = !game.instanceState.lastTestSuccess || slots.some((slot) => !slot);
+  commitButton.disabled =
+    !game.instanceState.lastTestSuccess || slots.some((slot) => slot === null);
   commitButton.addEventListener("click", () => submitPatchDrag(game));
+  if (game.instanceState.commitPulse) {
+    commitButton.classList.add("commit-pulse");
+  }
+
+  const clearButton = document.createElement("button");
+  clearButton.type = "button";
+  clearButton.textContent = "CLEAR SLOT";
+  clearButton.disabled = game.instanceState.focusedSlot === undefined;
+  clearButton.addEventListener("click", () => {
+    if (game.instanceState.focusedSlot === undefined) return;
+    clearPatchSlot(game.instanceState.focusedSlot);
+  });
 
   controls.appendChild(resetButton);
   controls.appendChild(stepButton);
   controls.appendChild(testButton);
   controls.appendChild(commitButton);
+  controls.appendChild(clearButton);
+
+  const commitHint = document.createElement("div");
+  commitHint.style.fontSize = "12px";
+  commitHint.style.opacity = commitButton.disabled ? "0.85" : "0.7";
+  commitHint.textContent = commitButton.disabled
+    ? "Run TEST until latch reaches 100% to enable COMMIT."
+    : "Patch ready to commit.";
 
   const slotsRow = document.createElement("div");
   slotsRow.style.display = "grid";
@@ -12753,16 +12996,19 @@ function renderPatchDrag(game) {
     slotEl.style.justifyContent = "center";
     slotEl.style.background = "rgba(12, 18, 24, 0.5)";
     if (!sim.halted && sim.pc === index) {
-      slotEl.style.outline = "2px solid rgba(120, 200, 240, 0.8)";
+      slotEl.style.outline = "3px solid rgba(120, 220, 255, 0.95)";
     }
     if (sim.firstErrorIndex === index) {
       slotEl.style.outline = "2px solid rgba(220, 80, 80, 0.9)";
+    }
+    if (game.instanceState.focusedSlot === index) {
+      slotEl.style.boxShadow = "0 0 0 2px rgba(180, 180, 240, 0.5)";
     }
     slotEl.addEventListener("click", handlePatchSlotClick);
     slotEl.addEventListener("dragover", (event) => event.preventDefault());
     slotEl.addEventListener("drop", handlePatchSlotDrop);
     if (slot) {
-      const label = slot === "XOR" ? "CLR" : slot;
+      const label = getPatchOpLabel(slot);
       const token = document.createElement("div");
       token.textContent = label;
       token.style.padding = "4px 6px";
@@ -12771,6 +13017,7 @@ function renderPatchDrag(game) {
       slotEl.appendChild(token);
     } else {
       slotEl.textContent = "Slot";
+      slotEl.style.opacity = "0.7";
     }
     slotsRow.appendChild(slotEl);
   });
@@ -12779,51 +13026,67 @@ function renderPatchDrag(game) {
   tray.style.display = "flex";
   tray.style.flexWrap = "wrap";
   tray.style.gap = "8px";
-  tiles.forEach((tile) => {
-    const tileEl = document.createElement("div");
+  const availableOps = getPatchAvailableOps(game);
+  const orderedOps = ["DEC", "INC", "ADD", "XOR", "JNZ", "RET", "NOP"];
+  orderedOps.forEach((op) => {
+    const tileEl = document.createElement("button");
+    tileEl.type = "button";
     tileEl.className = "patch-tile";
-    tileEl.textContent = tile.label;
+    tileEl.textContent = getPatchOpLabel(op);
     tileEl.style.padding = "6px 10px";
     tileEl.style.border = "1px solid rgba(255,255,255,0.4)";
     tileEl.style.background =
-      selectedOp === tile.op ? "rgba(80, 120, 160, 0.8)" : "rgba(20, 28, 38, 0.85)";
+      selectedOp === op ? "rgba(80, 120, 160, 0.8)" : "rgba(20, 28, 38, 0.85)";
     tileEl.style.cursor = "pointer";
-    tileEl.draggable = true;
-    tileEl.addEventListener("click", () => selectPatchOp(tile.op));
-    tileEl.addEventListener("dragstart", (event) => {
-      event.dataTransfer?.setData("text/plain", tile.op);
-    });
+    if (selectedOp === op) {
+      tileEl.classList.add("selected");
+    }
+    const isAvailable = availableOps.has(op);
+    if (!isAvailable) {
+      tileEl.disabled = true;
+      tileEl.classList.add("disabled");
+    } else {
+      tileEl.draggable = true;
+      tileEl.addEventListener("dragstart", (event) => {
+        event.dataTransfer?.setData("text/plain", op);
+      });
+      tileEl.addEventListener("click", () => selectPatchOp(op));
+    }
     tray.appendChild(tileEl);
   });
 
   const legend = document.createElement("div");
-  legend.style.fontSize = "12px";
+  legend.style.fontSize = "11px";
   legend.style.display = "grid";
   legend.style.gap = "2px";
-  legend.innerHTML =
-    "DEC: CX–1 | INC: CX+1 | ADD: CX+2 | CLR: CX=0 | JNZ: jump to start if CX!=0 | RET: succeed only if CX==0";
-
-  const xorTip = document.createElement("div");
-  xorTip.style.fontSize = "12px";
-  xorTip.textContent = "XOR clears CX (CX = 0). Think: wipe the counter.";
+  const legendLine1 = document.createElement("div");
+  legendLine1.textContent = "DEC/INC/ADD: CX adjust | CLR: CX=0";
+  const legendLine2 = document.createElement("div");
+  legendLine2.textContent = "JNZ: jump to start if CX!=0 | RET: succeed only if CX==0";
+  legend.appendChild(legendLine1);
+  legend.appendChild(legendLine2);
 
   const outputPanel = document.createElement("div");
-  outputPanel.style.display = "grid";
-  outputPanel.style.gap = "4px";
-  outputPanel.style.fontSize = "12px";
-  outputPanel.textContent = `PC=${sim.pc} | CX=${sim.cx} | Steps=${sim.steps} | Latch=${Math.round(
+  outputPanel.className = "patch-output";
+  outputPanel.textContent = `PC:${sim.pc}  CX:${sim.cx}  Steps:${sim.steps}  Latch:${Math.round(
     sim.latch
-  )}%`;
+  )}%
+Status: ${getPatchSimStatus(sim)}`;
 
   const simMessage = document.createElement("div");
   simMessage.style.fontSize = "12px";
   simMessage.textContent = game.instanceState.simMessage || `Start CX=${initialCx}.`;
 
   board.appendChild(controls);
+  board.appendChild(commitHint);
   board.appendChild(slotsRow);
   board.appendChild(tray);
   board.appendChild(legend);
-  board.appendChild(xorTip);
+  const outputLabel = document.createElement("div");
+  outputLabel.style.fontSize = "12px";
+  outputLabel.style.opacity = "0.8";
+  outputLabel.textContent = "SIM OUTPUT";
+  board.appendChild(outputLabel);
   board.appendChild(outputPanel);
   board.appendChild(simMessage);
   dom.miniGameOptions.appendChild(board);
