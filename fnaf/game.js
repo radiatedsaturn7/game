@@ -630,7 +630,6 @@ function generateCircuitStabilizeNumeric(rngSeed, night, template) {
     state: {
       R_selected,
       R_initial: R_selected,
-      strikes: 0,
     },
     solution: {
       V,
@@ -677,10 +676,16 @@ function generateTitrationQuick(rngSeed, night, template) {
       break;
     }
   }
+  let mlSelected = clamp(targetMl + rng.nextInt(-30, 30), 0, 200);
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const diffPct = Math.abs(mlSelected - targetMl) / targetMl * 100;
+    if (diffPct > tolerancePct) break;
+    mlSelected = clamp(targetMl + rng.nextInt(-30, 30), 0, 200);
+  }
   return {
     state: {
-      mlSelected: clamp(targetMl, 0, 200),
-      mlPoured: null,
+      mlSelected,
+      mlPoured: 0,
       attempts: 0,
       lastFeedback: "",
       lastSuccess: false,
@@ -708,7 +713,7 @@ function generatePatchDrag(rngSeed, night, template) {
     { op: "RET", label: "RET" },
     { op: "NOP", label: "NOP" },
     { op: "INC", label: "INC" },
-    { op: "XOR", label: "XOR" },
+    { op: "XOR", label: "CLR" },
     { op: "ADD", label: "ADD" },
   ];
   const required = ["DEC", "JNZ", "RET"];
@@ -726,7 +731,7 @@ function generatePatchDrag(rngSeed, night, template) {
     state: {
       tiles: shuffled,
       slots: Array.from({ length: 5 }, () => null),
-      selectedTileId: null,
+      selectedOp: null,
       initialCx,
       maxSteps,
       sim: {
@@ -738,6 +743,7 @@ function generatePatchDrag(rngSeed, night, template) {
         firstErrorIndex: null,
         latch: 0,
         failReason: null,
+        pcHistory: [],
       },
       lastTestSuccess: false,
       simMessage: "",
@@ -768,6 +774,7 @@ function generateBossFinish(rngSeed, night, template) {
       step: 1,
       heatHoldStart: null,
       holdReleased: false,
+      heatAttempts: 0,
       alignmentStart: null,
       cutStart: null,
       goodStrokes: 0,
@@ -775,6 +782,11 @@ function generateBossFinish(rngSeed, night, template) {
       cutFeedback: "",
       cutPressureStart: null,
       cutBandStart: null,
+      stepFeedback: "",
+      startedAt: null,
+      elapsedMs: 0,
+      mistakes: 0,
+      timePenaltyMs: 0,
     },
     solution: {
       heatBand,
@@ -784,6 +796,7 @@ function generateBossFinish(rngSeed, night, template) {
       cutStrokesNeeded: difficulty.cutStrokesNeeded ?? 5,
       cutTimeLimitMs: difficulty.cutTimeLimitMs ?? 6500,
       driftPeriod: difficulty.driftPeriod ?? 2000,
+      totalTimeLimitMs: 60000,
     },
     ui: {
       text: template.roomHintText,
@@ -9652,6 +9665,9 @@ function handleFlameSawThreatWindow() {
     state.robotKillGrace = 0;
     return false;
   }
+  if (state.miniGameActive && state.miniGame?.id === "FLAMESAW_FINISH") {
+    return true;
+  }
   if (state.robotRoom !== state.playerRoom) {
     state.robotKillGrace = 0;
     return false;
@@ -11752,6 +11768,25 @@ function getBossCutBand(game) {
   return [start, start + width];
 }
 
+function getBossFinishRemainingMs(game, timerEl) {
+  const { instanceState, instanceSolution } = game;
+  const now = performance.now();
+  if (!instanceState.startedAt) {
+    instanceState.startedAt = now;
+  }
+  instanceState.elapsedMs = now - instanceState.startedAt;
+  const remaining =
+    instanceSolution.totalTimeLimitMs - instanceState.elapsedMs - instanceState.timePenaltyMs;
+  const clamped = Math.max(0, remaining);
+  if (timerEl) {
+    timerEl.textContent = `Time remaining: ${Math.ceil(clamped / 1000)}s`;
+  }
+  if (remaining <= 0) {
+    handleMiniGameFailure(game);
+  }
+  return remaining;
+}
+
 function attemptSignalTunerLock(game) {
   const { instanceState, instanceSolution } = game;
   const position = getSignalSweepPosition(game);
@@ -12134,21 +12169,19 @@ function submitCircuitStabilizeNumeric(game) {
   const R = instanceState.R_selected;
   const Icalc = V / R;
   const Pcalc = (V * V) / R;
-  if (Pcalc > Pmax) {
-    instanceState.strikes += 1;
-    pushStatus("Overheat warning. Increase resistance.", 3);
-  } else if (Math.abs(Icalc - I_target) > tolerance) {
-    instanceState.strikes += 1;
-    pushStatus("Current is off target. Adjust R.", 3);
-  } else {
+  if (Pcalc <= Pmax && Math.abs(Icalc - I_target) <= tolerance) {
     handleMiniGameSuccess(game);
     return;
   }
-  if (instanceState.strikes >= 3) {
-    handleMiniGameFailure(game);
-    return;
-  }
-  renderMiniGame();
+  const profile = getNightProfile();
+  pushStatus("Circuit pops— regulator burned out.", 3);
+  registerSignal(state.playerRoom, 0.28 * profile.signalStrength.device, {
+    type: "burnout",
+    lastKnownChance: 0.25,
+    bleed: true,
+  });
+  applyRoomStress(state.playerRoom);
+  closeMiniGame();
 }
 
 function renderCircuitStabilizeNumeric(game) {
@@ -12216,26 +12249,37 @@ function renderCircuitStabilizeNumeric(game) {
   meter.style.height = "12px";
   meter.style.border = "1px solid rgba(255,255,255,0.4)";
   meter.style.background = "rgba(10, 15, 20, 0.6)";
+  const scaleMax = Math.max(I_target + tolerance * 3, I_target * 1.8);
+  const bandStartPct = clamp((I_target - tolerance) / scaleMax, 0, 1) * 100;
+  const bandEndPct = clamp((I_target + tolerance) / scaleMax, 0, 1) * 100;
+  const band = document.createElement("div");
+  band.style.position = "absolute";
+  band.style.left = `${bandStartPct}%`;
+  band.style.width = `${Math.max(2, bandEndPct - bandStartPct)}%`;
+  band.style.top = "0";
+  band.style.bottom = "0";
+  band.style.background = "rgba(80, 200, 120, 0.4)";
+  band.style.boxShadow = "0 0 0 1px rgba(80, 200, 120, 0.7)";
   const meterFill = document.createElement("div");
   meterFill.style.position = "absolute";
   meterFill.style.left = "0";
   meterFill.style.top = "0";
   meterFill.style.bottom = "0";
-  let stability = 0;
-  if (Pcalc <= Pmax) {
-    stability = clamp(1 - Math.abs(Icalc - I_target) / tolerance, 0, 1);
-  }
-  meterFill.style.width = `${Math.round(stability * 100)}%`;
-  meterFill.style.background =
-    Pcalc > Pmax
-      ? "rgba(200, 80, 80, 0.8)"
-      : stability >= 1
-        ? "rgba(80, 200, 120, 0.85)"
-        : "rgba(200, 180, 80, 0.8)";
+  const meterFillPct = clamp(Icalc / scaleMax, 0, 1) * 100;
+  meterFill.style.width = `${Math.round(meterFillPct)}%`;
+  const isHigh = Icalc > I_target + tolerance || Pcalc > Pmax;
+  const isLow = Icalc < I_target - tolerance;
+  meterFill.style.background = isHigh
+    ? "rgba(200, 80, 80, 0.85)"
+    : isLow
+      ? "rgba(160, 160, 160, 0.85)"
+      : "rgba(80, 200, 120, 0.9)";
   meter.appendChild(meterFill);
+  meter.appendChild(band);
 
-  const strikeText = document.createElement("div");
-  strikeText.textContent = `Strikes: ${instanceState.strikes}/3`;
+  const bandLabel = document.createElement("div");
+  bandLabel.style.fontSize = "12px";
+  bandLabel.textContent = isHigh ? "HIGH" : isLow ? "LOW" : "OK";
 
   const resetRow = document.createElement("div");
   const resetButton = document.createElement("button");
@@ -12254,11 +12298,29 @@ function renderCircuitStabilizeNumeric(game) {
   wrapper.appendChild(currentReadout);
   wrapper.appendChild(powerReadout);
   wrapper.appendChild(meter);
-  wrapper.appendChild(strikeText);
+  wrapper.appendChild(bandLabel);
   wrapper.appendChild(resetRow);
 
   dom.miniGameOptions.appendChild(wrapper);
-  setMiniGameSubmitButton({ label: "Apply Resistor", enabled: true, visible: true });
+  const actionRow = document.createElement("div");
+  actionRow.style.display = "flex";
+  actionRow.style.gap = "8px";
+  actionRow.style.justifyContent = "center";
+
+  const applyButton = document.createElement("button");
+  applyButton.type = "button";
+  applyButton.textContent = "Apply";
+  applyButton.addEventListener("click", () => submitCircuitStabilizeNumeric(game));
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "Cancel";
+  cancelButton.addEventListener("click", () => cancelMiniGame());
+
+  actionRow.appendChild(applyButton);
+  actionRow.appendChild(cancelButton);
+  dom.miniGameOptions.appendChild(actionRow);
+  setMiniGameSubmitButton({ visible: false });
 }
 
 function submitTitrationQuick(game) {
@@ -12381,11 +12443,34 @@ function renderTitrationQuick(game) {
     setFillLevel(instanceState.mlPoured);
   });
 
+  const pourFiveButton = document.createElement("button");
+  pourFiveButton.type = "button";
+  pourFiveButton.textContent = "+5 mL pour";
+  pourFiveButton.addEventListener("click", () => {
+    instanceState.mlPoured = clamp((instanceState.mlPoured ?? 0) + 5, 0, 200);
+    instanceState.lastSuccess = false;
+    setFillLevel(instanceState.mlPoured);
+  });
+
+  const pourTenButton = document.createElement("button");
+  pourTenButton.type = "button";
+  pourTenButton.textContent = "+10 mL pour";
+  pourTenButton.addEventListener("click", () => {
+    instanceState.mlPoured = clamp((instanceState.mlPoured ?? 0) + 10, 0, 200);
+    instanceState.lastSuccess = false;
+    setFillLevel(instanceState.mlPoured);
+  });
+
   const testButton = document.createElement("button");
   testButton.type = "button";
   testButton.textContent = "TEST MIX";
   testButton.addEventListener("click", () => {
-    const poured = instanceState.mlPoured ?? instanceState.mlSelected;
+    if (!instanceState.mlPoured) {
+      instanceState.lastFeedback = "You haven’t poured anything.";
+      renderMiniGame();
+      return;
+    }
+    const poured = instanceState.mlPoured;
     const diffPct = Math.abs(poured - targetMl) / targetMl * 100;
     if (diffPct <= tolerancePct) {
       instanceState.lastFeedback = `Within ${tolerancePct}% — mix ready.`;
@@ -12408,12 +12493,14 @@ function renderTitrationQuick(game) {
   const commitButton = document.createElement("button");
   commitButton.type = "button";
   commitButton.textContent = "COMMIT MIX";
-  commitButton.disabled = !instanceState.lastSuccess;
+  commitButton.disabled = !instanceState.lastSuccess || !instanceState.mlPoured;
   commitButton.addEventListener("click", () => {
     submitTitrationQuick(game);
   });
 
   actionRow.appendChild(pourButton);
+  actionRow.appendChild(pourFiveButton);
+  actionRow.appendChild(pourTenButton);
   actionRow.appendChild(testButton);
   actionRow.appendChild(commitButton);
 
@@ -12433,22 +12520,21 @@ function renderTitrationQuick(game) {
   setMiniGameSubmitButton({ visible: false });
 }
 
-function selectPatchTile(tileId) {
+function selectPatchOp(op) {
   const game = state.miniGame;
   if (!game) return;
   const tiles = game.instanceState.tiles;
-  if (!tiles.some((tile) => tile.id === tileId)) return;
-  game.instanceState.selectedTileId =
-    game.instanceState.selectedTileId === tileId ? null : tileId;
+  if (!tiles.some((tile) => tile.op === op)) return;
+  game.instanceState.selectedOp = game.instanceState.selectedOp === op ? null : op;
   renderMiniGame();
 }
 
-function placePatchTile(tileId, slotIndex) {
+function placePatchOp(op, slotIndex) {
   const game = state.miniGame;
   if (!game) return;
   const { slots } = game.instanceState;
-  slots[slotIndex] = tileId;
-  game.instanceState.selectedTileId = null;
+  slots[slotIndex] = op;
+  game.instanceState.selectedOp = null;
   resetPatchSim(game);
   game.instanceState.simMessage = "";
   renderMiniGame();
@@ -12468,9 +12554,9 @@ function handlePatchSlotClick(event) {
   if (Number.isNaN(slotIndex)) return;
   const game = state.miniGame;
   if (!game) return;
-  const selected = game.instanceState.selectedTileId;
+  const selected = game.instanceState.selectedOp;
   if (selected) {
-    placePatchTile(selected, slotIndex);
+    placePatchOp(selected, slotIndex);
     return;
   }
   clearPatchSlot(slotIndex);
@@ -12480,14 +12566,16 @@ function handlePatchSlotDrop(event) {
   event.preventDefault();
   const slotIndex = Number(event.currentTarget.dataset.slotIndex);
   if (Number.isNaN(slotIndex)) return;
-  const tileId = event.dataTransfer?.getData("text/plain");
-  if (!tileId) return;
-  placePatchTile(tileId, slotIndex);
+  const op = event.dataTransfer?.getData("text/plain");
+  if (!op) return;
+  const game = state.miniGame;
+  if (!game || !game.instanceState.tiles.some((tile) => tile.op === op)) return;
+  placePatchOp(op, slotIndex);
 }
 
 function getPatchProgram(game) {
-  const { tiles, slots } = game.instanceState;
-  return slots.map((slot) => tiles.find((tile) => tile.id === slot)?.op ?? "NOP");
+  const { slots } = game.instanceState;
+  return slots.map((slot) => slot ?? "NOP");
 }
 
 function resetPatchSim(game) {
@@ -12501,6 +12589,7 @@ function resetPatchSim(game) {
     firstErrorIndex: null,
     latch: 0,
     failReason: null,
+    pcHistory: [],
   };
   game.instanceState.lastTestSuccess = false;
   game.instanceState.simMessage = "";
@@ -12529,8 +12618,15 @@ function stepPatchSim(game) {
     sim.halted = true;
     sim.status = "fail";
     sim.failReason = "ran_off_end";
-    sim.firstErrorIndex ??= clamp(sim.pc, 0, program.length - 1);
+    sim.firstErrorIndex ??= clamp(sim.pc - 1, 0, program.length - 1);
     return { ok: false, reason: "ran_off" };
+  }
+  if (sim.pcHistory.includes(sim.pc)) {
+    sim.halted = true;
+    sim.status = "fail";
+    sim.failReason = "loop";
+    sim.firstErrorIndex ??= sim.pc;
+    return { ok: false, reason: "loop" };
   }
   if (sim.steps >= maxSteps) {
     sim.halted = true;
@@ -12540,6 +12636,10 @@ function stepPatchSim(game) {
     return { ok: false, reason: "loop" };
   }
   const op = program[sim.pc];
+  sim.pcHistory.push(sim.pc);
+  if (sim.pcHistory.length > maxSteps) {
+    sim.pcHistory.shift();
+  }
   const prevCx = sim.cx;
   const prevPc = sim.pc;
   let nextPc = sim.pc;
@@ -12620,7 +12720,7 @@ function submitPatchDrag(game) {
 }
 
 function renderPatchDrag(game) {
-  const { tiles, slots, selectedTileId, initialCx, sim } = game.instanceState;
+  const { tiles, slots, selectedOp, initialCx, sim } = game.instanceState;
   dom.miniGameText.innerHTML =
     "Patch the loop so CX returns to 0 and unlocks the latch.<br>Step/Test to see what the program does.";
   const board = document.createElement("div");
@@ -12664,10 +12764,15 @@ function renderPatchDrag(game) {
       game.instanceState.simMessage = "Latch: 100% — door unlock sequence valid.";
     } else {
       game.instanceState.lastTestSuccess = false;
-      const label = simState.failReason === "loop" ? "looping" : "stalled";
-      game.instanceState.simMessage = `Latch: ${Math.round(
-        simState.latch
-      )}% — ${label} (CX=${simState.cx}).`;
+      if (simState.failReason === "loop") {
+        game.instanceState.simMessage = "Loop detected: PC stuck cycling before CX hits 0.";
+      } else if (simState.failReason === "ret_fail") {
+        game.instanceState.simMessage = `RET hit too early: CX still ${simState.cx}.`;
+      } else if (simState.failReason === "ran_off_end") {
+        game.instanceState.simMessage = "Program fell off end: no RET.";
+      } else {
+        game.instanceState.simMessage = `Latch: ${Math.round(simState.latch)}% — stalled (CX=${simState.cx}).`;
+      }
     }
     renderMiniGame();
   });
@@ -12708,15 +12813,13 @@ function renderPatchDrag(game) {
     slotEl.addEventListener("dragover", (event) => event.preventDefault());
     slotEl.addEventListener("drop", handlePatchSlotDrop);
     if (slot) {
-      const tile = tiles.find((entry) => entry.id === slot);
-      if (tile) {
-        const token = document.createElement("div");
-        token.textContent = tile.label;
-        token.style.padding = "4px 6px";
-        token.style.border = "1px solid rgba(255,255,255,0.5)";
-        token.style.background = "rgba(22, 30, 40, 0.9)";
-        slotEl.appendChild(token);
-      }
+      const label = slot === "XOR" ? "CLR" : slot;
+      const token = document.createElement("div");
+      token.textContent = label;
+      token.style.padding = "4px 6px";
+      token.style.border = "1px solid rgba(255,255,255,0.5)";
+      token.style.background = "rgba(22, 30, 40, 0.9)";
+      slotEl.appendChild(token);
     } else {
       slotEl.textContent = "Slot";
     }
@@ -12734,15 +12837,26 @@ function renderPatchDrag(game) {
     tileEl.style.padding = "6px 10px";
     tileEl.style.border = "1px solid rgba(255,255,255,0.4)";
     tileEl.style.background =
-      selectedTileId === tile.id ? "rgba(80, 120, 160, 0.8)" : "rgba(20, 28, 38, 0.85)";
+      selectedOp === tile.op ? "rgba(80, 120, 160, 0.8)" : "rgba(20, 28, 38, 0.85)";
     tileEl.style.cursor = "pointer";
     tileEl.draggable = true;
-    tileEl.addEventListener("click", () => selectPatchTile(tile.id));
+    tileEl.addEventListener("click", () => selectPatchOp(tile.op));
     tileEl.addEventListener("dragstart", (event) => {
-      event.dataTransfer?.setData("text/plain", tile.id);
+      event.dataTransfer?.setData("text/plain", tile.op);
     });
     tray.appendChild(tileEl);
   });
+
+  const legend = document.createElement("div");
+  legend.style.fontSize = "12px";
+  legend.style.display = "grid";
+  legend.style.gap = "2px";
+  legend.innerHTML =
+    "DEC: CX–1 | INC: CX+1 | ADD: CX+2 | CLR: CX=0 | JNZ: jump to start if CX!=0 | RET: succeed only if CX==0";
+
+  const xorTip = document.createElement("div");
+  xorTip.style.fontSize = "12px";
+  xorTip.textContent = "XOR clears CX (CX = 0). Think: wipe the counter.";
 
   const outputPanel = document.createElement("div");
   outputPanel.style.display = "grid";
@@ -12759,6 +12873,8 @@ function renderPatchDrag(game) {
   board.appendChild(controls);
   board.appendChild(slotsRow);
   board.appendChild(tray);
+  board.appendChild(legend);
+  board.appendChild(xorTip);
   board.appendChild(outputPanel);
   board.appendChild(simMessage);
   dom.miniGameOptions.appendChild(board);
@@ -12782,6 +12898,11 @@ function renderBossFinish(game) {
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";
   wrapper.style.gap = "12px";
+
+  const timer = document.createElement("div");
+  timer.style.fontSize = "12px";
+  getBossFinishRemainingMs(game, timer);
+  wrapper.appendChild(timer);
 
   if (instanceState.step === 1) {
     const meter = document.createElement("div");
@@ -12817,17 +12938,27 @@ function renderBossFinish(game) {
       instanceState.heatHoldStart = null;
       if (held >= instanceSolution.heatBand[0] && held <= instanceSolution.heatBand[1]) {
         instanceState.step = 2;
+        instanceState.stepFeedback = "";
         renderMiniGame();
       } else {
-        handleMiniGameFailure(game);
+        instanceState.heatAttempts += 1;
+        instanceState.mistakes += 1;
+        instanceState.timePenaltyMs += 4000;
+        instanceState.stepFeedback = "Heat vented outside the band. +4s penalty.";
+        renderMiniGame();
       }
     });
+    const feedback = document.createElement("div");
+    feedback.style.fontSize = "12px";
+    feedback.textContent = instanceState.stepFeedback || "Aim for the green band.";
     wrapper.appendChild(meter);
     wrapper.appendChild(button);
+    wrapper.appendChild(feedback);
     dom.miniGameOptions.appendChild(wrapper);
     setMiniGameSubmitButton({ visible: false });
 
     const updateHeat = () => {
+      if (getBossFinishRemainingMs(game, timer) <= 0) return;
       const held = instanceState.heatHoldStart
         ? (performance.now() - instanceState.heatHoldStart) / 1200
         : 0;
@@ -12866,16 +12997,25 @@ function renderBossFinish(game) {
       const position = getBossAlignmentPosition(game);
       if (position >= instanceSolution.alignBand[0] && position <= instanceSolution.alignBand[1]) {
         instanceState.step = 3;
+        instanceState.stepFeedback = "";
         renderMiniGame();
       } else {
-        handleMiniGameFailure(game);
+        instanceState.mistakes += 1;
+        instanceState.timePenaltyMs += 3000;
+        instanceState.stepFeedback = "Alignment slipped. +3s penalty.";
+        renderMiniGame();
       }
     });
+    const feedback = document.createElement("div");
+    feedback.style.fontSize = "12px";
+    feedback.textContent = instanceState.stepFeedback || "Press when the marker is in the band.";
     wrapper.appendChild(bar);
     wrapper.appendChild(button);
+    wrapper.appendChild(feedback);
     dom.miniGameOptions.appendChild(wrapper);
     setMiniGameSubmitButton({ visible: false });
     startMiniGameAnimation(() => {
+      if (getBossFinishRemainingMs(game, timer) <= 0) return;
       marker.style.left = `${getBossAlignmentPosition(game) * 100}%`;
     });
     return;
@@ -12912,29 +13052,24 @@ function renderBossFinish(game) {
     if (!instanceState.cutStart) {
       instanceState.cutStart = performance.now();
     }
-    const elapsed = performance.now() - instanceState.cutStart;
-    if (elapsed > instanceSolution.cutTimeLimitMs) {
-      handleMiniGameFailure(game);
-      return;
-    }
     const pressure = getBossCutPressure(game);
     const [start, end] = getBossCutBand(game);
     if (pressure >= start && pressure <= end) {
       instanceState.goodStrokes += 1;
       instanceState.cutFeedback = "Good cut.";
     } else if (pressure < start) {
-      instanceState.missCount += 1;
-      instanceState.cutFeedback = "Too cold.";
+      instanceState.mistakes += 1;
+      instanceState.timePenaltyMs += 1000;
+      instanceState.goodStrokes = Math.max(0, instanceState.goodStrokes - 1);
+      instanceState.cutFeedback = "Too cold. +1s penalty.";
     } else {
-      instanceState.missCount += 1;
-      instanceState.cutFeedback = "Skidding.";
+      instanceState.mistakes += 1;
+      instanceState.timePenaltyMs += 1000;
+      instanceState.goodStrokes = Math.max(0, instanceState.goodStrokes - 1);
+      instanceState.cutFeedback = "Skidding. +1s penalty.";
     }
     if (instanceState.goodStrokes >= instanceSolution.cutStrokesNeeded) {
       handleMiniGameSuccess(game);
-      return;
-    }
-    if (instanceState.missCount >= 3) {
-      handleMiniGameFailure(game);
       return;
     }
     renderMiniGame();
@@ -12947,23 +13082,16 @@ function renderBossFinish(game) {
   dom.miniGameOptions.appendChild(wrapper);
   setMiniGameSubmitButton({ visible: false });
   startMiniGameAnimation(() => {
+    const remaining = getBossFinishRemainingMs(game, timer);
+    if (remaining <= 0) return;
     const [start, end] = getBossCutBand(game);
     const pressure = getBossCutPressure(game);
     band.style.left = `${start * 100}%`;
     band.style.width = `${(end - start) * 100}%`;
     marker.style.left = `${pressure * 100}%`;
-    if (instanceState.cutStart) {
-      const remaining = Math.max(
-        0,
-        instanceSolution.cutTimeLimitMs - (performance.now() - instanceState.cutStart)
-      );
-      progress.textContent = `Strokes: ${instanceState.goodStrokes}/${instanceSolution.cutStrokesNeeded} | ${Math.ceil(
-        remaining / 1000
-      )}s`;
-      if (remaining === 0) {
-        handleMiniGameFailure(game);
-      }
-    }
+    progress.textContent = `Strokes: ${instanceState.goodStrokes}/${instanceSolution.cutStrokesNeeded} | ${Math.ceil(
+      Math.max(0, remaining) / 1000
+    )}s`;
   });
 }
 
