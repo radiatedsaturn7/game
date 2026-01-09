@@ -704,6 +704,7 @@ function generateTitrationQuick(rngSeed, night, template) {
 
 function generateTitrationTransfer(rngSeed, night, template) {
   const rng = createRng(rngSeed);
+  const maxLoadMl = 60;
   const acidMlOptions = [];
   for (let ml = 30; ml <= 150; ml += 5) {
     acidMlOptions.push(ml);
@@ -730,10 +731,10 @@ function generateTitrationTransfer(rngSeed, night, template) {
     const acidM = acidMList[rng.nextInt(0, acidMList.length - 1)];
     const baseM = baseMList[rng.nextInt(0, baseMList.length - 1)];
     const baseTargetRaw = (acidM * acidMl) / baseM;
-    if (baseTargetRaw < 10 || baseTargetRaw > 200) continue;
-    const rounded = Math.round(baseTargetRaw);
-    const isInteger = Math.abs(baseTargetRaw - rounded) <= 0.02;
-    if (!isInteger) continue;
+    if (baseTargetRaw < 8 || baseTargetRaw > maxLoadMl) continue;
+    const rounded = Math.round(baseTargetRaw * 2) / 2;
+    const isClean = Math.abs(baseTargetRaw * 2 - Math.round(baseTargetRaw * 2)) <= 0.05;
+    if (!isClean) continue;
     const candidate = {
       acidMl,
       acidM,
@@ -741,7 +742,7 @@ function generateTitrationTransfer(rngSeed, night, template) {
       baseTargetMl: rounded,
     };
     if (!bestCandidate) bestCandidate = candidate;
-    if (rounded % 5 === 0) {
+    if (rounded % 5 === 0 && rounded <= maxLoadMl) {
       bestCandidate = candidate;
       break;
     }
@@ -750,19 +751,19 @@ function generateTitrationTransfer(rngSeed, night, template) {
     const acidMl = acidMlOptions[rng.nextInt(0, acidMlOptions.length - 1)];
     const acidM = acidMList[rng.nextInt(0, acidMList.length - 1)];
     const baseM = baseMList[rng.nextInt(0, baseMList.length - 1)];
-    const baseTargetRaw = clamp((acidM * acidMl) / baseM, 10, 200);
+    const baseTargetRaw = clamp((acidM * acidMl) / baseM, 8, maxLoadMl);
     bestCandidate = {
       acidMl,
       acidM,
       baseM,
-      baseTargetMl: Math.round(baseTargetRaw),
+      baseTargetMl: Math.round(baseTargetRaw * 2) / 2,
     };
   }
-  const tol = night <= 4 ? 5 : night <= 7 ? 4 : 3;
+  const tol = night <= 4 ? 3 : night <= 7 ? 2 : 1;
   return {
     type: "titration_transfer",
     title: "MIX VALVE RATIO",
-    actionLabel: "ADD DOSE",
+    actionLabel: "POUR",
     roomHintText: template.roomHintText,
     solution: {
       acidMl: bestCandidate.acidMl,
@@ -771,13 +772,16 @@ function generateTitrationTransfer(rngSeed, night, template) {
       baseTargetMl: bestCandidate.baseTargetMl,
       toleranceMl: tol,
       sampleMl: bestCandidate.acidMl,
+      targetPh: 7.0,
+      maxLoadMl,
     },
     state: {
-      selectedDoseMl: 5,
+      selectedLoadStep: 10,
+      loadedMl: 0,
       baseAddedMl: 0,
-      status: "acidic",
-      lastMessage: "",
-      overshot: false,
+      phase: "loading",
+      lastResult: null,
+      lockControls: false,
     },
   };
 }
@@ -12538,58 +12542,61 @@ function computeTitrationColor(diff, tol) {
   };
 }
 
-function evaluateTitrationTransfer(game, baseAddedOverride) {
-  const { instanceState, instanceSolution } = game;
-  const baseAddedMl = baseAddedOverride ?? instanceState.baseAddedMl;
-  const { baseTargetMl, toleranceMl } = instanceSolution;
-  const diff = baseAddedMl - baseTargetMl;
-  if (instanceState.overshot || diff > toleranceMl * 3) {
-    return {
-      status: "overshot",
-      message: "RUINED (blue). Reset the sample.",
-      diff,
-      overshot: true,
-    };
+function getTitrationReadout(diff, toleranceMl) {
+  const isSuccess = Math.abs(diff) <= toleranceMl;
+  const phOffset = Math.min(5, Math.abs(diff) / (toleranceMl * 2));
+  let ph = 7.0;
+  if (!isSuccess) {
+    if (diff < 0) {
+      ph = clamp(7.0 - phOffset, 1.0, 6.9);
+    } else if (diff > 0) {
+      ph = clamp(7.0 + phOffset, 7.1, 13.0);
+    }
   }
-  if (Math.abs(diff) <= toleranceMl) {
-    return {
-      status: "neutral",
-      message: "Neutral (clear). Solvent ready.",
-      diff,
-      overshot: false,
-    };
-  }
-  if (diff < 0) {
-    return {
-      status: "acidic",
-      message: "Acidic (red). Add base.",
-      diff,
-      overshot: false,
-    };
-  }
+  const message = isSuccess
+    ? "Neutral. Target reached."
+    : diff < 0
+      ? "Too acidic. Under-dosed."
+      : "Too basic. Over-dosed.";
   return {
-    status: "basic",
-    message: "Too basic (blue). You passed neutral.",
-    diff,
-    overshot: false,
+    ph,
+    diffMl: diff,
+    message,
+    isSuccess,
   };
+}
+
+function resetTitrationTransferState(instanceState) {
+  instanceState.selectedLoadStep = 10;
+  instanceState.loadedMl = 0;
+  instanceState.baseAddedMl = 0;
+  instanceState.phase = "loading";
+  instanceState.lastResult = null;
+  instanceState.lockControls = false;
+  instanceState.pourStartAt = null;
+  instanceState.pourDurationMs = null;
+  instanceState.pourStartLoadMl = null;
+  instanceState.pourStartBaseMl = null;
+  instanceState.successQueued = false;
 }
 
 function renderTitrationTransfer(game) {
   const { instanceState, instanceSolution } = game;
-  const { acidMl, acidM, baseM, baseTargetMl, toleranceMl, sampleMl } = instanceSolution;
+  const { acidMl, acidM, baseM, baseTargetMl, toleranceMl, targetPh, maxLoadMl } =
+    instanceSolution;
   dom.miniGameText.innerHTML = `
-    Acid sample is pre-filled (red). Add base doses (blue) until it turns clear (neutral).<br>
-    <span style="font-size:12px">M<sub>a</sub> · V<sub>a</sub> = M<sub>b</sub> · V<sub>b</sub></span>
+    Load base in the left beaker, then pour once to neutralize the acid sample.<br>
+    <span style="font-size:12px">M<sub>a</sub> · V<sub>a</sub> = M<sub>b</sub> · V<sub>b</sub></span><br>
+    <span style="font-size:11px">Compute V<sub>b</sub> = (M<sub>a</sub> · V<sub>a</sub>) / M<sub>b</sub></span>
   `;
   setMiniGameCancelVisibility({ showBottomBar: false, showInline: true });
 
-  const evaluation = evaluateTitrationTransfer(game);
-  instanceState.status = evaluation.status;
-  instanceState.lastMessage = evaluation.message;
-  if (evaluation.overshot) {
-    instanceState.overshot = true;
-  }
+  const isLoading = instanceState.phase === "loading";
+  const isPouring = instanceState.phase === "pouring";
+  const isReadout = instanceState.phase === "readout";
+  const locked = instanceState.lockControls;
+  const loadedMl = instanceState.loadedMl ?? 0;
+  const baseAddedMl = instanceState.baseAddedMl ?? 0;
 
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";
@@ -12600,6 +12607,7 @@ function renderTitrationTransfer(game) {
   beakerRow.style.gap = "12px";
   beakerRow.style.alignItems = "stretch";
   beakerRow.style.justifyContent = "space-between";
+  beakerRow.style.position = "relative";
 
   const makeBeaker = ({ label, color, fillPercent, bottomText }) => {
     const container = document.createElement("div");
@@ -12641,39 +12649,36 @@ function renderTitrationTransfer(game) {
       bottomEl.style.fontSize = "12px";
       bottomEl.style.textAlign = "center";
       container.appendChild(bottomEl);
+      return { container, fill, bottomEl, labelEl };
     }
-    return container;
+    return { container, fill, labelEl, bottomEl: null };
   };
 
-  const transferCapMl = 200;
-  const baseAddedMl = instanceState.baseAddedMl ?? 0;
-  const totalVolumeMl = sampleMl + baseAddedMl;
-  const sampleFillPercent = clamp(totalVolumeMl / transferCapMl, 0, 1) * 100;
+  const formatMl = (value) => (value % 1 === 0 ? value.toFixed(0) : value.toFixed(1));
+  const transferCapMl = acidMl + maxLoadMl;
+  const rightTotalMl = acidMl + baseAddedMl;
+  const sampleFillPercent = clamp(rightTotalMl / transferCapMl, 0, 1) * 100;
   const diff = baseAddedMl - baseTargetMl;
   const colorInfo = computeTitrationColor(diff, toleranceMl);
-  const sampleColor = instanceState.overshot ? "rgba(40, 90, 210, 0.95)" : colorInfo.color;
+  const sampleColor = isReadout ? colorInfo.color : "rgba(210, 70, 70, 0.9)";
 
   const baseBeaker = makeBeaker({
     label: "BASE DISPENSER (BLUE)",
     color: "rgba(70, 140, 230, 0.9)",
-    fillPercent: 75,
-    bottomText: `Dose: ${instanceState.selectedDoseMl} mL`,
+    fillPercent: clamp(loadedMl / maxLoadMl, 0, 1) * 100,
+    bottomText: `Loaded: ${formatMl(loadedMl)} mL`,
   });
   const sampleBeaker = makeBeaker({
     label: "ACID SAMPLE (RED)",
     color: sampleColor,
     fillPercent: sampleFillPercent,
-    bottomText: `Sample: ${acidMl} mL acid + ${baseAddedMl} mL base`,
+    bottomText: isLoading
+      ? `Sample: ${formatMl(acidMl)} mL acid`
+      : `Sample: ${formatMl(acidMl)} mL acid + ${formatMl(baseAddedMl)} mL base`,
   });
 
-  beakerRow.appendChild(baseBeaker);
-  beakerRow.appendChild(sampleBeaker);
-
-  const status = document.createElement("div");
-  status.textContent = instanceState.lastMessage;
-  status.style.fontSize = "16px";
-  status.style.fontWeight = "700";
-  status.style.textAlign = "center";
+  beakerRow.appendChild(baseBeaker.container);
+  beakerRow.appendChild(sampleBeaker.container);
 
   const readouts = document.createElement("div");
   readouts.style.display = "grid";
@@ -12684,14 +12689,8 @@ function renderTitrationTransfer(game) {
   acidReadout.textContent = `Acid: ${acidMl} mL @ ${acidM.toFixed(2)} M`;
   const baseReadout = document.createElement("div");
   baseReadout.textContent = `Base: ${baseM.toFixed(2)} M`;
-  const targetReadout = document.createElement("div");
-  targetReadout.textContent = "Target base total: ???";
-  const baseAddedReadout = document.createElement("div");
-  baseAddedReadout.textContent = `Base added: ${baseAddedMl} mL`;
   readouts.appendChild(acidReadout);
   readouts.appendChild(baseReadout);
-  readouts.appendChild(targetReadout);
-  readouts.appendChild(baseAddedReadout);
 
   const doseRow = document.createElement("div");
   doseRow.className = "btnRow";
@@ -12701,46 +12700,41 @@ function renderTitrationTransfer(game) {
   [1, 5, 10].forEach((dose) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = `${dose} mL`;
-    if (instanceState.selectedDoseMl === dose) {
-      button.style.border = "1px solid rgba(140, 220, 255, 0.9)";
-      button.style.boxShadow = "0 0 10px rgba(140, 220, 255, 0.65)";
-      button.style.background = "rgba(40, 80, 120, 0.35)";
-    }
+    button.textContent = `+${dose} mL`;
+    button.disabled = locked || !isLoading;
     button.addEventListener("click", () => {
-      instanceState.selectedDoseMl = dose;
+      if (instanceState.lockControls || instanceState.phase !== "loading") return;
+      instanceState.selectedLoadStep = dose;
+      instanceState.loadedMl = clamp(instanceState.loadedMl + dose, 0, maxLoadMl);
       renderMiniGame();
     });
     doseRow.appendChild(button);
   });
 
+  const clearButton = document.createElement("button");
+  clearButton.type = "button";
+  clearButton.textContent = "CLEAR LOAD";
+  clearButton.disabled = locked || !isLoading;
+  clearButton.addEventListener("click", () => {
+    if (instanceState.lockControls || instanceState.phase !== "loading") return;
+    instanceState.loadedMl = 0;
+    renderMiniGame();
+  });
+  doseRow.appendChild(clearButton);
+
   const transferButton = document.createElement("button");
   transferButton.type = "button";
-  transferButton.textContent = "ADD DOSE";
-  transferButton.disabled = instanceState.overshot;
+  transferButton.textContent = "POUR";
+  transferButton.disabled = locked || !isLoading || loadedMl <= 0;
   transferButton.addEventListener("click", () => {
-    if (instanceState.overshot) return;
-    instanceState.baseAddedMl = clamp(
-      instanceState.baseAddedMl + instanceState.selectedDoseMl,
-      0,
-      250
-    );
-    const nextEval = evaluateTitrationTransfer(game, instanceState.baseAddedMl);
-    if (nextEval.overshot) {
-      instanceState.overshot = true;
-      instanceState.status = nextEval.status;
-      instanceState.lastMessage = nextEval.message;
-      renderMiniGame();
-      return;
-    }
-    if (nextEval.status === "neutral") {
-      instanceState.status = nextEval.status;
-      instanceState.lastMessage = nextEval.message;
-      handleMiniGameSuccess(game);
-      return;
-    }
-    instanceState.status = nextEval.status;
-    instanceState.lastMessage = nextEval.message;
+    if (instanceState.lockControls || instanceState.phase !== "loading") return;
+    if (instanceState.loadedMl <= 0) return;
+    instanceState.phase = "pouring";
+    instanceState.lockControls = true;
+    instanceState.pourStartAt = performance.now();
+    instanceState.pourDurationMs = 800;
+    instanceState.pourStartLoadMl = instanceState.loadedMl;
+    instanceState.pourStartBaseMl = instanceState.baseAddedMl;
     renderMiniGame();
   });
 
@@ -12748,11 +12742,7 @@ function renderTitrationTransfer(game) {
   resetButton.type = "button";
   resetButton.textContent = "RESET";
   resetButton.addEventListener("click", () => {
-    instanceState.selectedDoseMl = 5;
-    instanceState.baseAddedMl = 0;
-    instanceState.status = "acidic";
-    instanceState.lastMessage = "";
-    instanceState.overshot = false;
+    resetTitrationTransferState(instanceState);
     renderMiniGame();
   });
 
@@ -12765,13 +12755,130 @@ function renderTitrationTransfer(game) {
   actionRow.style.width = "100%";
 
   wrapper.appendChild(beakerRow);
-  wrapper.appendChild(status);
   wrapper.appendChild(readouts);
   wrapper.appendChild(doseRow);
   wrapper.appendChild(actionRow);
 
+  if (isReadout && instanceState.lastResult) {
+    const result = instanceState.lastResult;
+    const readoutPanel = document.createElement("div");
+    readoutPanel.style.display = "grid";
+    readoutPanel.style.gap = "6px";
+    readoutPanel.style.padding = "10px 12px";
+    readoutPanel.style.border = "1px solid rgba(255,255,255,0.2)";
+    readoutPanel.style.background = "rgba(8, 12, 18, 0.65)";
+    readoutPanel.style.textAlign = "center";
+
+    const title = document.createElement("div");
+    title.textContent = "READOUT";
+    title.style.fontSize = "16px";
+    title.style.fontWeight = "700";
+
+    const target = document.createElement("div");
+    target.textContent = `Target pH: ${targetPh.toFixed(1)}`;
+
+    const measured = document.createElement("div");
+    measured.textContent = `Measured pH: ${result.ph.toFixed(1)}`;
+    measured.style.fontSize = "14px";
+    measured.style.fontWeight = "600";
+
+    const message = document.createElement("div");
+    message.textContent = result.message;
+
+    readoutPanel.appendChild(title);
+    readoutPanel.appendChild(target);
+    readoutPanel.appendChild(measured);
+    readoutPanel.appendChild(message);
+
+    if (result.diffMl !== 0) {
+      const estimate = document.createElement("div");
+      const direction = result.diffMl < 0 ? "under" : "over";
+      estimate.textContent = `Estimate: ${formatMl(Math.abs(result.diffMl))} mL ${direction}`;
+      estimate.style.fontSize = "12px";
+      readoutPanel.appendChild(estimate);
+    }
+
+    if (!result.isSuccess) {
+      const tryAgain = document.createElement("button");
+      tryAgain.type = "button";
+      tryAgain.textContent = "TRY AGAIN";
+      tryAgain.addEventListener("click", () => {
+        resetTitrationTransferState(instanceState);
+        renderMiniGame();
+      });
+      readoutPanel.appendChild(tryAgain);
+    }
+
+    wrapper.appendChild(readoutPanel);
+
+    if (result.isSuccess && !instanceState.successQueued) {
+      instanceState.successQueued = true;
+      setTimeout(() => {
+        if (!state.miniGameActive || state.miniGame !== game) return;
+        if (game.instanceState.phase !== "readout") return;
+        handleMiniGameSuccess(game);
+      }, 600);
+    }
+  }
+
   dom.miniGameOptions.appendChild(wrapper);
   setMiniGameSubmitButton({ visible: false });
+
+  if (isPouring) {
+    const stream = document.createElement("div");
+    stream.style.position = "absolute";
+    stream.style.width = "60px";
+    stream.style.height = "4px";
+    stream.style.background = "rgba(90, 150, 240, 0.85)";
+    stream.style.boxShadow = "0 0 6px rgba(120, 190, 255, 0.7)";
+    stream.style.left = "50%";
+    stream.style.top = "50%";
+    stream.style.transform = "translate(-50%, -50%) rotate(18deg)";
+    stream.style.borderRadius = "999px";
+    stream.style.opacity = "0.9";
+    beakerRow.appendChild(stream);
+
+    const updateFill = () => {
+      const start = instanceState.pourStartAt ?? performance.now();
+      const duration = instanceState.pourDurationMs ?? 800;
+      const elapsed = performance.now() - start;
+      const progress = clamp(elapsed / duration, 0, 1);
+      const startLoad = instanceState.pourStartLoadMl ?? 0;
+      const startBase = instanceState.pourStartBaseMl ?? 0;
+      const remainingLoad = startLoad * (1 - progress);
+      const pouredMl = startLoad * progress;
+      const totalBase = startBase + pouredMl;
+      baseBeaker.fill.style.height = `${clamp(remainingLoad / maxLoadMl, 0, 1) * 100}%`;
+      if (baseBeaker.bottomEl) {
+        baseBeaker.bottomEl.textContent = `Loaded: ${formatMl(remainingLoad)} mL`;
+      }
+      const rightTotal = acidMl + totalBase;
+      sampleBeaker.fill.style.height = `${clamp(rightTotal / transferCapMl, 0, 1) * 100}%`;
+      if (sampleBeaker.bottomEl) {
+        sampleBeaker.bottomEl.textContent = `Sample: ${formatMl(acidMl)} mL acid + ${formatMl(
+          totalBase
+        )} mL base`;
+      }
+      if (progress >= 1) {
+        stopMiniGameAnimation();
+        instanceState.baseAddedMl = startBase + startLoad;
+        instanceState.loadedMl = 0;
+        instanceState.lockControls = false;
+        instanceState.phase = "readout";
+        const diffAfter = instanceState.baseAddedMl - baseTargetMl;
+        instanceState.lastResult = getTitrationReadout(diffAfter, toleranceMl);
+        instanceState.pourStartAt = null;
+        instanceState.pourDurationMs = null;
+        instanceState.pourStartLoadMl = null;
+        instanceState.pourStartBaseMl = null;
+        renderMiniGame();
+      }
+    };
+    if (!instanceState.pourStartAt) {
+      instanceState.pourStartAt = performance.now();
+    }
+    startMiniGameAnimation(updateFill);
+  }
 }
 
 function renderTitrationQuick(game) {
