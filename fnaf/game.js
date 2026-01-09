@@ -418,6 +418,10 @@ const ROBOT_FOCUS_TTL = 6;
 const ROBOT_FOCUS_ARRIVAL_LINGER = 1;
 const ROBOT_FOCUS_BIAS = 0.35;
 const ROBOT_FOCUS_OVERRIDE_SIGNAL = 0.6;
+const ROBOT_RECHARGE_MIN_TURNS = 6;
+const ROBOT_RECHARGE_MAX_TURNS = 10;
+const ROBOT_RECHARGE_DORMANT_MIN = 2;
+const ROBOT_RECHARGE_DORMANT_MAX = 3;
 // Director nudges are soft hints near (not on) the player.
 const DIRECTOR_SAFE_TURNS_THRESHOLD = 8;
 const DIRECTOR_COOLDOWN = 7;
@@ -891,12 +895,15 @@ const state = {
   checkedRooms: new Set(),
   robotLinger: 0,
   robotDormant: 0,
+  robotRechargeCooldown: null,
   robotSearchTurns: 0,
   robotSearchSpot: null,
   robotPlannedTarget: null,
   robotLookTurns: 0,
   robotScanTarget: null,
   sawPlayerHide: false,
+  hideEncounteredRobotInRoom: false,
+  hideSpotArmKey: null,
   robotDisabled: true,
   selectedSchematic: null,
   requiredEscapeSchematic: null,
@@ -4507,6 +4514,7 @@ function setupMissionForNight() {
     setupNight11State();
     return;
   }
+  state.robotRechargeCooldown = getRobotRechargeCooldown();
   state.missionType = pickMissionForNight(state.currentNight);
   state.escapeMode = state.currentNight <= 3 ? "manual" : "fabricate";
   resetGoofingState();
@@ -5306,6 +5314,7 @@ function configureRobotStart() {
     state.robotDisabled = true;
     return;
   }
+  state.robotRechargeCooldown = getRobotRechargeCooldown();
   if (isTwistNight(state.currentNight)) {
     const exitRoom = rooms.find((room) => room.isExit)?.id ?? 13;
     state.robotRoom = exitRoom;
@@ -8503,19 +8512,7 @@ function recordHideSuccess(roomId, spot) {
 }
 
 function resolvePendingHide() {
-  const pending = state.pendingHide;
-  if (!pending) return;
-  if (!state.hidden ||
-    state.hiddenSpot !== pending.spot ||
-    state.playerRoom !== pending.roomId) {
-    state.pendingHide = null;
-    return;
-  }
-  const adjacent = roomConnections[state.playerRoom] || [];
-  const robotAdjacent = adjacent.includes(state.robotRoom);
-  if (state.robotRoom === state.playerRoom || robotAdjacent) return;
-  recordHideSuccess(pending.roomId, pending.spot);
-  state.pendingHide = null;
+  return;
 }
 
 function setHidden(spot, { force = false } = {}) {
@@ -8527,12 +8524,16 @@ function setHidden(spot, { force = false } = {}) {
     state.sawPlayerHide = false;
     state.hiddenTurns = 0;
     state.pendingHide = null;
+    state.hideEncounteredRobotInRoom = false;
+    state.hideSpotArmKey = null;
     updateUI();
     return;
   }
   state.hidden = true;
   state.hiddenSpot = spot;
   state.hiddenTurns = 0;
+  state.hideEncounteredRobotInRoom = false;
+  state.hideSpotArmKey = hideSpotKey(state.playerRoom, spot);
   if (!state.pendingHide ||
     state.pendingHide.roomId !== state.playerRoom ||
     state.pendingHide.spot !== spot) {
@@ -8542,7 +8543,9 @@ function setHidden(spot, { force = false } = {}) {
   if (state.burnedHidingSpots.has(`${state.playerRoom}:${spot}`)) {
     registerSignal(state.playerRoom, 0.25, { type: "hide", lastKnownChance: 0.2 });
   }
-  registerSignal(state.playerRoom, 0.2);
+  if (state.sawPlayerHide) {
+    registerSignal(state.playerRoom, 0.18, { type: "hide-seen", lastKnownChance: 0.25 });
+  }
   updateUI();
 }
 
@@ -8938,15 +8941,32 @@ function checkThreat() {
     state.sanityScanCooldown = 4;
   }
   if (state.robotSearchTurns > 0) {
-    if (!state.hidden || (state.hiddenSpot === state.robotSearchSpot && state.sawPlayerHide)) {
+    if (
+      !state.hidden ||
+      (
+        state.hidden &&
+        state.hiddenSpot === state.robotSearchSpot &&
+        (state.sawPlayerHide || isHideSpotUsed(state.playerRoom, state.hiddenSpot))
+      )
+    ) {
       attemptKill();
     }
     return;
   }
 
-  const learned = state.hidden && isHideSpotLearned(state.playerRoom, state.hiddenSpot);
+  if (state.hidden) {
+    state.robotLookTurns = Math.max(state.robotLookTurns, 1);
+    const reused = isHideSpotUsed(state.playerRoom, state.hiddenSpot);
+    const seen = state.sawPlayerHide;
+    const confidence = getRoomConfidence(state.playerRoom);
+    if (seen || reused || confidence >= 0.85) {
+      startSearchCycle();
+    }
+    return;
+  }
+
   const signal = state.roomSignals.get(state.playerRoom) || 0;
-  const baseChance = state.hidden ? (learned ? 0.55 : 0.35) : 0.75;
+  const baseChance = 0.7;
   const profile = getNightProfile();
   const killChance = Math.min(0.9, baseChance * profile.killAggression + signal * 0.3);
   const killed = Math.random() < killChance;
@@ -8966,7 +8986,7 @@ function attemptKill() {
   const learned = state.hidden && isHideSpotLearned(state.playerRoom, state.hiddenSpot);
   const signal = state.roomSignals.get(state.playerRoom) || 0;
   const baseChance = state.hidden
-    ? (state.sawPlayerHide ? (learned ? 0.5 : 0.3) : 0.05)
+    ? (state.sawPlayerHide ? (learned ? 0.45 : 0.28) : 0.01)
     : 0.7;
   const profile = getNightProfile();
   const killChance = Math.min(0.85, baseChance * profile.killAggression + signal * 0.4);
@@ -9087,6 +9107,8 @@ function resetGame({ preserveItems = false } = {}) {
   state.hidden = false;
   state.hiddenSpot = null;
   state.pendingHide = null;
+  state.hideEncounteredRobotInRoom = false;
+  state.hideSpotArmKey = null;
   state.learnedHidingSpots.clear();
   state.hideHistory.clear();
   state.threat = 1;
@@ -9125,6 +9147,7 @@ function resetGame({ preserveItems = false } = {}) {
   state.checkedRooms.clear();
   state.robotLinger = 0;
   state.robotDormant = 0;
+  state.robotRechargeCooldown = getRobotRechargeCooldown();
   state.robotSearchTurns = 0;
   state.robotSearchSpot = null;
   state.robotPlannedTarget = null;
@@ -9337,6 +9360,13 @@ function registerSignal(roomId, strength, options = {}) {
   const scaledStrength = strength * profile.confidenceGain * (weatherMods.signalStrength ?? 1);
   const next = Math.min(1, current + scaledStrength);
   state.roomSignals.set(roomId, next);
+  if (
+    !state.robotDisabled &&
+    state.robotDormant > 0 &&
+    (scaledStrength >= 0.35 || next >= 0.6)
+  ) {
+    state.robotDormant = Math.max(0, state.robotDormant - 1);
+  }
   if (type === "sneak") {
     state.signalDecayBoost.set(
       roomId,
@@ -9544,6 +9574,13 @@ function hasStrongSignal() {
     }
   });
   return strong;
+}
+
+function getRobotRechargeCooldown() {
+  const base = ROBOT_RECHARGE_MIN_TURNS +
+    Math.floor(Math.random() * (ROBOT_RECHARGE_MAX_TURNS - ROBOT_RECHARGE_MIN_TURNS + 1));
+  const nightBias = state.currentNight <= 3 ? 2 : state.currentNight <= 6 ? 0 : -1;
+  return Math.max(3, base + nightBias);
 }
 
 function runRobotTask() {
@@ -9767,6 +9804,14 @@ function updateRobotSearchSpot(spot) {
 function pickSearchSpot() {
   const spots = rooms[state.robotRoom].hideSpots;
   if (!spots || spots.length === 0) return null;
+  if (state.robotRoom === state.playerRoom && state.hidden && state.hiddenSpot) {
+    const preferSpot = state.sawPlayerHide ||
+      isHideSpotUsed(state.playerRoom, state.hiddenSpot) ||
+      isHideSpotLearned(state.playerRoom, state.hiddenSpot);
+    if (preferSpot && Math.random() < 0.6) {
+      return state.hiddenSpot;
+    }
+  }
   return spots[Math.floor(Math.random() * spots.length)];
 }
 
@@ -11142,11 +11187,27 @@ function startGameLoop() {
     tickPersistentSignals();
     decaySignals();
     tickDirector();
+    if (!state.robotDisabled && state.robotRechargeCooldown !== null) {
+      state.robotRechargeCooldown -= 1;
+      if (state.robotRechargeCooldown <= 0) {
+        if (
+          !hasStrongSignal() &&
+          !isRobotTraveling() &&
+          state.robotSearchTurns === 0 &&
+          state.robotRoom !== state.playerRoom
+        ) {
+          const dormantTurns = ROBOT_RECHARGE_DORMANT_MIN +
+            Math.floor(Math.random() * (ROBOT_RECHARGE_DORMANT_MAX - ROBOT_RECHARGE_DORMANT_MIN + 1));
+          state.robotDormant = Math.max(state.robotDormant, dormantTurns);
+          pushStatus("The robot powers down. The halls breathe.", 3);
+        }
+        state.robotRechargeCooldown = getRobotRechargeCooldown();
+      }
+    }
     tickRewireDampen();
     tickJammedEdges();
     maybeExpireLastKnown();
     advanceRobot();
-    resolvePendingHide();
     checkThreat();
     tickRobotMemory();
     maybeTriggerCaitFrayedTutorial();
@@ -11410,6 +11471,8 @@ function tickPlayerTravel() {
   state.hidden = false;
   state.hiddenSpot = null;
   state.hiddenTurns = 0;
+  state.hideEncounteredRobotInRoom = false;
+  state.hideSpotArmKey = null;
   if (isNight11() && state.caitQuietRoomId === nextRoom && !state.caitQuietSeen) {
     state.caitQuietSeen = true;
     showCaitQuietModal();
@@ -11571,6 +11634,22 @@ function tickRobotTravel() {
   state.robotRoom = nextRoom;
   state.robotLastRoom = previousRoom;
   state.robotMovedThisTick = true;
+  if (state.isAlive && state.hidden) {
+    if (state.robotRoom === state.playerRoom) {
+      state.hideEncounteredRobotInRoom = true;
+    }
+    if (previousRoom === state.playerRoom && state.robotRoom !== state.playerRoom) {
+      if (
+        state.hideEncounteredRobotInRoom &&
+        state.hiddenSpot &&
+        state.hideSpotArmKey === hideSpotKey(state.playerRoom, state.hiddenSpot)
+      ) {
+        recordHideSuccess(state.playerRoom, state.hiddenSpot);
+      }
+      state.hideEncounteredRobotInRoom = false;
+      state.hideSpotArmKey = null;
+    }
+  }
   if (state.robotDormant === 0) {
     const distance = getRobotDistance();
     if (distance >= 2) {
