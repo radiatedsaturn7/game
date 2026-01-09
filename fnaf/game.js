@@ -1831,9 +1831,34 @@ function isHotkeyBlocked() {
   return modals.some((modal) => modal?.classList.contains("active"));
 }
 
+const ACTION_HOTKEY_LABELS = new Map([
+  ["escape", "E"],
+  ["inspect-console", "I"],
+  ["align-override", "A"],
+  ["disable-alarm", "D"],
+  ["talk-cait", "K"],
+]);
+
+function appendHotkeyHint(button, actionKey) {
+  if (!button || !actionKey) return;
+  const hint = ACTION_HOTKEY_LABELS.get(actionKey);
+  if (!hint) return;
+  const hotkey = document.createElement("span");
+  hotkey.textContent = hint;
+  hotkey.classList.add("hotkey-hint");
+  hotkey.setAttribute("aria-hidden", "true");
+  button.appendChild(hotkey);
+}
+
 function triggerRoomAction(actionKey) {
   if (!actionKey) return false;
   const button = dom.roomActions?.querySelector(`button[data-action-key="${actionKey}"]`);
+  if (!button || button.disabled) return false;
+  button.click();
+  return true;
+}
+
+function clickButton(button) {
   if (!button || button.disabled) return false;
   button.click();
   return true;
@@ -3135,77 +3160,96 @@ function attachEvents() {
     if (shouldSuppressMenuPress(button)) return;
     playUiSfx(dom.menuPressAudio, "menu-press", { volume: 0.6, allowBeforeStart: true });
   });
+  const setHotkeyVisibility = (visible) => {
+    document.body.classList.toggle("hotkeys-visible", visible);
+  };
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Alt") {
+      setHotkeyVisibility(true);
+    }
+  });
+  document.addEventListener("keyup", (event) => {
+    if (event.key === "Alt") {
+      setHotkeyVisibility(false);
+    }
+  });
+  window.addEventListener("blur", () => {
+    setHotkeyVisibility(false);
+  });
   document.addEventListener("keydown", (event) => {
     if (event.defaultPrevented) return;
-    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.metaKey || event.ctrlKey) return;
     if (isHotkeyBlocked()) return;
     const key = event.key;
     const lower = key.toLowerCase();
     const mapActive = dom.mapPanel?.classList.contains("active");
-    const hasMapSelection = state.selectedRoom !== null || state.mapTargetSelection !== null;
-    let handled = true;
-    switch (lower) {
-      case "b":
-        openMenu();
-        break;
-      case "m":
-        openMap();
-        break;
-      case "l":
-        returnToRoom();
-        break;
-      case "t":
-        openTasks();
-        break;
-      case "u":
-        openUse();
-        break;
-      case "s":
-        if (mapActive && hasMapSelection) {
-          handleMapMove(false);
-        } else {
-          handled = false;
-        }
-        break;
-      case "r":
-        if (mapActive && hasMapSelection) {
-          handleMapMove(true);
-        } else {
-          handled = false;
-        }
-        break;
-      case "c":
-        if (isPlayerTraveling() || state.mapTargetMode || state.selectedRoom !== null) {
-          cancelMovement();
-        } else {
-          handled = false;
-        }
-        break;
-      case "e":
-        handled = triggerRoomAction("escape");
-        break;
-      case "i":
-        handled = triggerRoomAction("inspect-console");
-        break;
-      case "a":
-        handled = triggerRoomAction("align-override");
-        break;
-      case "d":
-        handled = triggerRoomAction("disable-alarm");
-        break;
-      case "k":
-        handled = triggerRoomAction("talk-cait");
-        break;
-      default:
-        handled = false;
-        break;
+    let handled = false;
+    if (mapActive) {
+      const direction = {
+        ArrowUp: "up",
+        ArrowDown: "down",
+        ArrowLeft: "left",
+        ArrowRight: "right",
+      }[key];
+      if (direction) {
+        handled = navigateMapSelection(direction);
+      }
     }
-    if (key === "Escape") {
+    if (!handled && key === "Escape") {
       handled = true;
       if (isPlayerTraveling()) {
         cancelMovement();
       } else {
         closePanels();
+      }
+    }
+    if (!handled && event.altKey) {
+      switch (lower) {
+        case "b":
+          handled = clickButton(dom.menuBtn);
+          break;
+        case "m":
+          handled = clickButton(dom.mapBtn);
+          break;
+        case "l":
+          handled = clickButton(dom.liveBtn);
+          break;
+        case "t":
+          handled = clickButton(dom.tasksBtn);
+          break;
+        case "u":
+          handled = clickButton(dom.useBtn);
+          break;
+        case "s":
+          handled = mapActive && clickButton(dom.sneakBtn);
+          break;
+        case "r":
+          handled = mapActive && clickButton(dom.runBtn);
+          break;
+        case "p":
+          handled = mapActive && clickButton(dom.deployBtn);
+          break;
+        case "c":
+          handled = clickButton(dom.cancelBtn);
+          break;
+        case "e":
+          handled = triggerRoomAction("escape");
+          break;
+        case "i":
+          handled = triggerRoomAction("inspect-console");
+          break;
+        case "a":
+          handled = triggerRoomAction("align-override");
+          break;
+        case "d":
+          handled = triggerRoomAction("disable-alarm");
+          break;
+        case "k":
+          handled = triggerRoomAction("talk-cait");
+          break;
+        default:
+          handled = false;
+          break;
       }
     }
     if (handled) {
@@ -6958,6 +7002,7 @@ function updateRoomActions() {
       const label = document.createElement("span");
       label.textContent = action.label;
       button.appendChild(label);
+      appendHotkeyHint(button, action.actionKey);
       if (action.className) {
         button.classList.add(action.className);
       }
@@ -7224,6 +7269,7 @@ function updateRoomActions() {
     if (action.actionKey) {
       button.dataset.actionKey = action.actionKey;
     }
+    appendHotkeyHint(button, action.actionKey);
     button.disabled = action.disabled;
     if (action.highlight) {
       button.classList.add("objective-highlight");
@@ -8112,6 +8158,52 @@ function getMapTargetCandidatesForBlowtorch() {
   const adjacent = roomConnections[source] || [];
   const valid = adjacent.filter((roomId) => state.permaJammedEdges.has(edgeKey(source, roomId)));
   return new Set(valid);
+}
+
+function getMapNavigationCandidates() {
+  if (state.mapTargetMode) {
+    const targets = getMapTargetCandidates();
+    return targets ? Array.from(targets) : [];
+  }
+  return rooms.map((room) => room.id);
+}
+
+function getDirectionalMapSelection(originId, direction, candidates) {
+  if (originId === null || originId === undefined) return null;
+  const origin = mapPositions[originId];
+  if (!origin) return null;
+  let best = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  candidates.forEach((roomId) => {
+    if (roomId === originId) return;
+    const target = mapPositions[roomId];
+    if (!target) return;
+    const dx = target.x - origin.x;
+    const dy = target.y - origin.y;
+    if (direction === "up" && dy >= 0) return;
+    if (direction === "down" && dy <= 0) return;
+    if (direction === "left" && dx >= 0) return;
+    if (direction === "right" && dx <= 0) return;
+    const score = direction === "up" || direction === "down"
+      ? Math.abs(dy) + Math.abs(dx) * 1.5
+      : Math.abs(dx) + Math.abs(dy) * 1.5;
+    if (score < bestScore) {
+      bestScore = score;
+      best = roomId;
+    }
+  });
+  return best;
+}
+
+function navigateMapSelection(direction) {
+  if (!dom.mapPanel?.classList.contains("active")) return false;
+  const candidates = getMapNavigationCandidates();
+  if (candidates.length === 0) return false;
+  const originId = state.mapTargetSelection ?? state.selectedRoom ?? state.mapTargetSourceRoom ?? state.playerRoom;
+  const nextId = getDirectionalMapSelection(originId, direction, candidates);
+  if (nextId === null || nextId === undefined) return false;
+  handleMapSelection(nextId);
+  return true;
 }
 
 function handleMapSelection(roomId) {

@@ -3254,6 +3254,33 @@ button.objective-highlight {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.hotkeys-visible .help-list .hotkey-label {
+  opacity: 1;
+}
+
+.hotkey-hint {
+  margin-left: 8px;
+  font-size: 0.7em;
+  letter-spacing: 0.2em;
+  opacity: 0;
+  text-transform: uppercase;
+  transition: opacity 140ms ease;
+}
+
+.hotkeys-visible .hotkey-hint {
+  opacity: 1;
+}
+
+u {
+  text-decoration: none;
+}
+
+.hotkeys-visible u {
+  text-decoration: underline;
 }
 
 .credits-screen {
