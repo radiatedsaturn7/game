@@ -293,6 +293,12 @@ const OBJECTIVE_RECIPES = [
     unlockDeployable: "doorJam",
     chargesGranted: 2,
   },
+  {
+    name: "Flame-Saw",
+    schematic: "Flame-Saw",
+    parts: ["Microcontroller", "Servo Motor", "Copper Wire", "Capacitors", "Resistors"],
+    nightOnly: 10,
+  },
 ];
 
 const OBJECTIVE_RECIPES_BY_SCHEMATIC = new Map(
@@ -302,6 +308,97 @@ const OBJECTIVE_RECIPES_BY_NAME = new Map(
   OBJECTIVE_RECIPES.map((recipe) => [recipe.name, recipe])
 );
 const DATA_FRAGMENT_SCHEMATIC = "Data Fragment";
+
+const NIGHT_PLAN = {
+  1: { objectiveId: "INTRO_ESCAPE", room: "Escape Workshop" },
+  2: { objectiveId: "CIRCUIT_STABILIZE", room: "Power Junction" },
+  3: { objectiveId: "ALARM_CALIBRATION", room: "Diagnostics Bay" },
+  4: { objectiveId: "SCANNER_DIAGNOSTIC", room: "Research Annex" },
+  5: { objectiveId: "SIGNAL_FILTER_RC", room: "Server Nest" },
+  6: { objectiveId: "CHEM_BALANCE", room: "Coolant Vault" },
+  7: { objectiveId: "MECH_TOLERANCE", room: "Hydraulic Core" },
+  8: { objectiveId: "ASM_PATCH", room: "Server Nest" },
+  9: { objectiveId: "CONTROL_LOOP", room: "Control Bay" },
+  10: { objectiveId: "FLAMESAW_FINAL", room: "Escape Workshop", miniGameId: "FLAMESAW_FINISH" },
+};
+
+const MINIGAMES = {
+  INTRO_ESCAPE: {
+    title: "Escape Console Calibration",
+    actionLabel: "Calibrate Escape Console",
+    prompt: "Console needs a manual lockout. Pick the safe reset order.",
+    options: ["Power → Release → Confirm", "Release → Power → Confirm", "Confirm → Power → Release"],
+    correctIndex: 0,
+  },
+  CIRCUIT_STABILIZE: {
+    title: "Circuit Stabilization",
+    actionLabel: "Stabilize Door Coil",
+    prompt: "Door coil needs 0.5A. Supply is 10V. Pick the resistor.",
+    options: ["5Ω", "10Ω", "20Ω", "50Ω"],
+    correctIndex: 2,
+  },
+  ALARM_CALIBRATION: {
+    title: "Alarm Calibration",
+    actionLabel: "Calibrate Alarm Array",
+    prompt: "Which threshold lowers false alarms without muting the channel?",
+    options: ["0.2", "0.5", "0.9", "1.2"],
+    correctIndex: 1,
+  },
+  SCANNER_DIAGNOSTIC: {
+    title: "Scanner Diagnostic",
+    actionLabel: "Run Scanner Diagnostic",
+    prompt: "Signal bleed is high. Reduce gain by which notch?",
+    options: ["+2", "+1", "0", "−1"],
+    correctIndex: 3,
+  },
+  SIGNAL_FILTER_RC: {
+    title: "Signal Filter",
+    actionLabel: "Filter Signal Noise",
+    prompt: "RC filter should cut noise at 4s. Pick the setting.",
+    options: ["1s", "2s", "4s", "8s"],
+    correctIndex: 2,
+  },
+  CHEM_BALANCE: {
+    title: "Coolant Balance",
+    actionLabel: "Balance Coolant Mix",
+    prompt: "Balance: Fe + O2 → Fe2O3",
+    options: [
+      "2Fe + O2 → Fe2O3",
+      "4Fe + 3O2 → 2Fe2O3",
+      "Fe + O2 → FeO2",
+      "2Fe + 3O2 → 2FeO3",
+    ],
+    correctIndex: 1,
+  },
+  MECH_TOLERANCE: {
+    title: "Pressure Tolerance",
+    actionLabel: "Set Pressure Tolerances",
+    prompt: "Hydraulic flow spikes at 300 PSI. Which tolerance keeps it under 320?",
+    options: ["+10", "+20", "+30", "+40"],
+    correctIndex: 1,
+  },
+  ASM_PATCH: {
+    title: "ASM Patch",
+    actionLabel: "Patch Door Controller",
+    prompt: "A loop never exits. Choose the patch.",
+    options: ["JMP start", "DEC CX; JNZ start", "INC CX; JNZ start", "NOP; JMP start"],
+    correctIndex: 1,
+  },
+  CONTROL_LOOP: {
+    title: "Control Loop",
+    actionLabel: "Tune Control Loop",
+    prompt: "Temperature rises at 2°/s. After 3 seconds, change is:",
+    options: ["2°", "3°", "6°", "9°"],
+    correctIndex: 2,
+  },
+  FLAMESAW_FINISH: {
+    title: "Flame-Saw Finish",
+    actionLabel: "Use Flame-Saw",
+    prompt: "Armor seam flashes. Cut now or wait?",
+    options: ["Cut now.", "Wait for a wider gap."],
+    correctIndex: 0,
+  },
+};
 
 const componentDescriptions = {
   Resistors: "Limits electrical current and stabilizes fragile circuits.",
@@ -325,6 +422,7 @@ const componentDescriptions = {
   "Noise Lure": "Creates a loud distraction to pull the robot off your trail.",
   "Door Jam": "Temporarily wedges a nearby door to slow pursuit.",
   "Blowtorch": "Burns through permanent jams. Loud, but it frees a locked edge.",
+  "Flame-Saw": "A brutal cutting tool built to breach the robot's armor plating.",
 };
 
 const deviceTypes = {
@@ -912,6 +1010,13 @@ const state = {
   objectiveBlocked: false,
   craftMiniGameActive: false,
   craftMiniGame: null,
+  miniGameActive: false,
+  miniGame: null,
+  nightObjectiveId: null,
+  nightObjectiveComplete: false,
+  robotKilled: false,
+  hasFlameSaw: false,
+  robotKillGrace: 0,
   actionLock: null,
   escapeConsoleInspected: false,
   tasksAcknowledgedNightOne: false,
@@ -1156,6 +1261,10 @@ const dom = {
   godModeBtn: document.getElementById("godModeBtn"),
   eyesBtn: document.getElementById("eyesBtn"),
   debugStoryBtn: document.getElementById("debugStoryBtn"),
+  debugMiniGameCircuit: document.getElementById("debugMiniGameCircuit"),
+  debugMiniGameChem: document.getElementById("debugMiniGameChem"),
+  debugMiniGameAsm: document.getElementById("debugMiniGameAsm"),
+  debugMiniGameFlameSaw: document.getElementById("debugMiniGameFlameSaw"),
   debugSanityInput: document.getElementById("debugSanity"),
   debugSanityValue: document.getElementById("debugSanityValue"),
   selectedRoom: document.getElementById("selectedRoom"),
@@ -1215,6 +1324,12 @@ const dom = {
   craftMiniGameTray: document.getElementById("craftMiniGameTray"),
   craftMiniGameCancelBtn: document.getElementById("craftMiniGameCancelBtn"),
   craftMiniGameCommitBtn: document.getElementById("craftMiniGameCommitBtn"),
+  miniGamePanel: document.getElementById("miniGamePanel"),
+  miniGameTitle: document.getElementById("miniGameTitle"),
+  miniGameText: document.getElementById("miniGameText"),
+  miniGameOptions: document.getElementById("miniGameOptions"),
+  miniGameCancelBtn: document.getElementById("miniGameCancelBtn"),
+  miniGameSubmitBtn: document.getElementById("miniGameSubmitBtn"),
   caitQuietModal: document.getElementById("caitQuietModal"),
   caitQuietText: document.getElementById("caitQuietText"),
   ackCaitQuietBtn: document.getElementById("ackCaitQuietBtn"),
@@ -3024,6 +3139,8 @@ function attachEvents() {
   dom.buildBtn.addEventListener("click", craftItem);
   dom.craftMiniGameCancelBtn.addEventListener("click", cancelCraftMiniGame);
   dom.craftMiniGameCommitBtn.addEventListener("click", commitCraftMiniGame);
+  dom.miniGameCancelBtn?.addEventListener("click", cancelMiniGame);
+  dom.miniGameSubmitBtn?.addEventListener("click", submitMiniGameAnswer);
   dom.retryBtn.addEventListener("click", resetGame);
   dom.nextNightBtn.addEventListener("click", advanceNight);
   dom.randomizeBtn.addEventListener("click", randomizeLayout);
@@ -3039,6 +3156,10 @@ function attachEvents() {
   dom.godModeBtn.addEventListener("click", toggleGodMode);
   dom.eyesBtn.addEventListener("click", toggleDebugEyes);
   dom.debugStoryBtn?.addEventListener("click", startDebugStoryPreview);
+  dom.debugMiniGameCircuit?.addEventListener("click", () => startDebugMiniGame("CIRCUIT_STABILIZE"));
+  dom.debugMiniGameChem?.addEventListener("click", () => startDebugMiniGame("CHEM_BALANCE"));
+  dom.debugMiniGameAsm?.addEventListener("click", () => startDebugMiniGame("ASM_PATCH"));
+  dom.debugMiniGameFlameSaw?.addEventListener("click", () => startDebugMiniGame("FLAMESAW_FINISH"));
   if (dom.debugSanityInput) {
     dom.debugSanityInput.addEventListener("input", (event) => {
       const next = clamp(Number(event.target.value) / 100, 0, 1);
@@ -4229,6 +4350,27 @@ function isNight11(night = state.currentNight) {
   return night === NIGHT_11;
 }
 
+function isScriptedNight(night = state.currentNight) {
+  return night >= 1 && night <= 10 && !isNight11(night);
+}
+
+function getNightPlan(night = state.currentNight) {
+  return NIGHT_PLAN[night] ?? null;
+}
+
+function getNightObjectiveRoomId(night = state.currentNight) {
+  const plan = getNightPlan(night);
+  if (!plan) return null;
+  const room = rooms.find((entry) => entry.name === plan.room);
+  return room?.id ?? null;
+}
+
+function getNightMiniGameId(night = state.currentNight) {
+  const plan = getNightPlan(night);
+  if (!plan) return null;
+  return plan.miniGameId ?? plan.objectiveId ?? null;
+}
+
 function getWeatherModifiers() {
   return state.weather?.modifiers ?? {
     signalStrength: 1,
@@ -4515,12 +4657,9 @@ function setupMissionForNight() {
     return;
   }
   state.robotRechargeCooldown = getRobotRechargeCooldown();
-  state.missionType = pickMissionForNight(state.currentNight);
-  state.escapeMode = state.currentNight <= 3 ? "manual" : "fabricate";
   resetGoofingState();
-  if (!state.unlocks.allowCrafting) {
-    state.escapeMode = "manual";
-  }
+  state.missionType = MISSION_TYPES.ESCAPE;
+  state.escapeMode = "manual";
   state.stabilizeTargets = [];
   state.stabilizedTargets = new Set();
   state.dataFragmentsFound = new Set();
@@ -4533,39 +4672,51 @@ function setupMissionForNight() {
   state.objectiveItemInstalled = false;
   state.objectiveBlocksEscapeConsole = false;
   state.completedObjectiveItems = new Set();
+  state.miniGameActive = false;
+  state.miniGame = null;
+  state.nightObjectiveId = null;
+  state.nightObjectiveComplete = false;
+  state.robotKilled = false;
+  state.hasFlameSaw = false;
+  state.robotKillGrace = 0;
 
-  const nightObjectiveRecipe = OBJECTIVE_RECIPES.find(
-    (recipe) => recipe.nightOnly === state.currentNight
-  );
-  if (nightObjectiveRecipe) {
-    state.missionType = MISSION_TYPES.ESCAPE;
-    state.escapeMode = "fabricate";
-    setObjectiveRecipe(nightObjectiveRecipe, { blocksEscapeConsole: true });
-  }
-
-  if (state.missionType === MISSION_TYPES.STABILIZE) {
-    const choices = [...STABILIZE_SYSTEMS].sort(() => Math.random() - 0.5);
-    const count = Math.floor(Math.random() * 2) + 2;
-    state.stabilizeTargets = choices.slice(0, count).map((entry) => ({
-      ...entry,
-      roomId: rooms.find((room) => room.name === entry.room)?.id ?? 0,
-    }));
-  }
-
-  if (state.missionType === MISSION_TYPES.DATA) {
-    state.dataFragmentsNeeded = Math.floor(Math.random() * 2) + 2;
-  }
-
-  if (!nightObjectiveRecipe) {
-    if (state.missionType === MISSION_TYPES.ESCAPE && state.escapeMode === "fabricate") {
-      const options = OBJECTIVE_RECIPES.filter((recipe) => !recipe.nightOnly);
-      const recipe = options[Math.floor(Math.random() * options.length)];
-      setObjectiveRecipe(recipe);
-      state.selectedSchematic = null;
+  if (isScriptedNight()) {
+    const plan = getNightPlan();
+    if (plan) {
+      state.nightObjectiveId = plan.objectiveId;
+    }
+    state.escapeConsoleInspected = state.currentNight !== 1;
+    if (state.currentNight === 10) {
+      const flameRecipe = getObjectiveRecipeByName("Flame-Saw");
+      if (flameRecipe) {
+        state.escapeMode = "fabricate";
+        setObjectiveRecipe(flameRecipe);
+      }
     } else {
       state.requiredEscapeSchematic = null;
       state.selectedSchematic = null;
     }
+    if (state.unlocks.robotActive) {
+      state.robotDisabled = false;
+    }
+    setupEnvironmentForNight();
+    const objectiveIntro = getNightObjectiveIntroLine();
+    if (objectiveIntro && state.currentNight !== 1) {
+      if (state.pendingObjectiveModal) {
+        state.storyQueue.push({
+          triggerTurn: state.turn + 1,
+          type: "objective-intro",
+          text: objectiveIntro,
+        });
+      } else {
+        state.pendingObjectiveModal = objectiveIntro;
+      }
+    }
+    return;
+  }
+
+  if (!state.unlocks.allowCrafting) {
+    state.escapeMode = "manual";
   }
 
   setupEnvironmentForNight();
@@ -5292,15 +5443,17 @@ function setCurrentNight(night) {
     // Reset mission state for coherent debug night swaps.
     setupMissionForNight();
     state.escapeReady = false;
-    state.requiredEscapeSchematic = null;
-    state.selectedSchematic = null;
-    state.escapeConsoleInspected = false;
-    state.tasksAcknowledgedNightOne = false;
-    state.runAcknowledgedNightOne = false;
-    state.runHighlightActive = false;
-    state.runHighlightConsumed = false;
-    state.liveAcknowledgedNightOne = false;
-    state.liveEscapePrompted = false;
+    if (!isScriptedNight()) {
+      state.requiredEscapeSchematic = null;
+      state.selectedSchematic = null;
+      state.escapeConsoleInspected = false;
+      state.tasksAcknowledgedNightOne = false;
+      state.runAcknowledgedNightOne = false;
+      state.runHighlightActive = false;
+      state.runHighlightConsumed = false;
+      state.liveAcknowledgedNightOne = false;
+      state.liveEscapePrompted = false;
+    }
   }
   announceWeather();
   updateNextNightButton();
@@ -5439,6 +5592,10 @@ function tickStoryQueue() {
   if (ready.length === 0) return;
   state.storyQueue = state.storyQueue.filter((entry) => state.turn < entry.triggerTurn);
   ready.forEach((entry) => {
+    if (entry.type === "objective-intro") {
+      showObjectiveModal(entry.text);
+      return;
+    }
     if (entry.type === "night7-lockdown") {
       showObjectiveModal(getCaitNightData(7).lockdown);
       state.storyQueue.push({
@@ -6618,6 +6775,23 @@ function startDebugStoryPreview() {
   flushPendingModals();
 }
 
+function startDebugMiniGame(miniGameId) {
+  const config = getMiniGameConfig(miniGameId);
+  if (!config) return;
+  const planEntry = Object.values(NIGHT_PLAN).find(
+    (entry) => entry.objectiveId === miniGameId || entry.miniGameId === miniGameId
+  );
+  const roomName = planEntry?.room ?? rooms[state.playerRoom]?.name;
+  const room = rooms.find((entry) => entry.name === roomName);
+  state.robotDisabled = true;
+  state.robotDormant = Math.max(state.robotDormant, 3);
+  if (room) {
+    state.playerRoom = room.id;
+  }
+  openMiniGame(miniGameId);
+  updateUI();
+}
+
 function queueRobotAlert(text) {
   state.robotAlertText = text;
   if (state.objectiveBlocked || dom.robotAlertModal.classList.contains("active") || isActionLocked()) {
@@ -6788,6 +6962,21 @@ function isAlarmTriggered(roomId) {
   if (!isAlarmCapable(roomId)) return false;
   const ttl = state.alarmTriggerTTL.get(roomId) || 0;
   return ttl > 0 && state.triggeredAlarms.has(roomId);
+}
+
+function canStartNightObjective() {
+  if (!isScriptedNight()) return false;
+  if (state.nightObjectiveComplete) return false;
+  if (state.objectiveHoldUntil > 0 && state.turn < state.objectiveHoldUntil) return false;
+  if (state.requiredPickup && !isRequiredPickupComplete()) return false;
+  if (!state.escapeConsoleInspected && state.currentNight === 1) return false;
+  return true;
+}
+
+function getNightObjectiveActionLabel() {
+  const miniGameId = getNightMiniGameId();
+  const config = getMiniGameConfig(miniGameId);
+  return config?.actionLabel ?? "Run Calibration";
 }
 
 function getAlarmTriggerTTL() {
@@ -7117,7 +7306,8 @@ function updateRoomActions() {
 
   if (room.isExit && state.escapeConsoleInspected &&
     state.objectiveItemCrafted &&
-    !state.objectiveItemInstalled) {
+    !state.objectiveItemInstalled &&
+    state.currentNight !== 10) {
     actions.push({
       label: `Install ${state.objectiveItemName}`,
       onClick: () => installObjectiveItem(),
@@ -7125,6 +7315,19 @@ function updateRoomActions() {
       highlight: true,
       risk: "Trace",
     });
+  }
+
+  if (isScriptedNight() && state.currentNight !== 10) {
+    const objectiveRoomId = getNightObjectiveRoomId();
+    if (objectiveRoomId === room.id && canStartNightObjective()) {
+      actions.push({
+        label: getNightObjectiveActionLabel(),
+        onClick: () => openMiniGame(getNightMiniGameId()),
+        disabled: state.hidden || blocked,
+        highlight: true,
+        risk: "Trace",
+      });
+    }
   }
 
   if (state.missionType === MISSION_TYPES.STABILIZE && state.escapeConsoleInspected) {
@@ -7183,6 +7386,20 @@ function updateRoomActions() {
         info: true,
       });
     }
+  }
+
+  if (state.currentNight === 10 &&
+    state.hasFlameSaw &&
+    !state.robotKilled &&
+    state.robotRoom === room.id &&
+    state.robotDormant === 0) {
+    actions.push({
+      label: "Use Flame-Saw",
+      onClick: () => startFlameSawAssault(),
+      disabled: state.hidden || blocked,
+      highlight: true,
+      risk: "Final",
+    });
   }
 
   const isRobotSearchingHere = state.robotRoom === room.id && state.robotSearchTurns > 0;
@@ -7345,6 +7562,26 @@ function alignManualOverride(roomId) {
   updateUI();
 }
 
+function startFlameSawAssault() {
+  if (state.objectiveBlocked || isActionLocked()) return;
+  if (!state.hasFlameSaw || state.robotKilled) return;
+  if (state.robotDormant > 0) return;
+  if (state.robotRoom !== state.playerRoom) return;
+  state.objectiveBlocked = true;
+  runLockedAction({
+    label: "Charging Flame-Saw…",
+    steps: 3,
+    onStep: (step, steps) => {
+      if (step === 1) {
+        pushStatus("Heating the armor seam…", 3);
+      }
+      if (step >= steps) {
+        openMiniGame("FLAMESAW_FINISH");
+      }
+    },
+  });
+}
+
 function hasCompletedAlarmedRooms() {
   if (state.alarmedRoomsRequired <= 0) return true;
   return state.disabledAlarmedRooms.size >= state.alarmedRoomsRequired;
@@ -7352,6 +7589,17 @@ function hasCompletedAlarmedRooms() {
 
 function updateEscapeReadiness() {
   const wasReady = state.escapeReady;
+  if (isScriptedNight()) {
+    let ready = false;
+    if (state.currentNight !== 10) {
+      ready = state.escapeConsoleInspected && state.nightObjectiveComplete;
+    }
+    if (ready && !hasCompletedAlarmedRooms()) {
+      ready = false;
+    }
+    state.escapeReady = ready;
+    return;
+  }
   if (!state.escapeConsoleInspected) {
     state.escapeReady = false;
     return;
@@ -7656,6 +7904,30 @@ function updateMapWeatherLabel() {
 function revealEscapeSchematic() {
   if (state.escapeConsoleInspected) return;
   state.escapeReady = false;
+  if (isScriptedNight()) {
+    state.escapeConsoleInspected = true;
+    const objectiveIntro = getNightObjectiveIntroLine();
+    const inspectLine = getEscapeConsoleInspectLine();
+    if (inspectLine) {
+      showObjectiveModal(inspectLine);
+      if (objectiveIntro) {
+        queueObjectiveModal(objectiveIntro);
+      }
+    } else if (objectiveIntro) {
+      showObjectiveModal(objectiveIntro);
+    } else {
+      showObjectiveModal(getObjectiveText());
+    }
+    if (state.unlocks.robotActive) {
+      state.robotDisabled = false;
+    } else {
+      state.robotDisabled = true;
+    }
+    schedulePowerSurge();
+    updateEscapeReadiness();
+    updateUI();
+    return;
+  }
   if (state.missionType === MISSION_TYPES.ESCAPE) {
     if (state.escapeMode === "fabricate") {
       if (!state.requiredEscapeSchematic) {
@@ -7882,6 +8154,33 @@ function getObjectiveText() {
     objective = `Collect the ${state.requiredEscapeSchematic}.`;
   } else if (!state.escapeConsoleInspected) {
     objective = "Inspect the Escape Workshop console to receive your mission.";
+  } else if (isScriptedNight()) {
+    if (state.currentNight === 10) {
+      if (!state.hasFlameSaw) {
+        if (state.requiredEscapeSchematic && !state.foundSchematics.has(state.requiredEscapeSchematic)) {
+          objective = `Collect the ${state.requiredEscapeSchematic} schematic.`;
+        } else if (!state.objectiveItemCrafted) {
+          objective = "Build the Flame-Saw.";
+        } else {
+          objective = "Hunt the robot and use the Flame-Saw.";
+        }
+      } else if (!state.robotKilled) {
+        objective = "Hunt the robot and use the Flame-Saw.";
+      } else {
+        objective = "Finish it.";
+      }
+      return objective;
+    }
+    const plan = getNightPlan();
+    const miniGame = getMiniGameConfig(getNightMiniGameId());
+    const objectiveName = miniGame?.title ?? "the objective";
+    const roomName = plan?.room ?? "the facility";
+    if (!state.nightObjectiveComplete) {
+      objective = `Complete ${objectiveName} in ${roomName}.`;
+    } else {
+      objective = "Return to the Escape Workshop and press Escape.";
+    }
+    return objective;
   } else {
     const alarmText = alarmObjectiveText();
     if (state.missionType === MISSION_TYPES.ESCAPE) {
@@ -8010,6 +8309,14 @@ function getObjectiveCompleteLine() {
 
 function getEscapeReadyLine() {
   return getNightDialogue(state.currentNight)?.escapeReady ?? null;
+}
+
+function getNightObjectiveIntroLine() {
+  return getNightDialogue(state.currentNight)?.objectiveIntro ?? null;
+}
+
+function getNightObjectiveSuccessLine() {
+  return getNightDialogue(state.currentNight)?.objectiveSuccess ?? null;
 }
 
 function getRobotActivationAlertText() {
@@ -8933,9 +9240,33 @@ function advanceRobot() {
   markRoomChecked(state.robotRoom);
 }
 
+function handleFlameSawThreatWindow() {
+  if (state.currentNight !== 10 || !state.hasFlameSaw || state.robotKilled) {
+    state.robotKillGrace = 0;
+    return false;
+  }
+  if (state.robotRoom !== state.playerRoom) {
+    state.robotKillGrace = 0;
+    return false;
+  }
+  if (state.robotKillGrace <= 0) {
+    state.robotKillGrace = 2;
+    pushStatus("It looms— close enough to cut.", 3);
+    adjustSanity(-0.05, "flamesaw");
+    state.threat = Math.min(5, state.threat + 0.4);
+    return true;
+  }
+  state.robotKillGrace -= 1;
+  if (state.robotKillGrace <= 0) {
+    triggerDeath();
+  }
+  return true;
+}
+
 function checkThreat() {
   if (state.robotDisabled) return;
   if (state.robotRoom !== state.playerRoom) return;
+  if (handleFlameSawThreatWindow()) return;
   if (state.hidden && state.robotLookTurns > 0 && state.sanityScanCooldown <= 0) {
     adjustSanity(-0.08, "scan");
     state.sanityScanCooldown = 4;
@@ -8983,6 +9314,7 @@ function checkThreat() {
 }
 
 function attemptKill() {
+  if (handleFlameSawThreatWindow()) return;
   const learned = state.hidden && isHideSpotLearned(state.playerRoom, state.hiddenSpot);
   const signal = state.roomSignals.get(state.playerRoom) || 0;
   const baseChance = state.hidden
@@ -9017,6 +9349,23 @@ function triggerDeath() {
   fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
   dom.deathScreen.classList.add("active");
   dom.deathScreen.setAttribute("aria-hidden", "false");
+}
+
+function triggerFinalVictory() {
+  if (!state.isAlive || state.hasEscaped) return;
+  fadeTrackTo("rain", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("fog", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("sunny", 0, AMBIENT_FADE_OUT_MS);
+  fadeTrackTo("run", 0, RUN_AUDIO_FADE_OUT_MS);
+  fadeTrackTo("sneak", 0, SNEAK_AUDIO_FADE_OUT_MS);
+  state.hasEscaped = true;
+  state.completedNight = state.currentNight;
+  state.dayCount += 1;
+  state.threat = Math.min(5, state.threat + 0.4);
+  updateVictoryTitle();
+  updateNextNightButton();
+  dom.victoryScreen.classList.add("active");
+  dom.victoryScreen.setAttribute("aria-hidden", "false");
 }
 
 function buildEscape() {
@@ -9081,6 +9430,7 @@ function resetGame({ preserveItems = false } = {}) {
   const savedVista = preserveItems ? state.vista : null;
   clearActionLock();
   closePanel(dom.craftMiniGame);
+  closePanel(dom.miniGamePanel);
   if (pendingMoveTimeoutId) {
     clearTimeout(pendingMoveTimeoutId);
     pendingMoveTimeoutId = null;
@@ -9122,6 +9472,13 @@ function resetGame({ preserveItems = false } = {}) {
   state.completedObjectiveItems = new Set();
   state.craftMiniGameActive = false;
   state.craftMiniGame = null;
+  state.miniGameActive = false;
+  state.miniGame = null;
+  state.nightObjectiveId = null;
+  state.nightObjectiveComplete = false;
+  state.robotKilled = false;
+  state.hasFlameSaw = false;
+  state.robotKillGrace = 0;
   state.usedDevices.clear();
   state.robotFocus = null;
   state.robotFocusTTL = 0;
@@ -10123,6 +10480,15 @@ function updateMap() {
     });
   }
   if (state.escapeConsoleInspected || state.debugEyes) {
+    if (isScriptedNight() &&
+      state.currentNight !== 10 &&
+      !state.nightObjectiveComplete &&
+      !(state.objectiveHoldUntil > 0 && state.turn < state.objectiveHoldUntil)) {
+      const objectiveRoomId = getNightObjectiveRoomId();
+      if (objectiveRoomId !== null) {
+        objectiveTargets.add(objectiveRoomId);
+      }
+    }
     if (state.missionType === MISSION_TYPES.ESCAPE && state.escapeMode === "manual") {
       state.manualOverrideTargets.forEach((roomId) => {
         if (!state.manualOverridesDone.has(roomId)) {
@@ -10806,6 +11172,132 @@ function createSchematicIcon(partName, { size = 28 } = {}) {
   return svg;
 }
 
+function getMiniGameConfig(miniGameId) {
+  return MINIGAMES[miniGameId] ?? null;
+}
+
+function openMiniGame(miniGameId) {
+  if (!miniGameId || state.miniGameActive) return;
+  const config = getMiniGameConfig(miniGameId);
+  if (!config) return;
+  state.miniGame = {
+    id: miniGameId,
+    title: config.title,
+    prompt: config.prompt,
+    options: [...config.options],
+    correctIndex: config.correctIndex,
+    tries: 0,
+    selectedIndex: null,
+  };
+  state.miniGameActive = true;
+  state.objectiveBlocked = true;
+  closePanels();
+  renderMiniGame();
+  openPanel(dom.miniGamePanel);
+  updateUI();
+}
+
+function closeMiniGame() {
+  if (!state.miniGameActive) return;
+  state.miniGameActive = false;
+  state.miniGame = null;
+  state.objectiveBlocked = false;
+  closePanel(dom.miniGamePanel);
+  updateUI();
+}
+
+function cancelMiniGame() {
+  if (!state.miniGameActive) return;
+  closeMiniGame();
+}
+
+function renderMiniGame() {
+  const game = state.miniGame;
+  if (!game || !dom.miniGameTitle || !dom.miniGameText || !dom.miniGameOptions) return;
+  dom.miniGameTitle.textContent = game.title;
+  dom.miniGameText.textContent = game.prompt;
+  dom.miniGameOptions.innerHTML = "";
+  game.options.forEach((option, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "mini-game-option";
+    button.textContent = option;
+    button.setAttribute("role", "listitem");
+    button.classList.toggle("is-selected", index === game.selectedIndex);
+    button.addEventListener("click", () => selectMiniGameOption(index));
+    dom.miniGameOptions.appendChild(button);
+  });
+  if (dom.miniGameSubmitBtn) {
+    dom.miniGameSubmitBtn.disabled = game.selectedIndex === null;
+  }
+}
+
+function selectMiniGameOption(index) {
+  const game = state.miniGame;
+  if (!game) return;
+  game.selectedIndex = index;
+  renderMiniGame();
+}
+
+function applyMiniGameFailurePenalty() {
+  const profile = getNightProfile();
+  const effects = getPassiveEffects();
+  registerSignal(
+    state.playerRoom,
+    0.18 * profile.signalStrength.device * effects.signalSpike,
+    { type: "minigame-fail", lastKnownChance: 0.12 }
+  );
+  adjustSanity(-0.03, "minigame");
+  state.threat = Math.min(5, state.threat + 0.2);
+  state.turn += 1;
+  pushStatus("Wrong. Try again.", 3);
+  updateUI();
+}
+
+function completeNightObjective() {
+  if (state.nightObjectiveComplete) return;
+  state.nightObjectiveComplete = true;
+  updateEscapeReadiness();
+  updateUI();
+}
+
+function resolveMiniGameSuccess(miniGameId) {
+  if (miniGameId === "FLAMESAW_FINISH") {
+    state.robotKilled = true;
+    state.nightObjectiveComplete = true;
+    triggerFinalVictory();
+    return;
+  }
+  completeNightObjective();
+  const successLine = getNightObjectiveSuccessLine();
+  if (successLine) {
+    showObjectiveModal(successLine);
+  }
+}
+
+function resolveMiniGameFailure(miniGameId) {
+  if (miniGameId === "FLAMESAW_FINISH") {
+    closeMiniGame();
+    triggerDeath();
+    return;
+  }
+  applyMiniGameFailurePenalty();
+}
+
+function submitMiniGameAnswer() {
+  const game = state.miniGame;
+  if (!game) return;
+  if (game.selectedIndex === null) return;
+  const correct = game.selectedIndex === game.correctIndex;
+  if (correct) {
+    closeMiniGame();
+    resolveMiniGameSuccess(game.id);
+  } else {
+    game.tries += 1;
+    resolveMiniGameFailure(game.id);
+  }
+}
+
 function openCraftMiniGame(craftable) {
   if (!craftable || state.craftMiniGameActive) return;
   const requiredParts = [...craftable.parts];
@@ -11021,6 +11513,15 @@ function completeCraftItem(craftable) {
   if (isObjective) {
     state.objectiveItemName = craftable.name;
     state.objectiveItemCrafted = true;
+    if (craftable.schematic === "Flame-Saw") {
+      state.hasFlameSaw = true;
+      if (state.currentNight === 10) {
+        const line = getNightObjectiveSuccessLine();
+        if (line) {
+          showObjectiveModal(line);
+        }
+      }
+    }
   } else {
     const recipe = getObjectiveRecipeByName(craftable.name);
     if (!isReusable) {

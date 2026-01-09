@@ -2387,6 +2387,25 @@ body.night-11 .map-node text {
   max-height: 30vh;
 }
 
+.debug-mini-games {
+  margin-top: 18px;
+  display: grid;
+  gap: 12px;
+}
+
+.debug-mini-games h4 {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.85rem;
+  color: rgba(210, 200, 180, 0.85);
+}
+
+.debug-mini-game-buttons {
+  display: grid;
+  gap: 8px;
+}
+
 .menu-panel {
   position: fixed;
   inset: 0;
@@ -2523,10 +2542,53 @@ body.night-11 .map-node text {
   background: rgba(4, 7, 14, 0.92);
 }
 
+.mini-game {
+  background: rgba(6, 8, 12, 0.92);
+}
+
 .craft-mini-game-card {
   width: min(760px, 94vw);
   border-color: rgba(120, 220, 200, 0.25);
   box-shadow: 0 0 24px rgba(80, 200, 190, 0.08);
+}
+
+.mini-game-card {
+  width: min(560px, 92vw);
+  border-color: rgba(140, 180, 240, 0.25);
+  box-shadow: 0 0 20px rgba(120, 160, 220, 0.15);
+}
+
+.mini-game-content {
+  display: grid;
+  gap: 16px;
+}
+
+.mini-game-options {
+  display: grid;
+  gap: 10px;
+}
+
+.mini-game-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(120, 170, 220, 0.4);
+  background: rgba(12, 18, 28, 0.9);
+  color: rgba(230, 245, 255, 0.9);
+  text-align: left;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.mini-game-option.is-selected {
+  border-color: rgba(180, 220, 255, 0.9);
+  box-shadow: 0 0 12px rgba(140, 180, 230, 0.35);
+  transform: translateY(-1px);
+}
+
+.mini-game-actions {
+  justify-content: flex-end;
 }
 
 .craft-mini-game-card::after {
