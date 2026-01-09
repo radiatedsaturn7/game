@@ -4279,13 +4279,13 @@ function sanityPressurePhrase() {
   if (state.currentNight < 4 || isNight11()) return "";
   const band = sanityBand();
   if (band === "strained") {
-    return "Too close.";
+    return "Stress: rising.";
   }
   if (band === "frayed") {
-    return "You waited.";
+    return "Stress: high.";
   }
   if (band === "critical") {
-    return "You should have moved.";
+    return "Stress: critical.";
   }
   return "";
 }
@@ -9863,73 +9863,86 @@ function getRobotDistance() {
 
 function getRobotRoomHint(roomId) {
   const hints = {
-    1: "Metal clatter.",
-    2: "Burnt air.",
-    3: "Cold vapor hisses.",
-    5: "Fans whine.",
-    6: "Servos hum.",
-    8: "Switches snap.",
-    11: "Pistons thump.",
+    1: "Echo: metal.",
+    2: "Air: scorched.",
+    3: "Vapor: cold.",
+    5: "Fans: whine.",
+    6: "Servos: hum.",
+    8: "Switches: snap.",
+    11: "Pistons: thump.",
   };
   return hints[roomId] || "";
 }
 
 function robotStatusLabel() {
+  const maxStatusLength = "You cam hear the birds chirping".length;
+  const fitStatus = (parts) => {
+    let line = "";
+    parts.forEach((part) => {
+      if (!part) return;
+      const candidate = line ? `${line} ${part}` : part;
+      if (candidate.length <= maxStatusLength) {
+        line = candidate;
+      }
+    });
+    if (line.length <= maxStatusLength) return line;
+    return `${line.slice(0, Math.max(0, maxStatusLength - 1))}…`;
+  };
+
   if (state.robotDisabled) {
     const weatherQuietLines = {
-      Rain: "Rain hammers the metal roof.",
-      Clear: "You can hear the birds chirping outside.",
-      Fog: "The chirping outside stopped.",
-      Storm: "Thunder rolls in the distance.",
+      Rain: "Sensor: rain impact.",
+      Clear: "Sensor: birds chirping.",
+      Fog: "Sensor: birds silent.",
+      Storm: "Sensor: distant thunder.",
     };
-    return weatherQuietLines[state.weather?.type] ?? "The factory holds its breath.";
+    return weatherQuietLines[state.weather?.type] ?? "Sensor: ambient quiet.";
   }
-  if (state.robotDormant > 0) return "The halls fall quiet.";
+  if (state.robotDormant > 0) return "Sensor: halls quiet.";
 
   const distance = getRobotDistance();
   const distanceLabel = distance === 0
-    ? "in the room"
+    ? "in-room"
     : distance === 1
-      ? "just outside"
+      ? "adjacent"
       : distance === 2
-        ? "nearby"
+        ? "near"
         : distance === null
-          ? "somewhere"
-          : "far away";
+          ? "unknown"
+          : "far";
 
   let primary = "";
   if (distance === 0) {
     if (state.hidden && state.robotLookTurns > 0) {
-      primary = "It stares right at you.";
+      primary = "Optics: target lock.";
     } else if (state.hidden) {
-      primary = "Footsteps enter the room.";
+      primary = "Motion: entry signal.";
     } else if (state.robotLookTurns > 0) {
-      primary = "It scans the halls.";
+      primary = "Scan: sweep in-room.";
     } else {
-      primary = "Footsteps scrape nearby.";
+      primary = "Audio: footfall near.";
     }
   } else if (distance === 1 && state.hidden) {
-    primary = "Footsteps hover outside.";
+    primary = "Motion: outside door.";
   } else if (state.robotLookTurns > 0) {
-    primary = `Servos move ${distanceLabel}.`;
+    primary = `Scan: ${distanceLabel}.`;
   } else if (state.robotSweepQueue.length > 0) {
-    primary = `Something runs ${distanceLabel}.`;
+    primary = `Motion: fast ${distanceLabel}.`;
   } else if (state.robotSearchTurns > 0) {
-    primary = `Footsteps search ${distanceLabel}.`;
+    primary = `Audio: search ${distanceLabel}.`;
   } else if (state.robotInvestigateTurns > 0) {
-    primary = `Footsteps slow ${distanceLabel}.`;
+    primary = `Audio: slow ${distanceLabel}.`;
   } else if (state.robotTask) {
-    primary = `Relays tick ${distanceLabel}.`;
+    primary = `Relay: tick ${distanceLabel}.`;
   } else if (distance === 1) {
-    primary = "Something moves nearby.";
+    primary = "Motion: nearby.";
   } else {
-    primary = `Footsteps ${distanceLabel}.`;
+    primary = `Audio: footfall ${distanceLabel}.`;
   }
 
   const roomHint = distance > 0 ? getRobotRoomHint(state.robotRoom) : "";
-  const base = roomHint ? `${primary} ${roomHint}` : primary;
   const pressureTag = sanityPressurePhrase();
-  const weightedBase = pressureTag ? `${base} ${pressureTag}` : base;
+  const weightedBase = fitStatus([primary, roomHint, pressureTag]);
   if (state.currentNight >= 4 && state.sanity < 0.4) {
     const nearRobot = distance !== null && distance <= 2;
     const inTriggeredAlarm = isAlarmTriggered(state.playerRoom);
@@ -9939,18 +9952,21 @@ function robotStatusLabel() {
     if (allowHallucination) {
       const distorted = state.sanity < 0.2
         ? [
-          "Static claws at your ears.",
-          "The signal fractures in your skull.",
-          "Every corridor feels too close.",
+          "Signal: static spike.",
+          "Signal: severe drift.",
+          "Signal: corridor pulse.",
         ]
         : [
-          "Static drifts across your thoughts.",
-          "The signal warps for a breath.",
-          "Your pulse drowns the noise.",
+          "Signal: static drift.",
+          "Signal: brief warp.",
+          "Signal: pulse noise.",
       ];
       const chance = state.sanity < 0.2 ? 0.45 : 0.25;
       if (Math.random() < chance) {
-        return `${distorted[Math.floor(Math.random() * distorted.length)]} ${weightedBase}`;
+        return fitStatus([
+          distorted[Math.floor(Math.random() * distorted.length)],
+          weightedBase,
+        ]);
       }
     }
   }
