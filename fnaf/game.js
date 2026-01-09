@@ -732,6 +732,7 @@ function generatePatchDrag(rngSeed, night, template) {
       tiles: shuffled,
       slots: Array.from({ length: 5 }, () => null),
       selectedOp: null,
+      focusedSlotIndex: undefined,
       initialCx,
       maxSteps,
       sim: {
@@ -746,6 +747,7 @@ function generatePatchDrag(rngSeed, night, template) {
         pcHistory: [],
       },
       lastTestSuccess: false,
+      commitPulseShown: false,
       simMessage: "",
     },
     solution: {
@@ -1604,6 +1606,7 @@ let typingTransitionToken = 0;
 let typingAudioActive = false;
 let typingAudioTimeoutId = null;
 let screenQueryApplied = false;
+let miniGameStylesInjected = false;
 const SUNLIGHT_MEMORY_TEXT = "You remember sunlight on a chipped mug.\nIt mattered then.";
 const SUNLIGHT_MEMORY_CHANCE = 0.28;
 const SUNLIGHT_MEMORY_TICKS = 3;
@@ -11659,6 +11662,7 @@ function closeMiniGame() {
   state.objectiveBlocked = false;
   stopMiniGameAnimation();
   closePanel(dom.miniGamePanel);
+  applyMiniGameMobileLayout();
   updateUI();
 }
 
@@ -11671,9 +11675,11 @@ function cancelMiniGame() {
 function renderMiniGame() {
   const game = state.miniGame;
   if (!game || !dom.miniGameTitle || !dom.miniGameText || !dom.miniGameOptions) return;
+  ensureMiniGameStylesInjected();
   dom.miniGameTitle.textContent = game.title;
   dom.miniGameText.textContent = game.ui?.text || game.roomHintText || "";
   dom.miniGameOptions.innerHTML = "";
+  setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
   stopMiniGameAnimation();
   switch (game.type) {
     case "signal_tuner":
@@ -11700,6 +11706,7 @@ function renderMiniGame() {
     default:
       break;
   }
+  applyMiniGameMobileLayout();
 }
 
 function stopMiniGameAnimation() {
@@ -11726,6 +11733,90 @@ function setMiniGameSubmitButton({ label, enabled = true, visible = true } = {})
   dom.miniGameSubmitBtn.textContent = label ?? dom.miniGameSubmitBtn.textContent;
   dom.miniGameSubmitBtn.disabled = !enabled;
   dom.miniGameSubmitBtn.style.display = visible ? "" : "none";
+}
+
+function setMiniGameCancelVisibility({ showBottomBar = true, showInline = false } = {}) {
+  if (dom.miniGameCancelBtn) {
+    dom.miniGameCancelBtn.style.display = showBottomBar ? "" : "none";
+  }
+  const inlineButtons = dom.miniGameOptions?.querySelectorAll(".mini-game-inline-cancel");
+  inlineButtons?.forEach((button) => {
+    button.style.display = showInline ? "" : "none";
+  });
+}
+
+function makeBtnRow(buttons, opts = {}) {
+  const { wrap = true, className = "" } = opts;
+  const row = document.createElement("div");
+  row.className = `btnRow ${className}`.trim();
+  if (!wrap) {
+    row.style.flexWrap = "nowrap";
+  }
+  buttons.forEach((button) => row.appendChild(button));
+  return row;
+}
+
+function isMiniGameMobile() {
+  return window.matchMedia("(pointer:coarse)").matches || window.innerWidth < 520;
+}
+
+function ensureMiniGameStylesInjected() {
+  if (miniGameStylesInjected) return;
+  const style = document.createElement("style");
+  style.textContent = `
+    .miniGameMobile .miniGameTitle { font-size: 18px; letter-spacing: 2px; }
+    .miniGameMobile .miniGameText { font-size: 14px; line-height: 1.25; margin-bottom: 8px; }
+    .miniGameMobile button { min-height: 44px; padding: 10px 12px; }
+    .btnRow { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btnRow > button { flex: 1; }
+    .btnRowSecondary > button { font-size: 12px; min-height: 36px; padding: 6px 8px; }
+    .miniGameMobile .mini-game-content { display: flex; flex-direction: column; gap: 8px; }
+    .miniGameMobile .mini-game-options { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+    .miniGameMobile .mini-game-action-row { margin-top: auto; }
+    .miniGameMobile .mini-game-slider { height: 32px; }
+    .miniGameMobile .mini-game-beaker { height: 120px; }
+    .mini-game-pump-value { font-size: 16px; text-align: center; font-weight: 600; }
+    .mini-game-instruction { font-size: 13px; text-align: center; }
+    .miniGameMobile .mini-game-instruction { font-size: 12px; }
+    .poured-value { font-size: 15px; font-weight: 600; text-align: center; }
+    .status-pill { font-size: 14px; font-weight: 700; padding: 6px 12px; border-radius: 999px; text-align: center; }
+    .status-row { display: grid; gap: 6px; justify-items: center; }
+    .status-details { font-size: 12px; opacity: 0.9; }
+    .circuit-step-row-secondary { display: none; }
+    .miniGameMobile .circuit-step-row-secondary { display: flex; }
+    .miniGameMobile .circuit-reset-row { display: none; }
+    .patch-output { font-family: "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; padding: 6px 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(10,15,20,0.6); border-radius: 6px; }
+    .patch-legend { font-size: 11px; opacity: 0.85; }
+    .patch-tile-selected { border: 2px solid rgba(140, 220, 255, 0.9); box-shadow: 0 0 8px rgba(120, 200, 255, 0.6); }
+    .patch-tile-disabled { opacity: 0.35; pointer-events: none; }
+    .patch-slot-active { outline: 2px solid rgba(160, 220, 255, 0.95); }
+    .patch-slot-focus { outline: 2px solid rgba(255, 200, 120, 0.9); }
+    .commit-pulse { animation: commitPulse 0.6s ease-out; }
+    @keyframes commitPulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 rgba(120, 220, 160, 0.0); }
+      50% { transform: scale(1.03); box-shadow: 0 0 12px rgba(120, 220, 160, 0.6); }
+      100% { transform: scale(1); box-shadow: 0 0 0 rgba(120, 220, 160, 0.0); }
+    }
+  `;
+  document.head.appendChild(style);
+  miniGameStylesInjected = true;
+}
+
+function applyMiniGameMobileLayout() {
+  if (!dom.miniGamePanel) return;
+  ensureMiniGameStylesInjected();
+  const isMobile = state.miniGameActive && isMiniGameMobile();
+  dom.miniGamePanel.classList.toggle("miniGameMobile", isMobile);
+  const footerHeight = dom.overlayFooter?.getBoundingClientRect().height ?? 0;
+  dom.miniGamePanel.style.maxHeight = isMobile
+    ? `calc(100vh - ${Math.round(footerHeight)}px - env(safe-area-inset-bottom))`
+    : "";
+  dom.miniGamePanel.style.overflow = isMobile ? "hidden" : "";
+  const content = dom.miniGamePanel.querySelector(".mini-game-content");
+  if (content) {
+    content.style.maxHeight = isMobile ? "100%" : "";
+    content.style.overflow = isMobile ? "hidden" : "";
+  }
 }
 
 function getSignalSweepPosition(game) {
@@ -12200,19 +12291,15 @@ function renderCircuitStabilizeNumeric(game) {
 
   const resistorReadout = document.createElement("div");
   resistorReadout.textContent = `Resistor: ${instanceState.R_selected}Ω`;
-
-  const stepRow = document.createElement("div");
-  stepRow.style.display = "flex";
-  stepRow.style.flexWrap = "wrap";
-  stepRow.style.gap = "6px";
-  stepRow.style.justifyContent = "center";
+  resistorReadout.className = "mini-game-pump-value";
 
   const adjustResistor = (delta) => {
     instanceState.R_selected = clamp(instanceState.R_selected + delta, R_min, R_max);
     renderMiniGame();
   };
 
-  [1, 5, 10].forEach((step) => {
+  const stepRowPrimary = makeBtnRow([], { className: "circuit-step-row" });
+  [1, 5].forEach((step) => {
     const down = document.createElement("button");
     down.type = "button";
     down.textContent = `-${step}Ω`;
@@ -12221,12 +12308,36 @@ function renderCircuitStabilizeNumeric(game) {
     up.type = "button";
     up.textContent = `+${step}Ω`;
     up.addEventListener("click", () => adjustResistor(step));
-    stepRow.appendChild(down);
-    stepRow.appendChild(up);
+    stepRowPrimary.appendChild(down);
+    stepRowPrimary.appendChild(up);
   });
+
+  const resetButton = document.createElement("button");
+  resetButton.type = "button";
+  resetButton.textContent = "RESET";
+  resetButton.addEventListener("click", () => {
+    instanceState.R_selected = instanceState.R_initial;
+    renderMiniGame();
+  });
+
+  const stepRowSecondary = makeBtnRow([], { className: "circuit-step-row-secondary" });
+  [10].forEach((step) => {
+    const down = document.createElement("button");
+    down.type = "button";
+    down.textContent = `-${step}Ω`;
+    down.addEventListener("click", () => adjustResistor(-step));
+    const up = document.createElement("button");
+    up.type = "button";
+    up.textContent = `+${step}Ω`;
+    up.addEventListener("click", () => adjustResistor(step));
+    stepRowSecondary.appendChild(down);
+    stepRowSecondary.appendChild(up);
+  });
+  stepRowSecondary.appendChild(resetButton);
 
   const slider = document.createElement("input");
   slider.type = "range";
+  slider.className = "mini-game-slider";
   slider.min = String(R_min);
   slider.max = String(R_max);
   slider.value = String(instanceState.R_selected);
@@ -12242,6 +12353,38 @@ function renderCircuitStabilizeNumeric(game) {
   currentReadout.textContent = `Icalc: ${Icalc.toFixed(2)}A`;
   const powerReadout = document.createElement("div");
   powerReadout.textContent = `Pcalc: ${Pcalc.toFixed(2)}W`;
+
+  const statusRow = document.createElement("div");
+  statusRow.className = "status-row";
+
+  const statusPill = document.createElement("div");
+  statusPill.className = "status-pill";
+
+  const deltaI = Icalc - I_target;
+  const pMargin = Pmax - Pcalc;
+  let statusLabel = "OK";
+  let statusColor = "rgba(80, 200, 120, 0.9)";
+  if (Pcalc > Pmax) {
+    statusLabel = "OVERHEAT";
+    statusColor = "rgba(230, 140, 60, 0.95)";
+  } else if (Icalc > I_target + tolerance) {
+    statusLabel = "HIGH";
+    statusColor = "rgba(200, 80, 80, 0.9)";
+  } else if (Icalc < I_target - tolerance) {
+    statusLabel = "LOW";
+    statusColor = "rgba(140, 140, 140, 0.9)";
+  }
+  statusPill.textContent = statusLabel;
+  statusPill.style.background = statusColor;
+
+  const statusDetails = document.createElement("div");
+  statusDetails.className = "status-details";
+  const deltaLabel = `${deltaI >= 0 ? "+" : ""}${deltaI.toFixed(2)}A`;
+  const marginLabel = `${pMargin >= 0 ? "+" : ""}${pMargin.toFixed(2)}W`;
+  statusDetails.textContent = `ΔI: ${deltaLabel} | P margin: ${marginLabel}`;
+
+  statusRow.appendChild(statusPill);
+  statusRow.appendChild(statusDetails);
 
   const meter = document.createElement("div");
   meter.style.position = "relative";
@@ -12276,36 +12419,23 @@ function renderCircuitStabilizeNumeric(game) {
       : "rgba(80, 200, 120, 0.9)";
   meter.appendChild(meterFill);
   meter.appendChild(band);
-
-  const bandLabel = document.createElement("div");
-  bandLabel.style.fontSize = "12px";
-  bandLabel.textContent = isHigh ? "HIGH" : isLow ? "LOW" : "OK";
-
   const resetRow = document.createElement("div");
-  const resetButton = document.createElement("button");
-  resetButton.type = "button";
-  resetButton.textContent = "RESET";
-  resetButton.addEventListener("click", () => {
-    instanceState.R_selected = instanceState.R_initial;
-    renderMiniGame();
-  });
+  resetRow.className = "circuit-reset-row";
   resetRow.appendChild(resetButton);
 
   wrapper.appendChild(stats);
   wrapper.appendChild(resistorReadout);
-  wrapper.appendChild(stepRow);
+  wrapper.appendChild(stepRowPrimary);
+  wrapper.appendChild(stepRowSecondary);
   wrapper.appendChild(slider);
   wrapper.appendChild(currentReadout);
   wrapper.appendChild(powerReadout);
+  wrapper.appendChild(statusRow);
   wrapper.appendChild(meter);
-  wrapper.appendChild(bandLabel);
   wrapper.appendChild(resetRow);
 
   dom.miniGameOptions.appendChild(wrapper);
-  const actionRow = document.createElement("div");
-  actionRow.style.display = "flex";
-  actionRow.style.gap = "8px";
-  actionRow.style.justifyContent = "center";
+  const actionRow = makeBtnRow([], { className: "mini-game-action-row" });
 
   const applyButton = document.createElement("button");
   applyButton.type = "button";
@@ -12315,11 +12445,13 @@ function renderCircuitStabilizeNumeric(game) {
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.textContent = "Cancel";
+  cancelButton.className = "mini-game-inline-cancel";
   cancelButton.addEventListener("click", () => cancelMiniGame());
 
   actionRow.appendChild(applyButton);
   actionRow.appendChild(cancelButton);
   dom.miniGameOptions.appendChild(actionRow);
+  setMiniGameCancelVisibility({ showBottomBar: false, showInline: true });
   setMiniGameSubmitButton({ visible: false });
 }
 
@@ -12333,7 +12465,7 @@ function renderTitrationQuick(game) {
   const { instanceState, instanceSolution } = game;
   const { variant, displayValues, targetMl, tolerancePct } = instanceSolution;
   dom.miniGameText.innerHTML =
-    "Dial the pump until the mix hits the target strength.<br>C1V1 = C2V2";
+    "Set pump volume and pour to hit the target mix.<br>C1V1 = C2V2";
 
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";
@@ -12360,8 +12492,10 @@ function renderTitrationQuick(game) {
   const beakerRow = document.createElement("div");
   beakerRow.style.display = "flex";
   beakerRow.style.gap = "12px";
+  beakerRow.style.justifyContent = "center";
 
   const beaker = document.createElement("div");
+  beaker.className = "mini-game-beaker";
   beaker.style.position = "relative";
   beaker.style.width = "90px";
   beaker.style.height = "120px";
@@ -12377,9 +12511,11 @@ function renderTitrationQuick(game) {
   beaker.appendChild(fill);
 
   const beakerLabel = document.createElement("div");
+  beakerLabel.className = "poured-value";
   beakerLabel.textContent = `Poured: ${instanceState.mlPoured ?? 0} mL`;
 
   const indicator = document.createElement("div");
+  indicator.className = "mini-game-pump-value";
   indicator.textContent = `Pump: ${instanceState.mlSelected} mL`;
 
   const setFillLevel = (ml) => {
@@ -12391,32 +12527,24 @@ function renderTitrationQuick(game) {
     setFillLevel(instanceState.mlPoured);
   }
 
-  const pumpRow = document.createElement("div");
-  pumpRow.style.display = "flex";
-  pumpRow.style.flexWrap = "wrap";
-  pumpRow.style.gap = "6px";
-
   const adjustPump = (delta) => {
     instanceState.mlSelected = clamp(instanceState.mlSelected + delta, 0, 200);
     instanceState.lastSuccess = false;
     renderMiniGame();
   };
 
-  [5, 10].forEach((step) => {
-    const down = document.createElement("button");
-    down.type = "button";
-    down.textContent = `-${step} mL`;
-    down.addEventListener("click", () => adjustPump(-step));
-    const up = document.createElement("button");
-    up.type = "button";
-    up.textContent = `+${step} mL`;
-    up.addEventListener("click", () => adjustPump(step));
-    pumpRow.appendChild(down);
-    pumpRow.appendChild(up);
+  const pumpRow = makeBtnRow([], { className: "mini-game-controls" });
+  [-10, -5, 5, 10].forEach((step) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = step > 0 ? `+${step}` : `${step}`;
+    button.addEventListener("click", () => adjustPump(step));
+    pumpRow.appendChild(button);
   });
 
   const slider = document.createElement("input");
   slider.type = "range";
+  slider.className = "mini-game-slider";
   slider.min = "0";
   slider.max = "200";
   slider.value = String(instanceState.mlSelected);
@@ -12426,17 +12554,16 @@ function renderTitrationQuick(game) {
     renderMiniGame();
   });
 
-  const feedback = document.createElement("div");
-  feedback.textContent = instanceState.lastFeedback || "Test the mix to check strength.";
-
-  const actionRow = document.createElement("div");
-  actionRow.style.display = "flex";
-  actionRow.style.gap = "8px";
-  actionRow.style.flexWrap = "wrap";
+  const instructionLine = document.createElement("div");
+  instructionLine.className = "mini-game-instruction";
+  const defaultInstruction = instanceState.mlPoured
+    ? "TEST MIX to check strength. Adjust + pour again."
+    : "Set pump amount, then POUR.";
+  instructionLine.textContent = instanceState.lastFeedback || defaultInstruction;
 
   const pourButton = document.createElement("button");
   pourButton.type = "button";
-  pourButton.textContent = "Pour";
+  pourButton.textContent = "POUR";
   pourButton.addEventListener("click", () => {
     instanceState.mlPoured = instanceState.mlSelected;
     instanceState.lastSuccess = false;
@@ -12445,7 +12572,7 @@ function renderTitrationQuick(game) {
 
   const pourFiveButton = document.createElement("button");
   pourFiveButton.type = "button";
-  pourFiveButton.textContent = "+5 mL pour";
+  pourFiveButton.textContent = "+5 mL";
   pourFiveButton.addEventListener("click", () => {
     instanceState.mlPoured = clamp((instanceState.mlPoured ?? 0) + 5, 0, 200);
     instanceState.lastSuccess = false;
@@ -12454,7 +12581,7 @@ function renderTitrationQuick(game) {
 
   const pourTenButton = document.createElement("button");
   pourTenButton.type = "button";
-  pourTenButton.textContent = "+10 mL pour";
+  pourTenButton.textContent = "+10 mL";
   pourTenButton.addEventListener("click", () => {
     instanceState.mlPoured = clamp((instanceState.mlPoured ?? 0) + 10, 0, 200);
     instanceState.lastSuccess = false;
@@ -12492,31 +12619,39 @@ function renderTitrationQuick(game) {
 
   const commitButton = document.createElement("button");
   commitButton.type = "button";
-  commitButton.textContent = "COMMIT MIX";
+  commitButton.textContent = "COMMIT";
   commitButton.disabled = !instanceState.lastSuccess || !instanceState.mlPoured;
   commitButton.addEventListener("click", () => {
     submitTitrationQuick(game);
   });
 
-  actionRow.appendChild(pourButton);
-  actionRow.appendChild(pourFiveButton);
-  actionRow.appendChild(pourTenButton);
-  actionRow.appendChild(testButton);
-  actionRow.appendChild(commitButton);
+  const actionRow = makeBtnRow([pourButton, testButton, commitButton], {
+    className: "mini-game-action-row",
+  });
+  const secondaryRow = makeBtnRow([pourFiveButton, pourTenButton], {
+    className: "btnRowSecondary",
+  });
 
-  beakerRow.appendChild(beaker);
+  const beakerColumn = document.createElement("div");
+  beakerColumn.style.display = "grid";
+  beakerColumn.style.gap = "6px";
+  beakerColumn.style.justifyItems = "center";
+  beakerColumn.appendChild(beaker);
+  beakerColumn.appendChild(beakerLabel);
+  beakerRow.appendChild(beakerColumn);
 
   wrapper.appendChild(description);
   wrapper.appendChild(equation);
   wrapper.appendChild(beakerRow);
-  wrapper.appendChild(beakerLabel);
   wrapper.appendChild(indicator);
   wrapper.appendChild(pumpRow);
   wrapper.appendChild(slider);
-  wrapper.appendChild(feedback);
+  wrapper.appendChild(instructionLine);
+  wrapper.appendChild(secondaryRow);
   wrapper.appendChild(actionRow);
 
   dom.miniGameOptions.appendChild(wrapper);
+  setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
   setMiniGameSubmitButton({ visible: false });
 }
 
@@ -12554,9 +12689,24 @@ function handlePatchSlotClick(event) {
   if (Number.isNaN(slotIndex)) return;
   const game = state.miniGame;
   if (!game) return;
+  game.instanceState.focusedSlotIndex = slotIndex;
   const selected = game.instanceState.selectedOp;
   if (selected) {
     placePatchOp(selected, slotIndex);
+    return;
+  }
+  if (isMiniGameMobile()) {
+    const availableOps = new Set(game.instanceState.tiles.map((tile) => tile.op));
+    const cycleOrder = ["NOP", "DEC", "INC", "ADD", "XOR", "JNZ", "RET"].filter(
+      (op) => op === "NOP" || availableOps.has(op)
+    );
+    const current = game.instanceState.slots[slotIndex] ?? "NOP";
+    const currentIndex = cycleOrder.indexOf(current);
+    const nextOp = cycleOrder[(currentIndex + 1) % cycleOrder.length] ?? "NOP";
+    game.instanceState.slots[slotIndex] = nextOp === "NOP" ? null : nextOp;
+    resetPatchSim(game);
+    game.instanceState.simMessage = "";
+    renderMiniGame();
     return;
   }
   clearPatchSlot(slotIndex);
@@ -12592,6 +12742,7 @@ function resetPatchSim(game) {
     pcHistory: [],
   };
   game.instanceState.lastTestSuccess = false;
+  game.instanceState.commitPulseShown = false;
   game.instanceState.simMessage = "";
 }
 
@@ -12729,9 +12880,8 @@ function renderPatchDrag(game) {
   board.style.gap = "10px";
 
   const controls = document.createElement("div");
-  controls.style.display = "flex";
-  controls.style.gap = "8px";
-  controls.style.flexWrap = "wrap";
+  controls.style.display = "grid";
+  controls.style.gap = "6px";
 
   const resetButton = document.createElement("button");
   resetButton.type = "button";
@@ -12782,11 +12932,37 @@ function renderPatchDrag(game) {
   commitButton.textContent = "COMMIT PATCH";
   commitButton.disabled = !game.instanceState.lastTestSuccess || slots.some((slot) => !slot);
   commitButton.addEventListener("click", () => submitPatchDrag(game));
+  if (game.instanceState.lastTestSuccess && !game.instanceState.commitPulseShown) {
+    commitButton.classList.add("commit-pulse");
+    game.instanceState.commitPulseShown = true;
+  }
 
-  controls.appendChild(resetButton);
-  controls.appendChild(stepButton);
-  controls.appendChild(testButton);
-  controls.appendChild(commitButton);
+  const clearButton = document.createElement("button");
+  clearButton.type = "button";
+  clearButton.textContent = "CLEAR SLOT";
+  clearButton.disabled = game.instanceState.focusedSlotIndex === undefined;
+  clearButton.addEventListener("click", () => {
+    const focusedIndex = game.instanceState.focusedSlotIndex;
+    if (focusedIndex === undefined) return;
+    clearPatchSlot(focusedIndex);
+  });
+
+  const primaryRow = makeBtnRow([resetButton, stepButton, testButton], {
+    className: "mini-game-controls",
+  });
+  const actionRow = makeBtnRow([commitButton], { className: "mini-game-action-row" });
+  const utilityRow = makeBtnRow([clearButton], { className: "btnRowSecondary" });
+
+  const commitHint = document.createElement("div");
+  commitHint.className = "mini-game-instruction";
+  commitHint.textContent = game.instanceState.lastTestSuccess
+    ? "Commit enabled. Patch looks stable."
+    : "Run TEST until latch reaches 100% to enable COMMIT.";
+
+  controls.appendChild(primaryRow);
+  controls.appendChild(utilityRow);
+  controls.appendChild(actionRow);
+  controls.appendChild(commitHint);
 
   const slotsRow = document.createElement("div");
   slotsRow.style.display = "grid";
@@ -12803,11 +12979,14 @@ function renderPatchDrag(game) {
     slotEl.style.alignItems = "center";
     slotEl.style.justifyContent = "center";
     slotEl.style.background = "rgba(12, 18, 24, 0.5)";
-    if (!sim.halted && sim.pc === index) {
-      slotEl.style.outline = "2px solid rgba(120, 200, 240, 0.8)";
+    if (sim.pc === index) {
+      slotEl.classList.add("patch-slot-active");
     }
     if (sim.firstErrorIndex === index) {
       slotEl.style.outline = "2px solid rgba(220, 80, 80, 0.9)";
+    }
+    if (game.instanceState.focusedSlotIndex === index) {
+      slotEl.classList.add("patch-slot-focus");
     }
     slotEl.addEventListener("click", handlePatchSlotClick);
     slotEl.addEventListener("dragover", (event) => event.preventDefault());
@@ -12821,7 +13000,7 @@ function renderPatchDrag(game) {
       token.style.background = "rgba(22, 30, 40, 0.9)";
       slotEl.appendChild(token);
     } else {
-      slotEl.textContent = "Slot";
+      slotEl.textContent = "NOP";
     }
     slotsRow.appendChild(slotEl);
   });
@@ -12830,7 +13009,17 @@ function renderPatchDrag(game) {
   tray.style.display = "flex";
   tray.style.flexWrap = "wrap";
   tray.style.gap = "8px";
-  tiles.forEach((tile) => {
+  const availableOps = new Set(tiles.map((tile) => tile.op));
+  const paletteOrder = [
+    { op: "DEC", label: "DEC" },
+    { op: "INC", label: "INC" },
+    { op: "ADD", label: "ADD" },
+    { op: "XOR", label: "CLR" },
+    { op: "JNZ", label: "JNZ" },
+    { op: "RET", label: "RET" },
+    { op: "NOP", label: "NOP" },
+  ];
+  paletteOrder.forEach((tile) => {
     const tileEl = document.createElement("div");
     tileEl.className = "patch-tile";
     tileEl.textContent = tile.label;
@@ -12839,46 +13028,56 @@ function renderPatchDrag(game) {
     tileEl.style.background =
       selectedOp === tile.op ? "rgba(80, 120, 160, 0.8)" : "rgba(20, 28, 38, 0.85)";
     tileEl.style.cursor = "pointer";
-    tileEl.draggable = true;
-    tileEl.addEventListener("click", () => selectPatchOp(tile.op));
-    tileEl.addEventListener("dragstart", (event) => {
-      event.dataTransfer?.setData("text/plain", tile.op);
-    });
+    if (selectedOp === tile.op) {
+      tileEl.classList.add("patch-tile-selected");
+    }
+    if (!availableOps.has(tile.op)) {
+      tileEl.classList.add("patch-tile-disabled");
+    } else {
+      tileEl.draggable = true;
+      tileEl.addEventListener("click", () => selectPatchOp(tile.op));
+      tileEl.addEventListener("dragstart", (event) => {
+        event.dataTransfer?.setData("text/plain", tile.op);
+      });
+    }
     tray.appendChild(tileEl);
   });
 
   const legend = document.createElement("div");
-  legend.style.fontSize = "12px";
-  legend.style.display = "grid";
-  legend.style.gap = "2px";
-  legend.innerHTML =
-    "DEC: CX–1 | INC: CX+1 | ADD: CX+2 | CLR: CX=0 | JNZ: jump to start if CX!=0 | RET: succeed only if CX==0";
-
-  const xorTip = document.createElement("div");
-  xorTip.style.fontSize = "12px";
-  xorTip.textContent = "XOR clears CX (CX = 0). Think: wipe the counter.";
+  legend.className = "patch-legend";
+  legend.innerHTML = "DEC:-1 INC:+1 ADD:+2 CLR:0<br>JNZ:loop RET:exit NOP:skip";
 
   const outputPanel = document.createElement("div");
-  outputPanel.style.display = "grid";
-  outputPanel.style.gap = "4px";
-  outputPanel.style.fontSize = "12px";
-  outputPanel.textContent = `PC=${sim.pc} | CX=${sim.cx} | Steps=${sim.steps} | Latch=${Math.round(
+  outputPanel.className = "patch-output";
+  let statusLabel = "Idle";
+  if (sim.status === "running") {
+    statusLabel = "Running";
+  } else if (sim.status === "success") {
+    statusLabel = "Success";
+  } else if (sim.failReason === "loop") {
+    statusLabel = "Loop detected";
+  } else if (sim.failReason === "ret_fail") {
+    statusLabel = "RET too early";
+  } else if (sim.failReason === "ran_off_end") {
+    statusLabel = "Ran off end";
+  }
+  outputPanel.innerHTML = `<div>PC:${sim.pc}  CX:${sim.cx}  Steps:${sim.steps}  Latch:${Math.round(
     sim.latch
-  )}%`;
+  )}%</div><div>Status: ${statusLabel}</div>`;
 
   const simMessage = document.createElement("div");
-  simMessage.style.fontSize = "12px";
+  simMessage.className = "mini-game-instruction";
   simMessage.textContent = game.instanceState.simMessage || `Start CX=${initialCx}.`;
 
   board.appendChild(controls);
   board.appendChild(slotsRow);
   board.appendChild(tray);
   board.appendChild(legend);
-  board.appendChild(xorTip);
   board.appendChild(outputPanel);
   board.appendChild(simMessage);
   dom.miniGameOptions.appendChild(board);
 
+  setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
   setMiniGameSubmitButton({ visible: false });
 }
 
