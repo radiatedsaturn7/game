@@ -762,7 +762,7 @@ function generateTitrationTransfer(rngSeed, night, template) {
   return {
     type: "titration_transfer",
     title: "MIX VALVE RATIO",
-    actionLabel: "Mix / Neutralize",
+    actionLabel: "ADD DOSE",
     roomHintText: template.roomHintText,
     solution: {
       acidMl: bestCandidate.acidMl,
@@ -770,13 +770,13 @@ function generateTitrationTransfer(rngSeed, night, template) {
       baseM: bestCandidate.baseM,
       baseTargetMl: bestCandidate.baseTargetMl,
       toleranceMl: tol,
+      sampleMl: bestCandidate.acidMl,
     },
     state: {
       selectedDoseMl: 5,
-      transferredMl: 0,
-      status: "idle",
+      baseAddedMl: 0,
+      status: "acidic",
       lastMessage: "",
-      didTransfer: false,
       overshot: false,
     },
   };
@@ -12538,23 +12538,15 @@ function computeTitrationColor(diff, tol) {
   };
 }
 
-function evaluateTitrationTransfer(game, transferredMlOverride) {
+function evaluateTitrationTransfer(game, baseAddedOverride) {
   const { instanceState, instanceSolution } = game;
-  const transferredMl = transferredMlOverride ?? instanceState.transferredMl;
+  const baseAddedMl = baseAddedOverride ?? instanceState.baseAddedMl;
   const { baseTargetMl, toleranceMl } = instanceSolution;
-  const diff = transferredMl - baseTargetMl;
-  if (!instanceState.didTransfer && transferredMl <= 0) {
-    return {
-      status: "idle",
-      message: "Still acidic (red). Add more base.",
-      diff,
-      overshot: false,
-    };
-  }
-  if (instanceState.overshot || diff > toleranceMl * 3 || transferredMl >= baseTargetMl + toleranceMl * 3) {
+  const diff = baseAddedMl - baseTargetMl;
+  if (instanceState.overshot || diff > toleranceMl * 3) {
     return {
       status: "overshot",
-      message: "Overshot. Sample turned basic. Batch ruined — reset.",
+      message: "RUINED (blue). Reset the sample.",
       diff,
       overshot: true,
     };
@@ -12562,30 +12554,22 @@ function evaluateTitrationTransfer(game, transferredMlOverride) {
   if (Math.abs(diff) <= toleranceMl) {
     return {
       status: "neutral",
-      message: "Neutral (clear). Latch solvent ready.",
+      message: "Neutral (clear). Solvent ready.",
       diff,
       overshot: false,
     };
   }
   if (diff < 0) {
-    if (diff >= -toleranceMl * 2) {
-      return {
-        status: "acidic",
-        message: "Close… one small dose might do it.",
-        diff,
-        overshot: false,
-      };
-    }
     return {
       status: "acidic",
-      message: "Still acidic (red). Add more base.",
+      message: "Acidic (red). Add base.",
       diff,
       overshot: false,
     };
   }
   return {
     status: "basic",
-    message: "Too much base (blue). You’re past neutral.",
+    message: "Too basic (blue). You passed neutral.",
     diff,
     overshot: false,
   };
@@ -12593,12 +12577,10 @@ function evaluateTitrationTransfer(game, transferredMlOverride) {
 
 function renderTitrationTransfer(game) {
   const { instanceState, instanceSolution } = game;
-  const { acidMl, acidM, baseM, baseTargetMl, toleranceMl } = instanceSolution;
+  const { acidMl, acidM, baseM, baseTargetMl, toleranceMl, sampleMl } = instanceSolution;
   dom.miniGameText.innerHTML = `
-    Neutralize the acid sample by transferring base.<br>
-    <span style="font-size:12px">M1·V1 = M2·V2</span><br>
-    <span style="font-size:12px">Acid: ${acidMl} mL @ ${acidM.toFixed(2)} M</span><br>
-    <span style="font-size:12px">Base: ${baseM.toFixed(2)} M</span>
+    Acid sample is pre-filled (red). Add base doses (blue) until it turns clear (neutral).<br>
+    <span style="font-size:12px">M<sub>a</sub> · V<sub>a</sub> = M<sub>b</sub> · V<sub>b</sub></span>
   `;
   setMiniGameCancelVisibility({ showBottomBar: false, showInline: true });
 
@@ -12616,10 +12598,10 @@ function renderTitrationTransfer(game) {
   const beakerRow = document.createElement("div");
   beakerRow.style.display = "flex";
   beakerRow.style.gap = "12px";
-  beakerRow.style.alignItems = "flex-end";
+  beakerRow.style.alignItems = "stretch";
   beakerRow.style.justifyContent = "space-between";
 
-  const makeBeaker = ({ label, color, fillPercent }) => {
+  const makeBeaker = ({ label, color, fillPercent, bottomText }) => {
     const container = document.createElement("div");
     container.style.display = "grid";
     container.style.gap = "6px";
@@ -12653,25 +12635,35 @@ function renderTitrationTransfer(game) {
 
     container.appendChild(labelEl);
     container.appendChild(beaker);
+    if (bottomText) {
+      const bottomEl = document.createElement("div");
+      bottomEl.textContent = bottomText;
+      bottomEl.style.fontSize = "12px";
+      bottomEl.style.textAlign = "center";
+      container.appendChild(bottomEl);
+    }
     return container;
   };
 
   const transferCapMl = 200;
-  const transferredMl = instanceState.transferredMl ?? 0;
-  const sampleFillPercent = clamp(transferredMl / transferCapMl, 0, 1) * 100;
-  const diff = transferredMl - baseTargetMl;
+  const baseAddedMl = instanceState.baseAddedMl ?? 0;
+  const totalVolumeMl = sampleMl + baseAddedMl;
+  const sampleFillPercent = clamp(totalVolumeMl / transferCapMl, 0, 1) * 100;
+  const diff = baseAddedMl - baseTargetMl;
   const colorInfo = computeTitrationColor(diff, toleranceMl);
   const sampleColor = instanceState.overshot ? "rgba(40, 90, 210, 0.95)" : colorInfo.color;
 
   const baseBeaker = makeBeaker({
-    label: "BASE (BLUE)",
+    label: "BASE DISPENSER (BLUE)",
     color: "rgba(70, 140, 230, 0.9)",
     fillPercent: 75,
+    bottomText: `Dose: ${instanceState.selectedDoseMl} mL`,
   });
   const sampleBeaker = makeBeaker({
-    label: "SAMPLE",
+    label: "ACID SAMPLE (RED)",
     color: sampleColor,
     fillPercent: sampleFillPercent,
+    bottomText: `Sample: ${acidMl} mL acid + ${baseAddedMl} mL base`,
   });
 
   beakerRow.appendChild(baseBeaker);
@@ -12683,10 +12675,23 @@ function renderTitrationTransfer(game) {
   status.style.fontWeight = "700";
   status.style.textAlign = "center";
 
-  const readout = document.createElement("div");
-  readout.textContent = `Transferred: ${transferredMl} mL`;
-  readout.style.fontSize = "12px";
-  readout.style.textAlign = "center";
+  const readouts = document.createElement("div");
+  readouts.style.display = "grid";
+  readouts.style.gap = "4px";
+  readouts.style.fontSize = "12px";
+  readouts.style.textAlign = "center";
+  const acidReadout = document.createElement("div");
+  acidReadout.textContent = `Acid: ${acidMl} mL @ ${acidM.toFixed(2)} M`;
+  const baseReadout = document.createElement("div");
+  baseReadout.textContent = `Base: ${baseM.toFixed(2)} M`;
+  const targetReadout = document.createElement("div");
+  targetReadout.textContent = "Target base total: ???";
+  const baseAddedReadout = document.createElement("div");
+  baseAddedReadout.textContent = `Base added: ${baseAddedMl} mL`;
+  readouts.appendChild(acidReadout);
+  readouts.appendChild(baseReadout);
+  readouts.appendChild(targetReadout);
+  readouts.appendChild(baseAddedReadout);
 
   const doseRow = document.createElement("div");
   doseRow.className = "btnRow";
@@ -12711,17 +12716,16 @@ function renderTitrationTransfer(game) {
 
   const transferButton = document.createElement("button");
   transferButton.type = "button";
-  transferButton.textContent = "TRANSFER";
+  transferButton.textContent = "ADD DOSE";
   transferButton.disabled = instanceState.overshot;
   transferButton.addEventListener("click", () => {
     if (instanceState.overshot) return;
-    instanceState.transferredMl = clamp(
-      instanceState.transferredMl + instanceState.selectedDoseMl,
+    instanceState.baseAddedMl = clamp(
+      instanceState.baseAddedMl + instanceState.selectedDoseMl,
       0,
       250
     );
-    instanceState.didTransfer = true;
-    const nextEval = evaluateTitrationTransfer(game, instanceState.transferredMl);
+    const nextEval = evaluateTitrationTransfer(game, instanceState.baseAddedMl);
     if (nextEval.overshot) {
       instanceState.overshot = true;
       instanceState.status = nextEval.status;
@@ -12745,10 +12749,9 @@ function renderTitrationTransfer(game) {
   resetButton.textContent = "RESET";
   resetButton.addEventListener("click", () => {
     instanceState.selectedDoseMl = 5;
-    instanceState.transferredMl = 0;
-    instanceState.status = "idle";
+    instanceState.baseAddedMl = 0;
+    instanceState.status = "acidic";
     instanceState.lastMessage = "";
-    instanceState.didTransfer = false;
     instanceState.overshot = false;
     renderMiniGame();
   });
@@ -12763,7 +12766,7 @@ function renderTitrationTransfer(game) {
 
   wrapper.appendChild(beakerRow);
   wrapper.appendChild(status);
-  wrapper.appendChild(readout);
+  wrapper.appendChild(readouts);
   wrapper.appendChild(doseRow);
   wrapper.appendChild(actionRow);
 
