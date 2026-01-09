@@ -397,6 +397,15 @@
             </select>
           </label>
         </div>
+        <div class="debug-mini-games">
+          <h4>Mini-Games</h4>
+          <div class="debug-mini-game-buttons">
+            <button id="debugMiniGameCircuit">Test: Circuit Stabilize</button>
+            <button id="debugMiniGameChem">Test: Chem Balance</button>
+            <button id="debugMiniGameAsm">Test: ASM Patch</button>
+            <button id="debugMiniGameFlameSaw">Test: Flame-Saw Finish</button>
+          </div>
+        </div>
         <div class="debug-log">
           <h4>Console Log</h4>
           <div id="debugLog" class="debug-log-output" role="log" aria-live="polite"></div>
@@ -462,6 +471,22 @@
         <div class="menu-actions craft-mini-game-actions">
           <button id="craftMiniGameCancelBtn">Cancel</button>
           <button id="craftMiniGameCommitBtn" disabled>Commit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="miniGamePanel" class="menu-panel modal-panel mini-game" aria-hidden="true">
+    <div class="menu-card mini-game-card">
+      <div class="menu-header">
+        <h3 id="miniGameTitle">Calibration</h3>
+      </div>
+      <div class="menu-content mini-game-content">
+        <p id="miniGameText" class="component-details"></p>
+        <div id="miniGameOptions" class="mini-game-options" role="list"></div>
+        <div class="menu-actions mini-game-actions">
+          <button id="miniGameCancelBtn">Cancel</button>
+          <button id="miniGameSubmitBtn" disabled>Submit</button>
         </div>
       </div>
     </div>
