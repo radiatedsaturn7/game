@@ -322,83 +322,356 @@ const NIGHT_PLAN = {
   10: { objectiveId: "FLAMESAW_FINAL", room: "Escape Workshop", miniGameId: "FLAMESAW_FINISH" },
 };
 
-const MINIGAMES = {
+const MINI_GAME_TEMPLATES = {
   INTRO_ESCAPE: {
+    id: "INTRO_ESCAPE",
     title: "Escape Console Calibration",
     actionLabel: "Calibrate Escape Console",
-    prompt: "Console needs a manual lockout. Pick the safe reset order.",
-    options: ["Power → Release → Confirm", "Release → Power → Confirm", "Confirm → Power → Release"],
-    correctIndex: 0,
+    type: "circuit_trace",
+    roomHintText: "Route power cleanly. No shorts.",
+    difficultyByNight: { nodeCount: 6, hotCount: 0, pathLength: 4 },
+    generate: generateCircuitTrace,
   },
   CIRCUIT_STABILIZE: {
+    id: "CIRCUIT_STABILIZE",
     title: "Circuit Stabilization",
     actionLabel: "Stabilize Door Coil",
-    prompt: "Door coil needs 0.5A. Supply is 10V. Pick the resistor.",
-    options: ["5Ω", "10Ω", "20Ω", "50Ω"],
-    correctIndex: 2,
+    type: "circuit_trace",
+    roomHintText: "Route power cleanly. No shorts.",
+    difficultyByNight: { nodeCount: 9, hotCount: 2, pathLength: 6 },
+    generate: generateCircuitTrace,
   },
   ALARM_CALIBRATION: {
-    title: "Alarm Calibration",
+    id: "ALARM_CALIBRATION",
+    title: "Tuner Calibration",
     actionLabel: "Calibrate Alarm Array",
-    prompt: "Which threshold lowers false alarms without muting the channel?",
-    options: ["0.2", "0.5", "0.9", "1.2"],
-    correctIndex: 1,
+    type: "signal_tuner",
+    roomHintText: "Lock the sweep in-band, then crack the decrypt windows.",
+    difficultyByNight: (night) => ({
+      sweepWindowSize: clamp(0.26 - night * 0.01, 0.14, 0.26),
+      locksNeeded: night < 5 ? 2 : 3,
+      decryptWindowSize: clamp(0.16 - night * 0.008, 0.08, 0.16),
+      sweepPeriod: clamp(1800 - night * 80, 1000, 1800),
+    }),
+    generate: generateSignalTuner,
   },
   SCANNER_DIAGNOSTIC: {
-    title: "Scanner Diagnostic",
+    id: "SCANNER_DIAGNOSTIC",
+    title: "Scanner Gain Lock",
     actionLabel: "Run Scanner Diagnostic",
-    prompt: "Signal bleed is high. Reduce gain by which notch?",
-    options: ["+2", "+1", "0", "−1"],
-    correctIndex: 3,
+    type: "signal_tuner",
+    roomHintText: "Lock the sweep in-band, then crack the decrypt windows.",
+    difficultyByNight: (night) => ({
+      sweepWindowSize: clamp(0.24 - night * 0.01, 0.12, 0.24),
+      locksNeeded: night < 5 ? 2 : 3,
+      decryptWindowSize: clamp(0.14 - night * 0.008, 0.07, 0.14),
+      sweepPeriod: clamp(1700 - night * 80, 900, 1700),
+    }),
+    generate: generateSignalTuner,
   },
   SIGNAL_FILTER_RC: {
-    title: "Signal Filter",
+    id: "SIGNAL_FILTER_RC",
+    title: "Filter Lock",
     actionLabel: "Filter Signal Noise",
-    prompt: "RC filter should cut noise at 4s. Pick the setting.",
-    options: ["1s", "2s", "4s", "8s"],
-    correctIndex: 2,
+    type: "signal_tuner",
+    roomHintText: "Lock the sweep in-band, then crack the decrypt windows.",
+    difficultyByNight: (night) => ({
+      sweepWindowSize: clamp(0.22 - night * 0.01, 0.12, 0.22),
+      locksNeeded: night < 5 ? 2 : 3,
+      decryptWindowSize: clamp(0.12 - night * 0.008, 0.06, 0.12),
+      sweepPeriod: clamp(1600 - night * 70, 850, 1600),
+    }),
+    generate: generateSignalTuner,
   },
   CHEM_BALANCE: {
-    title: "Coolant Balance",
+    id: "CHEM_BALANCE",
+    title: "Mix Valve Ratio",
     actionLabel: "Balance Coolant Mix",
-    prompt: "Balance: Fe + O2 → Fe2O3",
-    options: [
-      "2Fe + O2 → Fe2O3",
-      "4Fe + 3O2 → 2Fe2O3",
-      "Fe + O2 → FeO2",
-      "2Fe + 3O2 → 2FeO3",
-    ],
-    correctIndex: 1,
+    type: "dial_lock",
+    roomHintText: "Align the valve stops in sequence.",
+    difficultyByNight: { tolerance: 2, pattern: ["L", "R", "L"] },
+    generate: generateDialLock,
   },
   MECH_TOLERANCE: {
-    title: "Pressure Tolerance",
+    id: "MECH_TOLERANCE",
+    title: "Pressure Regulator",
     actionLabel: "Set Pressure Tolerances",
-    prompt: "Hydraulic flow spikes at 300 PSI. Which tolerance keeps it under 320?",
-    options: ["+10", "+20", "+30", "+40"],
-    correctIndex: 1,
+    type: "dial_lock",
+    roomHintText: "Align the valve stops in sequence.",
+    difficultyByNight: { tolerance: 2, pattern: ["R", "L", "R"] },
+    generate: generateDialLock,
   },
   ASM_PATCH: {
+    id: "ASM_PATCH",
     title: "ASM Patch",
     actionLabel: "Patch Door Controller",
-    prompt: "A loop never exits. Choose the patch.",
-    options: ["JMP start", "DEC CX; JNZ start", "INC CX; JNZ start", "NOP; JMP start"],
-    correctIndex: 1,
+    type: "patch_drag",
+    roomHintText: "Door controller is stuck. Patch the loop.",
+    difficultyByNight: (night) => ({
+      initialCx: clamp(2 + Math.floor(night / 3), 2, 5),
+      maxSteps: 14,
+    }),
+    generate: generatePatchDrag,
   },
   CONTROL_LOOP: {
-    title: "Control Loop",
+    id: "CONTROL_LOOP",
+    title: "PID Knob",
     actionLabel: "Tune Control Loop",
-    prompt: "Temperature rises at 2°/s. After 3 seconds, change is:",
-    options: ["2°", "3°", "6°", "9°"],
-    correctIndex: 2,
+    type: "dial_lock",
+    roomHintText: "Align the valve stops in sequence.",
+    difficultyByNight: { tolerance: 1, pattern: ["L", "L", "R"] },
+    generate: generateDialLock,
   },
   FLAMESAW_FINISH: {
+    id: "FLAMESAW_FINISH",
     title: "Flame-Saw Finish",
     actionLabel: "Use Flame-Saw",
-    prompt: "Armor seam flashes. Cut now or wait?",
-    options: ["Cut now.", "Wait for a wider gap."],
-    correctIndex: 0,
+    type: "boss_finish",
+    roomHintText: "Stay on rhythm. Finish the cut.",
+    difficultyByNight: { heatBand: [0.62, 0.78], alignWindow: 0.08, cutWindow: 550 },
+    generate: generateBossFinish,
   },
 };
+
+function getMiniGameDifficulty(template, night) {
+  if (typeof template.difficultyByNight === "function") {
+    return template.difficultyByNight(night);
+  }
+  return template.difficultyByNight ?? {};
+}
+
+function generateSignalTuner(rngSeed, night, template) {
+  const rng = createRng(rngSeed);
+  const difficulty = getMiniGameDifficulty(template, night);
+  const sweepWindowSize = difficulty.sweepWindowSize ?? 0.2;
+  const decryptWindowSize = difficulty.decryptWindowSize ?? 0.12;
+  const locksNeeded = difficulty.locksNeeded ?? 2;
+  const sweepPeriod = difficulty.sweepPeriod ?? 1600;
+  const sweepCenter = rng.nextFloat() * 0.6 + 0.2;
+  const sweepWindow = [
+    clamp(sweepCenter - sweepWindowSize / 2, 0.05, 0.95),
+    clamp(sweepCenter + sweepWindowSize / 2, 0.05, 0.95),
+  ];
+  const decryptWindows = Array.from({ length: 3 }, () => {
+    const center = rng.nextFloat() * 0.7 + 0.15;
+    return [
+      clamp(center - decryptWindowSize / 2, 0.03, 0.97),
+      clamp(center + decryptWindowSize / 2, 0.03, 0.97),
+    ];
+  });
+  return {
+    state: {
+      phase: "sweep",
+      progress: 0,
+      strikes: 0,
+      decryptIndex: 0,
+      sweepStart: null,
+    },
+    solution: {
+      sweepWindow,
+      decryptWindows,
+      locksNeeded,
+      sweepPeriod,
+      strikesAllowed: 3,
+    },
+    ui: {
+      text: template.roomHintText,
+    },
+  };
+}
+
+function generateDialLock(rngSeed, night, template) {
+  const rng = createRng(rngSeed);
+  const difficulty = getMiniGameDifficulty(template, night);
+  const sequence = [];
+  while (sequence.length < 3) {
+    const value = rng.nextInt(0, 99);
+    if (sequence.every((entry) => Math.abs(entry - value) >= 8)) {
+      sequence.push(value);
+    }
+  }
+  return {
+    state: {
+      value: rng.nextInt(0, 99),
+      stepIndex: 0,
+      lastDirection: null,
+      dragStartX: null,
+      dragStartValue: null,
+    },
+    solution: {
+      sequence,
+      pattern: difficulty.pattern ?? ["L", "R", "L"],
+      tolerance: difficulty.tolerance ?? 2,
+    },
+    ui: {
+      text: template.roomHintText,
+    },
+  };
+}
+
+function generateCircuitTrace(rngSeed, night, template) {
+  const rng = createRng(rngSeed);
+  const difficulty = getMiniGameDifficulty(template, night);
+  const nodeCount = clamp(difficulty.nodeCount ?? 8, 6, 10);
+  const pathLength = clamp(difficulty.pathLength ?? 5, 4, 7);
+  const hotCount = clamp(difficulty.hotCount ?? 1, 0, 2);
+  const grid = [
+    { id: 0, x: 20, y: 20 },
+    { id: 1, x: 110, y: 20 },
+    { id: 2, x: 200, y: 20 },
+    { id: 3, x: 290, y: 20 },
+    { id: 4, x: 20, y: 110 },
+    { id: 5, x: 110, y: 110 },
+    { id: 6, x: 200, y: 110 },
+    { id: 7, x: 290, y: 110 },
+    { id: 8, x: 20, y: 200 },
+    { id: 9, x: 110, y: 200 },
+    { id: 10, x: 200, y: 200 },
+    { id: 11, x: 290, y: 200 },
+  ];
+  const shuffled = [...grid].sort(() => rng.nextFloat() - 0.5);
+  const selected = shuffled.slice(0, nodeCount);
+  const selectedIds = new Set(selected.map((node) => node.id));
+  const adjacency = new Map();
+  selected.forEach((node) => {
+    const neighbors = [];
+    grid.forEach((candidate) => {
+      if (!selectedIds.has(candidate.id)) return;
+      const distance = Math.abs(candidate.x - node.x) + Math.abs(candidate.y - node.y);
+      if (distance === 90) {
+        neighbors.push(candidate.id);
+      }
+    });
+    adjacency.set(node.id, neighbors);
+  });
+
+  let path = [];
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const start = selected[rng.nextInt(0, selected.length - 1)].id;
+    path = [start];
+    while (path.length < pathLength) {
+      const current = path[path.length - 1];
+      const options = (adjacency.get(current) || []).filter((id) => !path.includes(id));
+      if (!options.length) break;
+      path.push(options[rng.nextInt(0, options.length - 1)]);
+    }
+    if (path.length >= pathLength) break;
+  }
+  if (path.length < pathLength) {
+    path = selected.slice(0, Math.min(pathLength, selected.length)).map((node) => node.id);
+  }
+  const source = path[0];
+  const target = path[path.length - 1];
+  const hotNodes = selected
+    .map((node) => node.id)
+    .filter((id) => !path.includes(id))
+    .sort(() => rng.nextFloat() - 0.5)
+    .slice(0, hotCount);
+  const edges = new Set();
+  for (let i = 0; i < path.length - 1; i += 1) {
+    edges.add(`${path[i]}-${path[i + 1]}`);
+    edges.add(`${path[i + 1]}-${path[i]}`);
+  }
+  const decoyBranches = Math.min(2, rng.nextInt(1, 2));
+  for (let i = 0; i < decoyBranches; i += 1) {
+    const anchor = path[rng.nextInt(0, path.length - 1)];
+    const options = (adjacency.get(anchor) || []).filter((id) => !path.includes(id));
+    if (!options.length) continue;
+    const decoy = options[rng.nextInt(0, options.length - 1)];
+    edges.add(`${anchor}-${decoy}`);
+    edges.add(`${decoy}-${anchor}`);
+  }
+  return {
+    state: {
+      selectedPath: [source],
+    },
+    solution: {
+      nodes: selected,
+      source,
+      target,
+      hotNodes,
+      edges,
+      path,
+    },
+    ui: {
+      text: template.roomHintText,
+    },
+  };
+}
+
+function generatePatchDrag(rngSeed, night, template) {
+  const rng = createRng(rngSeed);
+  const difficulty = getMiniGameDifficulty(template, night);
+  const initialCx = difficulty.initialCx ?? rng.nextInt(2, 4);
+  const maxSteps = difficulty.maxSteps ?? 12;
+  const tilePool = [
+    { op: "DEC", label: "DEC" },
+    { op: "JNZ", label: "JNZ" },
+    { op: "RET", label: "RET" },
+    { op: "NOP", label: "NOP" },
+    { op: "INC", label: "INC" },
+    { op: "XOR", label: "XOR" },
+    { op: "ADD", label: "ADD" },
+  ];
+  const required = ["DEC", "JNZ", "RET"];
+  const tiles = [];
+  required.forEach((op) => {
+    const entry = tilePool.find((tile) => tile.op === op);
+    tiles.push({ id: `${op}-${tiles.length}`, op: entry.op, label: entry.label });
+  });
+  while (tiles.length < 7) {
+    const entry = tilePool[rng.nextInt(0, tilePool.length - 1)];
+    tiles.push({ id: `${entry.op}-${tiles.length}`, op: entry.op, label: entry.label });
+  }
+  const shuffled = [...tiles].sort(() => rng.nextFloat() - 0.5);
+  return {
+    state: {
+      tiles: shuffled,
+      slots: Array.from({ length: 5 }, () => null),
+      selectedTileId: null,
+      initialCx,
+      maxSteps,
+    },
+    solution: {
+      initialCx,
+      maxSteps,
+    },
+    ui: {
+      text: template.roomHintText,
+    },
+  };
+}
+
+function generateBossFinish(rngSeed, night, template) {
+  const rng = createRng(rngSeed);
+  const difficulty = getMiniGameDifficulty(template, night);
+  const heatBand = difficulty.heatBand ?? [0.62, 0.78];
+  const alignWindow = difficulty.alignWindow ?? 0.08;
+  const alignCenter = rng.nextFloat() * 0.5 + 0.25;
+  const alignBand = [
+    clamp(alignCenter - alignWindow / 2, 0.05, 0.95),
+    clamp(alignCenter + alignWindow / 2, 0.05, 0.95),
+  ];
+  return {
+    state: {
+      step: 1,
+      heatHoldStart: null,
+      holdReleased: false,
+      alignmentStart: null,
+      cutClicks: 0,
+      cutStart: null,
+    },
+    solution: {
+      heatBand,
+      alignBand,
+      alignPeriod: 1400,
+      cutWindow: difficulty.cutWindow ?? 600,
+    },
+    ui: {
+      text: template.roomHintText,
+    },
+  };
+}
 
 const componentDescriptions = {
   Resistors: "Limits electrical current and stabilizes fragile circuits.",
@@ -1178,6 +1451,8 @@ let actionLockTimeoutId = null;
 let actionLockStepTimeoutId = null;
 let lastActionLockStart = null;
 let pendingMoveTimeoutId = null;
+let miniGameAnimationId = null;
+let miniGameAnimationToken = 0;
 const ACTION_LOCK_MS = 1200;
 const ALARM_TRIGGER_TTL_MIN = 4;
 const ALARM_TRIGGER_TTL_MAX = 6;
@@ -4344,6 +4619,20 @@ function getPassiveEffects() {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function createRng(seed) {
+  let value = Math.abs(seed) % 2147483647;
+  if (value === 0) value = 2147483646;
+  return {
+    nextFloat() {
+      value = (value * 48271) % 2147483647;
+      return (value - 1) / 2147483646;
+    },
+    nextInt(min, max) {
+      return Math.floor(this.nextFloat() * (max - min + 1)) + min;
+    },
+  };
 }
 
 function isNight11(night = state.currentNight) {
@@ -11173,22 +11462,54 @@ function createSchematicIcon(partName, { size = 28 } = {}) {
 }
 
 function getMiniGameConfig(miniGameId) {
-  return MINIGAMES[miniGameId] ?? null;
+  return MINI_GAME_TEMPLATES[miniGameId] ?? null;
+}
+
+function getMiniGameSeed(night, turn, tries) {
+  return night * 100000 + turn * 100 + tries;
+}
+
+function buildMiniGameInstance(miniGameId, tries = 0) {
+  const config = getMiniGameConfig(miniGameId);
+  if (!config) return null;
+  const night = state.currentNight;
+  const seed = getMiniGameSeed(night, state.turn, tries);
+  const generated = config.generate(seed, night, config);
+  return {
+    id: miniGameId,
+    type: config.type,
+    title: config.title,
+    actionLabel: config.actionLabel,
+    roomHintText: config.roomHintText,
+    seed,
+    night,
+    instanceState: generated.state,
+    instanceSolution: generated.solution,
+    ui: generated.ui,
+    tries,
+    startedAtTurn: state.turn,
+    result: null,
+  };
+}
+
+function regenerateMiniGameInstance() {
+  if (!state.miniGame) return;
+  const tries = state.miniGame.tries;
+  const config = getMiniGameConfig(state.miniGame.id);
+  if (!config) return;
+  const seed = getMiniGameSeed(state.currentNight, state.turn, tries);
+  const generated = config.generate(seed, state.currentNight, config);
+  state.miniGame.seed = seed;
+  state.miniGame.instanceState = generated.state;
+  state.miniGame.instanceSolution = generated.solution;
+  state.miniGame.ui = generated.ui;
 }
 
 function openMiniGame(miniGameId) {
   if (!miniGameId || state.miniGameActive) return;
-  const config = getMiniGameConfig(miniGameId);
-  if (!config) return;
-  state.miniGame = {
-    id: miniGameId,
-    title: config.title,
-    prompt: config.prompt,
-    options: [...config.options],
-    correctIndex: config.correctIndex,
-    tries: 0,
-    selectedIndex: null,
-  };
+  const instance = buildMiniGameInstance(miniGameId, 0);
+  if (!instance) return;
+  state.miniGame = instance;
   state.miniGameActive = true;
   state.objectiveBlocked = true;
   closePanels();
@@ -11202,12 +11523,14 @@ function closeMiniGame() {
   state.miniGameActive = false;
   state.miniGame = null;
   state.objectiveBlocked = false;
+  stopMiniGameAnimation();
   closePanel(dom.miniGamePanel);
   updateUI();
 }
 
 function cancelMiniGame() {
   if (!state.miniGameActive) return;
+  applyMiniGameCancelPenalty();
   closeMiniGame();
 }
 
@@ -11215,31 +11538,676 @@ function renderMiniGame() {
   const game = state.miniGame;
   if (!game || !dom.miniGameTitle || !dom.miniGameText || !dom.miniGameOptions) return;
   dom.miniGameTitle.textContent = game.title;
-  dom.miniGameText.textContent = game.prompt;
+  dom.miniGameText.textContent = game.ui?.text || game.roomHintText || "";
   dom.miniGameOptions.innerHTML = "";
-  game.options.forEach((option, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "mini-game-option";
-    button.textContent = option;
-    button.setAttribute("role", "listitem");
-    button.classList.toggle("is-selected", index === game.selectedIndex);
-    button.addEventListener("click", () => selectMiniGameOption(index));
-    dom.miniGameOptions.appendChild(button);
-  });
-  if (dom.miniGameSubmitBtn) {
-    dom.miniGameSubmitBtn.disabled = game.selectedIndex === null;
+  stopMiniGameAnimation();
+  switch (game.type) {
+    case "signal_tuner":
+      renderSignalTuner(game);
+      break;
+    case "dial_lock":
+      renderDialLock(game);
+      break;
+    case "circuit_trace":
+      renderCircuitTrace(game);
+      break;
+    case "patch_drag":
+      renderPatchDrag(game);
+      break;
+    case "boss_finish":
+      renderBossFinish(game);
+      break;
+    default:
+      break;
   }
 }
 
-function selectMiniGameOption(index) {
-  const game = state.miniGame;
-  if (!game) return;
-  game.selectedIndex = index;
+function stopMiniGameAnimation() {
+  if (miniGameAnimationId) {
+    cancelAnimationFrame(miniGameAnimationId);
+    miniGameAnimationId = null;
+  }
+  miniGameAnimationToken += 1;
+}
+
+function startMiniGameAnimation(callback) {
+  stopMiniGameAnimation();
+  const token = miniGameAnimationToken;
+  const loop = () => {
+    if (!state.miniGameActive || token !== miniGameAnimationToken) return;
+    callback();
+    miniGameAnimationId = requestAnimationFrame(loop);
+  };
+  miniGameAnimationId = requestAnimationFrame(loop);
+}
+
+function setMiniGameSubmitButton({ label, enabled = true, visible = true } = {}) {
+  if (!dom.miniGameSubmitBtn) return;
+  dom.miniGameSubmitBtn.textContent = label ?? dom.miniGameSubmitBtn.textContent;
+  dom.miniGameSubmitBtn.disabled = !enabled;
+  dom.miniGameSubmitBtn.style.display = visible ? "" : "none";
+}
+
+function getSignalSweepPosition(game) {
+  const { instanceState, instanceSolution } = game;
+  if (!instanceState.sweepStart) {
+    instanceState.sweepStart = performance.now();
+  }
+  const elapsed = performance.now() - instanceState.sweepStart;
+  const phase = (elapsed % instanceSolution.sweepPeriod) / instanceSolution.sweepPeriod;
+  return phase;
+}
+
+function getBossAlignmentPosition(game) {
+  const { instanceState, instanceSolution } = game;
+  if (!instanceState.alignmentStart) {
+    instanceState.alignmentStart = performance.now();
+  }
+  const elapsed = performance.now() - instanceState.alignmentStart;
+  return (elapsed % instanceSolution.alignPeriod) / instanceSolution.alignPeriod;
+}
+
+function attemptSignalTunerLock(game) {
+  const { instanceState, instanceSolution } = game;
+  const position = getSignalSweepPosition(game);
+  const [start, end] =
+    instanceState.phase === "decrypt"
+      ? instanceSolution.decryptWindows[instanceState.decryptIndex]
+      : instanceSolution.sweepWindow;
+  const inWindow = position >= start && position <= end;
+  if (inWindow) {
+    if (instanceState.phase === "sweep") {
+      instanceState.progress += 1;
+      if (instanceState.progress >= instanceSolution.locksNeeded) {
+        instanceState.phase = "decrypt";
+        instanceState.decryptIndex = 0;
+      }
+    } else {
+      instanceState.decryptIndex += 1;
+      if (instanceState.decryptIndex >= instanceSolution.decryptWindows.length) {
+        handleMiniGameSuccess(game);
+        return;
+      }
+    }
+  } else {
+    instanceState.strikes += 1;
+    instanceState.progress = 0;
+    instanceState.decryptIndex = 0;
+  }
+  if (instanceState.strikes >= instanceSolution.strikesAllowed) {
+    handleMiniGameFailure(game);
+    return;
+  }
   renderMiniGame();
 }
 
-function applyMiniGameFailurePenalty() {
+function renderSignalTuner(game) {
+  const { instanceState, instanceSolution } = game;
+  const status =
+    instanceState.phase === "decrypt"
+      ? `Decrypt locks ${instanceState.decryptIndex + 1}/${instanceSolution.decryptWindows.length}`
+      : `Sweep locks ${instanceState.progress}/${instanceSolution.locksNeeded}`;
+  dom.miniGameText.textContent = `${game.roomHintText} ${status}`;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "mini-game-signal";
+  wrapper.style.display = "grid";
+  wrapper.style.gap = "12px";
+
+  const bar = document.createElement("div");
+  bar.className = "signal-bar";
+  bar.style.position = "relative";
+  bar.style.height = "16px";
+  bar.style.border = "1px solid rgba(255,255,255,0.4)";
+  bar.style.background = "rgba(10, 15, 20, 0.6)";
+
+  const windowEl = document.createElement("div");
+  windowEl.className = "signal-window";
+  windowEl.style.position = "absolute";
+  windowEl.style.top = "0";
+  windowEl.style.bottom = "0";
+  windowEl.style.background = "rgba(66, 180, 120, 0.5)";
+
+  const marker = document.createElement("div");
+  marker.className = "signal-marker";
+  marker.style.position = "absolute";
+  marker.style.top = "-3px";
+  marker.style.width = "4px";
+  marker.style.height = "22px";
+  marker.style.background = "rgba(220, 220, 220, 0.9)";
+
+  bar.appendChild(windowEl);
+  bar.appendChild(marker);
+  wrapper.appendChild(bar);
+
+  const strikeText = document.createElement("div");
+  strikeText.textContent = `Strikes: ${instanceState.strikes}/3`;
+  wrapper.appendChild(strikeText);
+
+  dom.miniGameOptions.appendChild(wrapper);
+  setMiniGameSubmitButton({
+    label: instanceState.phase === "decrypt" ? "Lock Decrypt" : "Lock Signal",
+    enabled: true,
+    visible: true,
+  });
+
+  const updateSweep = () => {
+    const position = getSignalSweepPosition(game);
+    const windowRange =
+      instanceState.phase === "decrypt"
+        ? instanceSolution.decryptWindows[instanceState.decryptIndex]
+        : instanceSolution.sweepWindow;
+    windowEl.style.left = `${windowRange[0] * 100}%`;
+    windowEl.style.width = `${(windowRange[1] - windowRange[0]) * 100}%`;
+    marker.style.left = `${position * 100}%`;
+  };
+  updateSweep();
+  startMiniGameAnimation(updateSweep);
+}
+
+function getDialDistance(a, b) {
+  const diff = Math.abs(a - b);
+  return Math.min(diff, 100 - diff);
+}
+
+function confirmDialLockStep(game) {
+  const { instanceState, instanceSolution } = game;
+  const { sequence, pattern, tolerance } = instanceSolution;
+  const step = instanceState.stepIndex;
+  const requiredDirection = pattern[step];
+  const target = sequence[step];
+  if (!instanceState.lastDirection || instanceState.lastDirection !== requiredDirection) {
+    handleMiniGameFailure(game);
+    return;
+  }
+  if (getDialDistance(instanceState.value, target) > tolerance) {
+    handleMiniGameFailure(game);
+    return;
+  }
+  instanceState.stepIndex += 1;
+  if (instanceState.stepIndex >= sequence.length) {
+    handleMiniGameSuccess(game);
+    return;
+  }
+  renderMiniGame();
+}
+
+function renderDialLock(game) {
+  const { instanceState, instanceSolution } = game;
+  const step = instanceState.stepIndex;
+  const target = instanceSolution.sequence[step];
+  const direction = instanceSolution.pattern[step];
+  dom.miniGameText.textContent = `${game.roomHintText} Step ${step + 1}/3: Turn ${direction} to ${target}.`;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "mini-game-dial";
+  wrapper.style.display = "grid";
+  wrapper.style.justifyItems = "center";
+  wrapper.style.gap = "10px";
+
+  const dial = document.createElement("div");
+  dial.className = "dial-face";
+  dial.style.width = "160px";
+  dial.style.height = "160px";
+  dial.style.border = "2px solid rgba(255,255,255,0.4)";
+  dial.style.borderRadius = "50%";
+  dial.style.position = "relative";
+  dial.style.background = "rgba(18, 24, 32, 0.7)";
+
+  const pointer = document.createElement("div");
+  pointer.style.position = "absolute";
+  pointer.style.width = "2px";
+  pointer.style.height = "70px";
+  pointer.style.background = "rgba(200, 220, 240, 0.9)";
+  pointer.style.left = "50%";
+  pointer.style.top = "10px";
+  pointer.style.transformOrigin = "bottom center";
+
+  const readout = document.createElement("div");
+  readout.textContent = `Value: ${instanceState.value}`;
+
+  const updatePointer = () => {
+    pointer.style.transform = `rotate(${instanceState.value * 3.6}deg) translateX(-50%)`;
+    readout.textContent = `Value: ${instanceState.value}`;
+  };
+  updatePointer();
+
+  const handlePointerDown = (event) => {
+    event.preventDefault();
+    instanceState.dragStartX = event.clientX;
+    instanceState.dragStartValue = instanceState.value;
+    const handleMove = (moveEvent) => {
+      const delta = moveEvent.clientX - instanceState.dragStartX;
+      const ticks = Math.round(delta / 4);
+      let next = (instanceState.dragStartValue + ticks) % 100;
+      if (next < 0) next += 100;
+      if (delta !== 0) {
+        instanceState.lastDirection = delta > 0 ? "R" : "L";
+      }
+      instanceState.value = next;
+      updatePointer();
+    };
+    const handleUp = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      instanceState.dragStartX = null;
+      instanceState.dragStartValue = null;
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+  };
+
+  dial.addEventListener("pointerdown", handlePointerDown);
+  dial.appendChild(pointer);
+  wrapper.appendChild(dial);
+  wrapper.appendChild(readout);
+  dom.miniGameOptions.appendChild(wrapper);
+
+  setMiniGameSubmitButton({ label: "Confirm Step", enabled: true, visible: true });
+}
+
+function handleCircuitNodeClick(nodeId) {
+  const game = state.miniGame;
+  if (!game) return;
+  const { instanceState, instanceSolution } = game;
+  const selectedPath = instanceState.selectedPath;
+  const last = selectedPath[selectedPath.length - 1];
+  if (nodeId === last) return;
+  if (!instanceSolution.edges.has(`${last}-${nodeId}`)) {
+    pushStatus("No direct trace.", 2);
+    return;
+  }
+  if (instanceSolution.hotNodes.includes(nodeId)) {
+    handleMiniGameFailure(game);
+    return;
+  }
+  selectedPath.push(nodeId);
+  if (nodeId === instanceSolution.target) {
+    const matchesSolution =
+      selectedPath.length === instanceSolution.path.length &&
+      selectedPath.every((entry, index) => entry === instanceSolution.path[index]);
+    if (matchesSolution) {
+      handleMiniGameSuccess(game);
+      return;
+    }
+    handleMiniGameFailure(game);
+    return;
+  }
+  renderMiniGame();
+}
+
+function undoCircuitSegment(event) {
+  event.preventDefault();
+  const game = state.miniGame;
+  if (!game) return;
+  const selectedPath = game.instanceState.selectedPath;
+  if (selectedPath.length <= 1) return;
+  selectedPath.pop();
+  renderMiniGame();
+}
+
+function renderCircuitTrace(game) {
+  const { instanceState, instanceSolution } = game;
+  dom.miniGameText.textContent = `${game.roomHintText} Right click to undo the last segment.`;
+  const board = document.createElement("div");
+  board.className = "circuit-board";
+  board.style.position = "relative";
+  board.style.width = "320px";
+  board.style.height = "240px";
+  board.style.border = "1px solid rgba(255,255,255,0.3)";
+  board.style.background = "rgba(12, 18, 24, 0.65)";
+  board.addEventListener("contextmenu", undoCircuitSegment);
+
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "320");
+  svg.setAttribute("height", "240");
+  svg.style.position = "absolute";
+  svg.style.top = "0";
+  svg.style.left = "0";
+
+  for (let i = 0; i < instanceState.selectedPath.length - 1; i += 1) {
+    const from = instanceSolution.nodes.find((node) => node.id === instanceState.selectedPath[i]);
+    const to = instanceSolution.nodes.find((node) => node.id === instanceState.selectedPath[i + 1]);
+    if (!from || !to) continue;
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    line.setAttribute("x1", from.x);
+    line.setAttribute("y1", from.y);
+    line.setAttribute("x2", to.x);
+    line.setAttribute("y2", to.y);
+    line.setAttribute("stroke", "rgba(80, 200, 140, 0.85)");
+    line.setAttribute("stroke-width", "4");
+    svg.appendChild(line);
+  }
+  board.appendChild(svg);
+
+  instanceSolution.nodes.forEach((node) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "circuit-node";
+    button.style.position = "absolute";
+    button.style.left = `${node.x}px`;
+    button.style.top = `${node.y}px`;
+    button.style.transform = "translate(-50%, -50%)";
+    button.style.width = "46px";
+    button.style.height = "32px";
+    button.style.border = "1px solid rgba(255,255,255,0.5)";
+    button.style.background = "rgba(20, 28, 38, 0.85)";
+    button.style.color = "white";
+    button.style.fontSize = "12px";
+    let label = "NODE";
+    if (node.id === instanceSolution.source) label = "SRC";
+    if (node.id === instanceSolution.target) label = "COIL";
+    if (instanceSolution.hotNodes.includes(node.id)) label = "HOT";
+    button.textContent = label;
+    button.addEventListener("click", () => handleCircuitNodeClick(node.id));
+    board.appendChild(button);
+  });
+
+  dom.miniGameOptions.appendChild(board);
+  setMiniGameSubmitButton({ visible: false });
+}
+
+function selectPatchTile(tileId) {
+  const game = state.miniGame;
+  if (!game) return;
+  const tiles = game.instanceState.tiles;
+  if (!tiles.some((tile) => tile.id === tileId)) return;
+  game.instanceState.selectedTileId =
+    game.instanceState.selectedTileId === tileId ? null : tileId;
+  renderMiniGame();
+}
+
+function placePatchTile(tileId, slotIndex) {
+  const game = state.miniGame;
+  if (!game) return;
+  const { slots } = game.instanceState;
+  slots[slotIndex] = tileId;
+  game.instanceState.selectedTileId = null;
+  renderMiniGame();
+}
+
+function clearPatchSlot(slotIndex) {
+  const game = state.miniGame;
+  if (!game) return;
+  game.instanceState.slots[slotIndex] = null;
+  renderMiniGame();
+}
+
+function handlePatchSlotClick(event) {
+  const slotIndex = Number(event.currentTarget.dataset.slotIndex);
+  if (Number.isNaN(slotIndex)) return;
+  const game = state.miniGame;
+  if (!game) return;
+  const selected = game.instanceState.selectedTileId;
+  if (selected) {
+    placePatchTile(selected, slotIndex);
+    return;
+  }
+  clearPatchSlot(slotIndex);
+}
+
+function handlePatchSlotDrop(event) {
+  event.preventDefault();
+  const slotIndex = Number(event.currentTarget.dataset.slotIndex);
+  if (Number.isNaN(slotIndex)) return;
+  const tileId = event.dataTransfer?.getData("text/plain");
+  if (!tileId) return;
+  placePatchTile(tileId, slotIndex);
+}
+
+function submitPatchDrag(game) {
+  const { tiles, slots, initialCx, maxSteps } = game.instanceState;
+  if (slots.some((slot) => !slot)) return;
+  const program = slots.map((slot) => tiles.find((tile) => tile.id === slot)?.op ?? "NOP");
+  let cx = initialCx;
+  let pc = 0;
+  for (let step = 0; step < maxSteps; step += 1) {
+    const op = program[pc];
+    switch (op) {
+      case "DEC":
+        cx -= 1;
+        pc += 1;
+        break;
+      case "INC":
+        cx += 1;
+        pc += 1;
+        break;
+      case "JNZ":
+        pc = cx !== 0 ? 0 : pc + 1;
+        break;
+      case "RET":
+        if (cx === 0) {
+          handleMiniGameSuccess(game);
+          return;
+        }
+        handleMiniGameFailure(game);
+        return;
+      case "ADD":
+        cx += 2;
+        pc += 1;
+        break;
+      case "XOR":
+        cx = 0;
+        pc += 1;
+        break;
+      default:
+        pc += 1;
+        break;
+    }
+    if (pc >= program.length) {
+      handleMiniGameFailure(game);
+      return;
+    }
+  }
+  handleMiniGameFailure(game);
+}
+
+function renderPatchDrag(game) {
+  const { tiles, slots, selectedTileId, initialCx } = game.instanceState;
+  dom.miniGameText.textContent = `${game.roomHintText} CX=${initialCx}.`;
+  const board = document.createElement("div");
+  board.className = "patch-board";
+  board.style.display = "grid";
+  board.style.gap = "10px";
+
+  const slotsRow = document.createElement("div");
+  slotsRow.style.display = "grid";
+  slotsRow.style.gridTemplateColumns = "repeat(5, minmax(0, 1fr))";
+  slotsRow.style.gap = "6px";
+
+  slots.forEach((slot, index) => {
+    const slotEl = document.createElement("div");
+    slotEl.className = "patch-slot";
+    slotEl.dataset.slotIndex = String(index);
+    slotEl.style.border = "1px dashed rgba(255,255,255,0.4)";
+    slotEl.style.minHeight = "40px";
+    slotEl.style.display = "flex";
+    slotEl.style.alignItems = "center";
+    slotEl.style.justifyContent = "center";
+    slotEl.style.background = "rgba(12, 18, 24, 0.5)";
+    slotEl.addEventListener("click", handlePatchSlotClick);
+    slotEl.addEventListener("dragover", (event) => event.preventDefault());
+    slotEl.addEventListener("drop", handlePatchSlotDrop);
+    if (slot) {
+      const tile = tiles.find((entry) => entry.id === slot);
+      if (tile) {
+        const token = document.createElement("div");
+        token.textContent = tile.label;
+        token.style.padding = "4px 6px";
+        token.style.border = "1px solid rgba(255,255,255,0.5)";
+        token.style.background = "rgba(22, 30, 40, 0.9)";
+        slotEl.appendChild(token);
+      }
+    } else {
+      slotEl.textContent = "Slot";
+    }
+    slotsRow.appendChild(slotEl);
+  });
+
+  const tray = document.createElement("div");
+  tray.style.display = "flex";
+  tray.style.flexWrap = "wrap";
+  tray.style.gap = "8px";
+  tiles.forEach((tile) => {
+    const tileEl = document.createElement("div");
+    tileEl.className = "patch-tile";
+    tileEl.textContent = tile.label;
+    tileEl.style.padding = "6px 10px";
+    tileEl.style.border = "1px solid rgba(255,255,255,0.4)";
+    tileEl.style.background =
+      selectedTileId === tile.id ? "rgba(80, 120, 160, 0.8)" : "rgba(20, 28, 38, 0.85)";
+    tileEl.style.cursor = "pointer";
+    tileEl.draggable = true;
+    tileEl.addEventListener("click", () => selectPatchTile(tile.id));
+    tileEl.addEventListener("dragstart", (event) => {
+      event.dataTransfer?.setData("text/plain", tile.id);
+    });
+    tray.appendChild(tileEl);
+  });
+
+  board.appendChild(slotsRow);
+  board.appendChild(tray);
+  dom.miniGameOptions.appendChild(board);
+
+  setMiniGameSubmitButton({
+    label: "Deploy Patch",
+    enabled: !slots.some((slot) => !slot),
+    visible: true,
+  });
+}
+
+function renderBossFinish(game) {
+  const { instanceState, instanceSolution } = game;
+  dom.miniGameText.textContent = `Step ${instanceState.step}/3: ${game.roomHintText}`;
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "grid";
+  wrapper.style.gap = "12px";
+
+  if (instanceState.step === 1) {
+    const meter = document.createElement("div");
+    meter.style.position = "relative";
+    meter.style.height = "16px";
+    meter.style.border = "1px solid rgba(255,255,255,0.4)";
+    meter.style.background = "rgba(10, 15, 20, 0.6)";
+    const fill = document.createElement("div");
+    fill.style.position = "absolute";
+    fill.style.left = "0";
+    fill.style.top = "0";
+    fill.style.bottom = "0";
+    fill.style.background = "rgba(180, 80, 60, 0.65)";
+    const band = document.createElement("div");
+    band.style.position = "absolute";
+    band.style.top = "0";
+    band.style.bottom = "0";
+    band.style.left = `${instanceSolution.heatBand[0] * 100}%`;
+    band.style.width = `${(instanceSolution.heatBand[1] - instanceSolution.heatBand[0]) * 100}%`;
+    band.style.background = "rgba(80, 200, 120, 0.5)";
+    meter.appendChild(fill);
+    meter.appendChild(band);
+    const button = document.createElement("button");
+    button.textContent = "Hold Heat";
+    button.addEventListener("pointerdown", () => {
+      if (!instanceState.heatHoldStart) {
+        instanceState.heatHoldStart = performance.now();
+      }
+    });
+    button.addEventListener("pointerup", () => {
+      if (!instanceState.heatHoldStart) return;
+      const held = (performance.now() - instanceState.heatHoldStart) / 1200;
+      instanceState.heatHoldStart = null;
+      if (held >= instanceSolution.heatBand[0] && held <= instanceSolution.heatBand[1]) {
+        instanceState.step = 2;
+        renderMiniGame();
+      } else {
+        handleMiniGameFailure(game);
+      }
+    });
+    wrapper.appendChild(meter);
+    wrapper.appendChild(button);
+    dom.miniGameOptions.appendChild(wrapper);
+    setMiniGameSubmitButton({ visible: false });
+
+    const updateHeat = () => {
+      const held = instanceState.heatHoldStart
+        ? (performance.now() - instanceState.heatHoldStart) / 1200
+        : 0;
+      const clamped = clamp(held, 0, 1);
+      fill.style.width = `${clamped * 100}%`;
+    };
+    updateHeat();
+    startMiniGameAnimation(updateHeat);
+    return;
+  }
+
+  if (instanceState.step === 2) {
+    const bar = document.createElement("div");
+    bar.style.position = "relative";
+    bar.style.height = "16px";
+    bar.style.border = "1px solid rgba(255,255,255,0.4)";
+    bar.style.background = "rgba(10, 15, 20, 0.6)";
+    const windowEl = document.createElement("div");
+    windowEl.style.position = "absolute";
+    windowEl.style.top = "0";
+    windowEl.style.bottom = "0";
+    windowEl.style.left = `${instanceSolution.alignBand[0] * 100}%`;
+    windowEl.style.width = `${(instanceSolution.alignBand[1] - instanceSolution.alignBand[0]) * 100}%`;
+    windowEl.style.background = "rgba(80, 200, 120, 0.5)";
+    const marker = document.createElement("div");
+    marker.style.position = "absolute";
+    marker.style.top = "-3px";
+    marker.style.width = "4px";
+    marker.style.height = "22px";
+    marker.style.background = "rgba(220, 220, 220, 0.9)";
+    bar.appendChild(windowEl);
+    bar.appendChild(marker);
+    const button = document.createElement("button");
+    button.textContent = "Lock Alignment";
+    button.addEventListener("click", () => {
+      const position = getBossAlignmentPosition(game);
+      if (position >= instanceSolution.alignBand[0] && position <= instanceSolution.alignBand[1]) {
+        instanceState.step = 3;
+        renderMiniGame();
+      } else {
+        handleMiniGameFailure(game);
+      }
+    });
+    wrapper.appendChild(bar);
+    wrapper.appendChild(button);
+    dom.miniGameOptions.appendChild(wrapper);
+    setMiniGameSubmitButton({ visible: false });
+    startMiniGameAnimation(() => {
+      marker.style.left = `${getBossAlignmentPosition(game) * 100}%`;
+    });
+    return;
+  }
+
+  const rhythm = document.createElement("div");
+  rhythm.textContent = "Click 3 times in rhythm to cut.";
+  const button = document.createElement("button");
+  button.textContent = "Cut";
+  button.addEventListener("click", () => {
+    if (!instanceState.cutStart) {
+      instanceState.cutStart = performance.now();
+      instanceState.cutClicks = 0;
+    }
+    instanceState.cutClicks += 1;
+    const elapsed = performance.now() - instanceState.cutStart;
+    if (instanceState.cutClicks >= 3) {
+      if (elapsed <= instanceSolution.cutWindow) {
+        handleMiniGameSuccess(game);
+      } else {
+        handleMiniGameFailure(game);
+      }
+    }
+  });
+  wrapper.appendChild(rhythm);
+  wrapper.appendChild(button);
+  dom.miniGameOptions.appendChild(wrapper);
+  setMiniGameSubmitButton({ visible: false });
+}
+
+function applyMiniGameFailurePenalty(tries = 0) {
   const profile = getNightProfile();
   const effects = getPassiveEffects();
   registerSignal(
@@ -11248,9 +12216,23 @@ function applyMiniGameFailurePenalty() {
     { type: "minigame-fail", lastKnownChance: 0.12 }
   );
   adjustSanity(-0.03, "minigame");
-  state.threat = Math.min(5, state.threat + 0.2);
+  const extraThreat = tries >= 2 ? 0.1 : 0;
+  state.threat = Math.min(5, state.threat + 0.2 + extraThreat);
   state.turn += 1;
   pushStatus("Wrong. Try again.", 3);
+  updateUI();
+}
+
+function applyMiniGameCancelPenalty() {
+  const profile = getNightProfile();
+  const effects = getPassiveEffects();
+  registerSignal(
+    state.playerRoom,
+    0.08 * profile.signalStrength.device * effects.signalSpike,
+    { type: "minigame-cancel", lastKnownChance: 0.06 }
+  );
+  state.threat = Math.min(5, state.threat + 0.05);
+  pushStatus("You back away from the panel.", 2);
   updateUI();
 }
 
@@ -11281,20 +12263,38 @@ function resolveMiniGameFailure(miniGameId) {
     triggerDeath();
     return;
   }
-  applyMiniGameFailurePenalty();
+  const tries = state.miniGame?.tries ?? 0;
+  applyMiniGameFailurePenalty(tries);
+}
+
+function handleMiniGameSuccess(game) {
+  closeMiniGame();
+  resolveMiniGameSuccess(game.id);
+}
+
+function handleMiniGameFailure(game) {
+  game.tries += 1;
+  resolveMiniGameFailure(game.id);
+  if (!state.miniGameActive || game.id === "FLAMESAW_FINISH") return;
+  regenerateMiniGameInstance();
+  renderMiniGame();
 }
 
 function submitMiniGameAnswer() {
   const game = state.miniGame;
   if (!game) return;
-  if (game.selectedIndex === null) return;
-  const correct = game.selectedIndex === game.correctIndex;
-  if (correct) {
-    closeMiniGame();
-    resolveMiniGameSuccess(game.id);
-  } else {
-    game.tries += 1;
-    resolveMiniGameFailure(game.id);
+  switch (game.type) {
+    case "signal_tuner":
+      attemptSignalTunerLock(game);
+      break;
+    case "dial_lock":
+      confirmDialLockStep(game);
+      break;
+    case "patch_drag":
+      submitPatchDrag(game);
+      break;
+    default:
+      break;
   }
 }
 
