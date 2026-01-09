@@ -385,10 +385,10 @@ const MINI_GAME_TEMPLATES = {
   CHEM_BALANCE: {
     id: "CHEM_BALANCE",
     title: "Mix Valve Ratio",
-    actionLabel: "Mix Etchant Batch",
-    type: "titration_quick",
-    roomHintText: "Mix the etchant to spec.",
-    generate: generateTitrationQuick,
+    actionLabel: "Neutralize Sample",
+    type: "titration_transfer",
+    roomHintText: "Neutralize the sample. Too much base ruins the batch.",
+    generate: generateTitrationTransfer,
   },
   MECH_TOLERANCE: {
     id: "MECH_TOLERANCE",
@@ -698,6 +698,86 @@ function generateTitrationQuick(rngSeed, night, template) {
     },
     ui: {
       text: template.roomHintText,
+    },
+  };
+}
+
+function generateTitrationTransfer(rngSeed, night, template) {
+  const rng = createRng(rngSeed);
+  const acidMlOptions = [];
+  for (let ml = 30; ml <= 150; ml += 5) {
+    acidMlOptions.push(ml);
+  }
+  const acidMOptions = new Set();
+  for (let m = 0.5; m <= 2.0001; m += 0.1) {
+    acidMOptions.add(Number(m.toFixed(2)));
+  }
+  for (let m = 0.5; m <= 2.0001; m += 0.25) {
+    acidMOptions.add(Number(m.toFixed(2)));
+  }
+  const baseMOptions = new Set();
+  for (let m = 0.4; m <= 1.5001; m += 0.1) {
+    baseMOptions.add(Number(m.toFixed(2)));
+  }
+  for (let m = 0.4; m <= 1.5001; m += 0.2) {
+    baseMOptions.add(Number(m.toFixed(2)));
+  }
+  const acidMList = Array.from(acidMOptions);
+  const baseMList = Array.from(baseMOptions);
+  let bestCandidate = null;
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const acidMl = acidMlOptions[rng.nextInt(0, acidMlOptions.length - 1)];
+    const acidM = acidMList[rng.nextInt(0, acidMList.length - 1)];
+    const baseM = baseMList[rng.nextInt(0, baseMList.length - 1)];
+    const baseTargetRaw = (acidM * acidMl) / baseM;
+    if (baseTargetRaw < 10 || baseTargetRaw > 200) continue;
+    const rounded = Math.round(baseTargetRaw);
+    const isInteger = Math.abs(baseTargetRaw - rounded) <= 0.02;
+    if (!isInteger) continue;
+    const candidate = {
+      acidMl,
+      acidM,
+      baseM,
+      baseTargetMl: rounded,
+    };
+    if (!bestCandidate) bestCandidate = candidate;
+    if (rounded % 5 === 0) {
+      bestCandidate = candidate;
+      break;
+    }
+  }
+  if (!bestCandidate) {
+    const acidMl = acidMlOptions[rng.nextInt(0, acidMlOptions.length - 1)];
+    const acidM = acidMList[rng.nextInt(0, acidMList.length - 1)];
+    const baseM = baseMList[rng.nextInt(0, baseMList.length - 1)];
+    const baseTargetRaw = clamp((acidM * acidMl) / baseM, 10, 200);
+    bestCandidate = {
+      acidMl,
+      acidM,
+      baseM,
+      baseTargetMl: Math.round(baseTargetRaw),
+    };
+  }
+  const tol = night <= 4 ? 5 : night <= 7 ? 4 : 3;
+  return {
+    type: "titration_transfer",
+    title: "MIX VALVE RATIO",
+    actionLabel: "Mix / Neutralize",
+    roomHintText: template.roomHintText,
+    solution: {
+      acidMl: bestCandidate.acidMl,
+      acidM: bestCandidate.acidM,
+      baseM: bestCandidate.baseM,
+      baseTargetMl: bestCandidate.baseTargetMl,
+      toleranceMl: tol,
+    },
+    state: {
+      selectedDoseMl: 5,
+      transferredMl: 0,
+      status: "idle",
+      lastMessage: "",
+      didTransfer: false,
+      overshot: false,
     },
   };
 }
@@ -11685,6 +11765,9 @@ function renderMiniGame() {
     case "dial_lock":
       renderDialLock(game);
       break;
+    case "titration_transfer":
+      renderTitrationTransfer(game);
+      break;
     case "titration_quick":
       renderTitrationQuick(game);
       break;
@@ -12435,6 +12518,257 @@ function submitTitrationQuick(game) {
   const { instanceState } = game;
   if (!instanceState.lastSuccess) return;
   handleMiniGameSuccess(game);
+}
+
+function computeTitrationColor(diff, tol) {
+  if (Math.abs(diff) <= tol) {
+    return { color: "rgba(245, 245, 245, 0.95)", label: "neutral" };
+  }
+  if (diff < 0) {
+    const nearNeutral = Math.abs(diff) <= tol * 2;
+    return {
+      color: nearNeutral ? "rgba(230, 120, 120, 0.85)" : "rgba(210, 70, 70, 0.9)",
+      label: "acidic",
+    };
+  }
+  const nearNeutral = diff <= tol * 2;
+  return {
+    color: nearNeutral ? "rgba(120, 170, 240, 0.85)" : "rgba(80, 130, 230, 0.9)",
+    label: "basic",
+  };
+}
+
+function evaluateTitrationTransfer(game, transferredMlOverride) {
+  const { instanceState, instanceSolution } = game;
+  const transferredMl = transferredMlOverride ?? instanceState.transferredMl;
+  const { baseTargetMl, toleranceMl } = instanceSolution;
+  const diff = transferredMl - baseTargetMl;
+  if (!instanceState.didTransfer && transferredMl <= 0) {
+    return {
+      status: "idle",
+      message: "Still acidic (red). Add more base.",
+      diff,
+      overshot: false,
+    };
+  }
+  if (instanceState.overshot || diff > toleranceMl * 3 || transferredMl >= baseTargetMl + toleranceMl * 3) {
+    return {
+      status: "overshot",
+      message: "Overshot. Sample turned basic. Batch ruined — reset.",
+      diff,
+      overshot: true,
+    };
+  }
+  if (Math.abs(diff) <= toleranceMl) {
+    return {
+      status: "neutral",
+      message: "Neutral (clear). Latch solvent ready.",
+      diff,
+      overshot: false,
+    };
+  }
+  if (diff < 0) {
+    if (diff >= -toleranceMl * 2) {
+      return {
+        status: "acidic",
+        message: "Close… one small dose might do it.",
+        diff,
+        overshot: false,
+      };
+    }
+    return {
+      status: "acidic",
+      message: "Still acidic (red). Add more base.",
+      diff,
+      overshot: false,
+    };
+  }
+  return {
+    status: "basic",
+    message: "Too much base (blue). You’re past neutral.",
+    diff,
+    overshot: false,
+  };
+}
+
+function renderTitrationTransfer(game) {
+  const { instanceState, instanceSolution } = game;
+  const { acidMl, acidM, baseM, baseTargetMl, toleranceMl } = instanceSolution;
+  dom.miniGameText.innerHTML = `
+    Neutralize the acid sample by transferring base.<br>
+    <span style="font-size:12px">M1·V1 = M2·V2</span><br>
+    <span style="font-size:12px">Acid: ${acidMl} mL @ ${acidM.toFixed(2)} M</span><br>
+    <span style="font-size:12px">Base: ${baseM.toFixed(2)} M</span>
+  `;
+  setMiniGameCancelVisibility({ showBottomBar: false, showInline: true });
+
+  const evaluation = evaluateTitrationTransfer(game);
+  instanceState.status = evaluation.status;
+  instanceState.lastMessage = evaluation.message;
+  if (evaluation.overshot) {
+    instanceState.overshot = true;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "grid";
+  wrapper.style.gap = "10px";
+
+  const beakerRow = document.createElement("div");
+  beakerRow.style.display = "flex";
+  beakerRow.style.gap = "12px";
+  beakerRow.style.alignItems = "flex-end";
+  beakerRow.style.justifyContent = "space-between";
+
+  const makeBeaker = ({ label, color, fillPercent }) => {
+    const container = document.createElement("div");
+    container.style.display = "grid";
+    container.style.gap = "6px";
+    container.style.flex = "1";
+
+    const labelEl = document.createElement("div");
+    labelEl.textContent = label;
+    labelEl.style.fontSize = "12px";
+    labelEl.style.fontWeight = "700";
+    labelEl.style.textAlign = "center";
+
+    const beaker = document.createElement("div");
+    beaker.className = "chem-beaker";
+    beaker.style.position = "relative";
+    beaker.style.height = "120px";
+    beaker.style.border = "1px solid rgba(255,255,255,0.45)";
+    beaker.style.background = "rgba(12, 16, 24, 0.75)";
+    beaker.style.borderRadius = "6px";
+    beaker.style.overflow = "hidden";
+    beaker.style.boxShadow = "0 0 8px rgba(120, 170, 255, 0.18)";
+
+    const fill = document.createElement("div");
+    fill.style.position = "absolute";
+    fill.style.left = "0";
+    fill.style.right = "0";
+    fill.style.bottom = "0";
+    fill.style.height = `${fillPercent}%`;
+    fill.style.background = color;
+    fill.style.boxShadow = "0 0 12px rgba(255,255,255,0.2)";
+    beaker.appendChild(fill);
+
+    container.appendChild(labelEl);
+    container.appendChild(beaker);
+    return container;
+  };
+
+  const transferCapMl = 200;
+  const transferredMl = instanceState.transferredMl ?? 0;
+  const sampleFillPercent = clamp(transferredMl / transferCapMl, 0, 1) * 100;
+  const diff = transferredMl - baseTargetMl;
+  const colorInfo = computeTitrationColor(diff, toleranceMl);
+  const sampleColor = instanceState.overshot ? "rgba(40, 90, 210, 0.95)" : colorInfo.color;
+
+  const baseBeaker = makeBeaker({
+    label: "BASE (BLUE)",
+    color: "rgba(70, 140, 230, 0.9)",
+    fillPercent: 75,
+  });
+  const sampleBeaker = makeBeaker({
+    label: "SAMPLE",
+    color: sampleColor,
+    fillPercent: sampleFillPercent,
+  });
+
+  beakerRow.appendChild(baseBeaker);
+  beakerRow.appendChild(sampleBeaker);
+
+  const status = document.createElement("div");
+  status.textContent = instanceState.lastMessage;
+  status.style.fontSize = "16px";
+  status.style.fontWeight = "700";
+  status.style.textAlign = "center";
+
+  const readout = document.createElement("div");
+  readout.textContent = `Transferred: ${transferredMl} mL`;
+  readout.style.fontSize = "12px";
+  readout.style.textAlign = "center";
+
+  const doseRow = document.createElement("div");
+  doseRow.className = "btnRow";
+  doseRow.style.display = "flex";
+  doseRow.style.gap = "10px";
+  doseRow.style.flexWrap = "wrap";
+  [1, 5, 10].forEach((dose) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = `${dose} mL`;
+    if (instanceState.selectedDoseMl === dose) {
+      button.style.border = "1px solid rgba(140, 220, 255, 0.9)";
+      button.style.boxShadow = "0 0 10px rgba(140, 220, 255, 0.65)";
+      button.style.background = "rgba(40, 80, 120, 0.35)";
+    }
+    button.addEventListener("click", () => {
+      instanceState.selectedDoseMl = dose;
+      renderMiniGame();
+    });
+    doseRow.appendChild(button);
+  });
+
+  const transferButton = document.createElement("button");
+  transferButton.type = "button";
+  transferButton.textContent = "TRANSFER";
+  transferButton.disabled = instanceState.overshot;
+  transferButton.addEventListener("click", () => {
+    if (instanceState.overshot) return;
+    instanceState.transferredMl = clamp(
+      instanceState.transferredMl + instanceState.selectedDoseMl,
+      0,
+      250
+    );
+    instanceState.didTransfer = true;
+    const nextEval = evaluateTitrationTransfer(game, instanceState.transferredMl);
+    if (nextEval.overshot) {
+      instanceState.overshot = true;
+      instanceState.status = nextEval.status;
+      instanceState.lastMessage = nextEval.message;
+      renderMiniGame();
+      return;
+    }
+    if (nextEval.status === "neutral") {
+      instanceState.status = nextEval.status;
+      instanceState.lastMessage = nextEval.message;
+      handleMiniGameSuccess(game);
+      return;
+    }
+    instanceState.status = nextEval.status;
+    instanceState.lastMessage = nextEval.message;
+    renderMiniGame();
+  });
+
+  const resetButton = document.createElement("button");
+  resetButton.type = "button";
+  resetButton.textContent = "RESET";
+  resetButton.addEventListener("click", () => {
+    instanceState.selectedDoseMl = 5;
+    instanceState.transferredMl = 0;
+    instanceState.status = "idle";
+    instanceState.lastMessage = "";
+    instanceState.didTransfer = false;
+    instanceState.overshot = false;
+    renderMiniGame();
+  });
+
+  const cancelButton = document.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.textContent = "CANCEL";
+  cancelButton.addEventListener("click", cancelMiniGame);
+
+  const actionRow = makeBtnRow([transferButton, resetButton, cancelButton], { wrap: true });
+  actionRow.style.width = "100%";
+
+  wrapper.appendChild(beakerRow);
+  wrapper.appendChild(status);
+  wrapper.appendChild(readout);
+  wrapper.appendChild(doseRow);
+  wrapper.appendChild(actionRow);
+
+  dom.miniGameOptions.appendChild(wrapper);
+  setMiniGameSubmitButton({ visible: false });
 }
 
 function renderTitrationQuick(game) {
