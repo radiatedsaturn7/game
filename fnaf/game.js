@@ -336,10 +336,9 @@ const MINI_GAME_TEMPLATES = {
     id: "CIRCUIT_STABILIZE",
     title: "Circuit Stabilization",
     actionLabel: "Stabilize Door Coil",
-    type: "circuit_trace",
-    roomHintText: "Route power cleanly. No shorts.",
-    difficultyByNight: { nodeCount: 9, hotCount: 2, pathLength: 6 },
-    generate: generateCircuitTrace,
+    type: "circuit_stabilize_numeric",
+    roomHintText: "Stabilize the coil regulator.",
+    generate: generateCircuitStabilizeNumeric,
   },
   ALARM_CALIBRATION: {
     id: "ALARM_CALIBRATION",
@@ -386,11 +385,10 @@ const MINI_GAME_TEMPLATES = {
   CHEM_BALANCE: {
     id: "CHEM_BALANCE",
     title: "Mix Valve Ratio",
-    actionLabel: "Balance Coolant Mix",
-    type: "dial_lock",
-    roomHintText: "Align the valve stops in sequence.",
-    difficultyByNight: { tolerance: 2, pattern: ["L", "R", "L"] },
-    generate: generateDialLock,
+    actionLabel: "Mix Etchant Batch",
+    type: "titration_quick",
+    roomHintText: "Mix the etchant to spec.",
+    generate: generateTitrationQuick,
   },
   MECH_TOLERANCE: {
     id: "MECH_TOLERANCE",
@@ -428,7 +426,14 @@ const MINI_GAME_TEMPLATES = {
     actionLabel: "Use Flame-Saw",
     type: "boss_finish",
     roomHintText: "Stay on rhythm. Finish the cut.",
-    difficultyByNight: { heatBand: [0.62, 0.78], alignWindow: 0.08, cutWindow: 550 },
+    difficultyByNight: {
+      heatBand: [0.62, 0.78],
+      alignWindow: 0.08,
+      cutBand: [0.42, 0.62],
+      cutStrokesNeeded: 5,
+      cutTimeLimitMs: 6500,
+      driftPeriod: 2000,
+    },
     generate: generateBossFinish,
   },
 };
@@ -599,6 +604,99 @@ function generateCircuitTrace(rngSeed, night, template) {
   };
 }
 
+function generateCircuitStabilizeNumeric(rngSeed, night, template) {
+  const rng = createRng(rngSeed);
+  const tolerance = night < 5 ? 0.05 : 0.03;
+  const R_min = 5;
+  const R_max = 100;
+  let V = 12;
+  let I_target = 0.6;
+  let Pmax = 8;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    V = rng.nextInt(8, 18);
+    I_target = rng.nextInt(4, 12) / 10;
+    const P = V * I_target;
+    if (P > 11.2) continue;
+    const margin = rng.nextInt(1, 3);
+    Pmax = clamp(Math.round(P + margin), 6, 12);
+    const R_target = V / I_target;
+    if (R_target >= R_min && R_target <= R_max) {
+      break;
+    }
+  }
+  const R_target = V / I_target;
+  const R_selected = clamp(Math.round(R_target), R_min, R_max);
+  return {
+    state: {
+      R_selected,
+      R_initial: R_selected,
+      strikes: 0,
+    },
+    solution: {
+      V,
+      I_target,
+      tolerance,
+      Pmax,
+      R_min,
+      R_max,
+    },
+    ui: {
+      text: template.roomHintText,
+    },
+  };
+}
+
+function generateTitrationQuick(rngSeed, night, template) {
+  const rng = createRng(rngSeed);
+  const tolerancePct = night < 5 ? 5 : 3;
+  const variants = ["dilution", "neutralization"];
+  let variant = variants[rng.nextInt(0, variants.length - 1)];
+  let targetMl = 50;
+  let displayValues = {};
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    variant = variants[rng.nextInt(0, variants.length - 1)];
+    if (variant === "dilution") {
+      const C1 = rng.nextInt(10, 30) / 10;
+      const C2 = rng.nextInt(2, 10) / 10;
+      const V2 = rng.nextInt(50, 150) / 10 * 10;
+      const V1 = (C2 * V2) / C1;
+      if (V1 <= 0 || V1 > 200) continue;
+      if (Math.abs(V1 / 5 - Math.round(V1 / 5)) > 0.01) continue;
+      targetMl = Math.round(V1);
+      displayValues = { C1, C2, V2 };
+      break;
+    } else {
+      const M1 = rng.nextInt(5, 15) / 10;
+      const V1 = rng.nextInt(20, 60);
+      const M2 = rng.nextInt(5, 20) / 10;
+      const V2 = (M1 * V1) / M2;
+      if (V2 <= 0 || V2 > 200) continue;
+      if (Math.abs(V2 / 5 - Math.round(V2 / 5)) > 0.01) continue;
+      targetMl = Math.round(V2);
+      displayValues = { M1, V1, M2 };
+      break;
+    }
+  }
+  return {
+    state: {
+      mlSelected: clamp(targetMl, 0, 200),
+      mlPoured: null,
+      attempts: 0,
+      lastFeedback: "",
+      lastSuccess: false,
+    },
+    solution: {
+      targetMl,
+      tolerancePct,
+      variant,
+      displayValues,
+    },
+    ui: {
+      text: template.roomHintText,
+    },
+  };
+}
+
 function generatePatchDrag(rngSeed, night, template) {
   const rng = createRng(rngSeed);
   const difficulty = getMiniGameDifficulty(template, night);
@@ -631,6 +729,18 @@ function generatePatchDrag(rngSeed, night, template) {
       selectedTileId: null,
       initialCx,
       maxSteps,
+      sim: {
+        pc: 0,
+        cx: initialCx,
+        steps: 0,
+        halted: false,
+        status: "idle",
+        firstErrorIndex: null,
+        latch: 0,
+        failReason: null,
+      },
+      lastTestSuccess: false,
+      simMessage: "",
     },
     solution: {
       initialCx,
@@ -652,20 +762,28 @@ function generateBossFinish(rngSeed, night, template) {
     clamp(alignCenter - alignWindow / 2, 0.05, 0.95),
     clamp(alignCenter + alignWindow / 2, 0.05, 0.95),
   ];
+  const cutBand = difficulty.cutBand ?? [0.42, 0.62];
   return {
     state: {
       step: 1,
       heatHoldStart: null,
       holdReleased: false,
       alignmentStart: null,
-      cutClicks: 0,
       cutStart: null,
+      goodStrokes: 0,
+      missCount: 0,
+      cutFeedback: "",
+      cutPressureStart: null,
+      cutBandStart: null,
     },
     solution: {
       heatBand,
       alignBand,
       alignPeriod: 1400,
-      cutWindow: difficulty.cutWindow ?? 600,
+      cutBand,
+      cutStrokesNeeded: difficulty.cutStrokesNeeded ?? 5,
+      cutTimeLimitMs: difficulty.cutTimeLimitMs ?? 6500,
+      driftPeriod: difficulty.driftPeriod ?? 2000,
     },
     ui: {
       text: template.roomHintText,
@@ -11548,8 +11666,14 @@ function renderMiniGame() {
     case "dial_lock":
       renderDialLock(game);
       break;
+    case "titration_quick":
+      renderTitrationQuick(game);
+      break;
     case "circuit_trace":
       renderCircuitTrace(game);
+      break;
+    case "circuit_stabilize_numeric":
+      renderCircuitStabilizeNumeric(game);
       break;
     case "patch_drag":
       renderPatchDrag(game);
@@ -11607,6 +11731,27 @@ function getBossAlignmentPosition(game) {
   return (elapsed % instanceSolution.alignPeriod) / instanceSolution.alignPeriod;
 }
 
+function getBossCutPressure(game) {
+  const { instanceState } = game;
+  if (!instanceState.cutPressureStart) {
+    instanceState.cutPressureStart = performance.now();
+  }
+  const elapsed = performance.now() - instanceState.cutPressureStart;
+  return (Math.sin((elapsed / 1200) * Math.PI * 2) + 1) / 2;
+}
+
+function getBossCutBand(game) {
+  const { instanceState, instanceSolution } = game;
+  if (!instanceState.cutBandStart) {
+    instanceState.cutBandStart = performance.now();
+  }
+  const width = instanceSolution.cutBand[1] - instanceSolution.cutBand[0];
+  const elapsed = performance.now() - instanceState.cutBandStart;
+  const drift = Math.sin((elapsed / instanceSolution.driftPeriod) * Math.PI * 2) * 0.08;
+  const start = clamp(instanceSolution.cutBand[0] + drift, 0, 1 - width);
+  return [start, start + width];
+}
+
 function attemptSignalTunerLock(game) {
   const { instanceState, instanceSolution } = game;
   const position = getSignalSweepPosition(game);
@@ -11647,7 +11792,8 @@ function renderSignalTuner(game) {
     instanceState.phase === "decrypt"
       ? `Decrypt locks ${instanceState.decryptIndex + 1}/${instanceSolution.decryptWindows.length}`
       : `Sweep locks ${instanceState.progress}/${instanceSolution.locksNeeded}`;
-  dom.miniGameText.textContent = `${game.roomHintText} ${status}`;
+  dom.miniGameText.innerHTML =
+    `Keep the sweep in the safe band, then lock each window.<br>${status}`;
 
   const wrapper = document.createElement("div");
   wrapper.className = "mini-game-signal";
@@ -11710,17 +11856,22 @@ function getDialDistance(a, b) {
   return Math.min(diff, 100 - diff);
 }
 
+function isTouchDevice() {
+  return Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+}
+
 function confirmDialLockStep(game) {
   const { instanceState, instanceSolution } = game;
   const { sequence, pattern, tolerance } = instanceSolution;
   const step = instanceState.stepIndex;
   const requiredDirection = pattern[step];
   const target = sequence[step];
+  const adjustedTolerance = isTouchDevice() ? tolerance + 1 : tolerance;
   if (!instanceState.lastDirection || instanceState.lastDirection !== requiredDirection) {
     handleMiniGameFailure(game);
     return;
   }
-  if (getDialDistance(instanceState.value, target) > tolerance) {
+  if (getDialDistance(instanceState.value, target) > adjustedTolerance) {
     handleMiniGameFailure(game);
     return;
   }
@@ -11737,7 +11888,8 @@ function renderDialLock(game) {
   const step = instanceState.stepIndex;
   const target = instanceSolution.sequence[step];
   const direction = instanceSolution.pattern[step];
-  dom.miniGameText.textContent = `${game.roomHintText} Step ${step + 1}/3: Turn ${direction} to ${target}.`;
+  dom.miniGameText.innerHTML =
+    `Align the valve stops in order. Step ${step + 1}/3: turn ${direction} to ${target}.<br>Use the dial or buttons, then confirm.`;
 
   const wrapper = document.createElement("div");
   wrapper.className = "mini-game-dial";
@@ -11772,6 +11924,16 @@ function renderDialLock(game) {
   };
   updatePointer();
 
+  const updateDialValue = (nextValue) => {
+    if (nextValue === instanceState.value) return;
+    instanceState.lastDirection = nextValue > instanceState.value ? "R" : "L";
+    instanceState.value = ((nextValue % 100) + 100) % 100;
+    updatePointer();
+    if (slider) {
+      slider.value = String(instanceState.value);
+    }
+  };
+
   const handlePointerDown = (event) => {
     event.preventDefault();
     instanceState.dragStartX = event.clientX;
@@ -11801,6 +11963,35 @@ function renderDialLock(game) {
   dial.appendChild(pointer);
   wrapper.appendChild(dial);
   wrapper.appendChild(readout);
+
+  const controlRow = document.createElement("div");
+  controlRow.style.display = "flex";
+  controlRow.style.flexWrap = "wrap";
+  controlRow.style.gap = "6px";
+  [1, 5].forEach((stepSize) => {
+    const down = document.createElement("button");
+    down.type = "button";
+    down.textContent = `-${stepSize}`;
+    down.addEventListener("click", () => updateDialValue(instanceState.value - stepSize));
+    const up = document.createElement("button");
+    up.type = "button";
+    up.textContent = `+${stepSize}`;
+    up.addEventListener("click", () => updateDialValue(instanceState.value + stepSize));
+    controlRow.appendChild(down);
+    controlRow.appendChild(up);
+  });
+
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = "0";
+  slider.max = "99";
+  slider.value = String(instanceState.value);
+  slider.addEventListener("input", (event) => {
+    updateDialValue(Number(event.target.value));
+  });
+
+  wrapper.appendChild(controlRow);
+  wrapper.appendChild(slider);
   dom.miniGameOptions.appendChild(wrapper);
 
   setMiniGameSubmitButton({ label: "Confirm Step", enabled: true, visible: true });
@@ -11837,7 +12028,9 @@ function handleCircuitNodeClick(nodeId) {
 }
 
 function undoCircuitSegment(event) {
-  event.preventDefault();
+  if (event?.preventDefault) {
+    event.preventDefault();
+  }
   const game = state.miniGame;
   if (!game) return;
   const selectedPath = game.instanceState.selectedPath;
@@ -11846,9 +12039,17 @@ function undoCircuitSegment(event) {
   renderMiniGame();
 }
 
+function resetCircuitTrace() {
+  const game = state.miniGame;
+  if (!game) return;
+  game.instanceState.selectedPath = [game.instanceSolution.source];
+  renderMiniGame();
+}
+
 function renderCircuitTrace(game) {
   const { instanceState, instanceSolution } = game;
-  dom.miniGameText.textContent = `${game.roomHintText} Right click to undo the last segment.`;
+  dom.miniGameText.innerHTML =
+    "Trace power from SRC to COIL without touching hot nodes.<br>Tap nodes to trace. Undo/Reset below.";
   const board = document.createElement("div");
   board.className = "circuit-board";
   board.style.position = "relative";
@@ -11856,7 +12057,6 @@ function renderCircuitTrace(game) {
   board.style.height = "240px";
   board.style.border = "1px solid rgba(255,255,255,0.3)";
   board.style.background = "rgba(12, 18, 24, 0.65)";
-  board.addEventListener("contextmenu", undoCircuitSegment);
 
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("width", "320");
@@ -11903,7 +12103,333 @@ function renderCircuitTrace(game) {
     board.appendChild(button);
   });
 
+  const controls = document.createElement("div");
+  controls.style.display = "flex";
+  controls.style.gap = "8px";
+  controls.style.justifyContent = "center";
+
+  const undoButton = document.createElement("button");
+  undoButton.type = "button";
+  undoButton.textContent = "UNDO";
+  undoButton.style.padding = "6px 12px";
+  undoButton.addEventListener("click", undoCircuitSegment);
+
+  const resetButton = document.createElement("button");
+  resetButton.type = "button";
+  resetButton.textContent = "RESET";
+  resetButton.style.padding = "6px 12px";
+  resetButton.addEventListener("click", resetCircuitTrace);
+
+  controls.appendChild(undoButton);
+  controls.appendChild(resetButton);
+
   dom.miniGameOptions.appendChild(board);
+  dom.miniGameOptions.appendChild(controls);
+  setMiniGameSubmitButton({ visible: false });
+}
+
+function submitCircuitStabilizeNumeric(game) {
+  const { instanceState, instanceSolution } = game;
+  const { V, I_target, tolerance, Pmax } = instanceSolution;
+  const R = instanceState.R_selected;
+  const Icalc = V / R;
+  const Pcalc = (V * V) / R;
+  if (Pcalc > Pmax) {
+    instanceState.strikes += 1;
+    pushStatus("Overheat warning. Increase resistance.", 3);
+  } else if (Math.abs(Icalc - I_target) > tolerance) {
+    instanceState.strikes += 1;
+    pushStatus("Current is off target. Adjust R.", 3);
+  } else {
+    handleMiniGameSuccess(game);
+    return;
+  }
+  if (instanceState.strikes >= 3) {
+    handleMiniGameFailure(game);
+    return;
+  }
+  renderMiniGame();
+}
+
+function renderCircuitStabilizeNumeric(game) {
+  const { instanceState, instanceSolution } = game;
+  const { V, I_target, tolerance, Pmax, R_min, R_max } = instanceSolution;
+  dom.miniGameText.innerHTML =
+    "Set resistor so current hits target without overheating.<br>I = V/R";
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "grid";
+  wrapper.style.gap = "10px";
+  wrapper.style.justifyItems = "center";
+
+  const stats = document.createElement("div");
+  stats.textContent = `Supply V=${V}V | Target I=${I_target.toFixed(2)}A | Pmax=${Pmax}W`;
+
+  const resistorReadout = document.createElement("div");
+  resistorReadout.textContent = `Resistor: ${instanceState.R_selected}Ω`;
+
+  const stepRow = document.createElement("div");
+  stepRow.style.display = "flex";
+  stepRow.style.flexWrap = "wrap";
+  stepRow.style.gap = "6px";
+  stepRow.style.justifyContent = "center";
+
+  const adjustResistor = (delta) => {
+    instanceState.R_selected = clamp(instanceState.R_selected + delta, R_min, R_max);
+    renderMiniGame();
+  };
+
+  [1, 5, 10].forEach((step) => {
+    const down = document.createElement("button");
+    down.type = "button";
+    down.textContent = `-${step}Ω`;
+    down.addEventListener("click", () => adjustResistor(-step));
+    const up = document.createElement("button");
+    up.type = "button";
+    up.textContent = `+${step}Ω`;
+    up.addEventListener("click", () => adjustResistor(step));
+    stepRow.appendChild(down);
+    stepRow.appendChild(up);
+  });
+
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = String(R_min);
+  slider.max = String(R_max);
+  slider.value = String(instanceState.R_selected);
+  slider.addEventListener("input", (event) => {
+    const value = Number(event.target.value);
+    instanceState.R_selected = value;
+    renderMiniGame();
+  });
+
+  const Icalc = V / instanceState.R_selected;
+  const Pcalc = (V * V) / instanceState.R_selected;
+  const currentReadout = document.createElement("div");
+  currentReadout.textContent = `Icalc: ${Icalc.toFixed(2)}A`;
+  const powerReadout = document.createElement("div");
+  powerReadout.textContent = `Pcalc: ${Pcalc.toFixed(2)}W`;
+
+  const meter = document.createElement("div");
+  meter.style.position = "relative";
+  meter.style.width = "240px";
+  meter.style.height = "12px";
+  meter.style.border = "1px solid rgba(255,255,255,0.4)";
+  meter.style.background = "rgba(10, 15, 20, 0.6)";
+  const meterFill = document.createElement("div");
+  meterFill.style.position = "absolute";
+  meterFill.style.left = "0";
+  meterFill.style.top = "0";
+  meterFill.style.bottom = "0";
+  let stability = 0;
+  if (Pcalc <= Pmax) {
+    stability = clamp(1 - Math.abs(Icalc - I_target) / tolerance, 0, 1);
+  }
+  meterFill.style.width = `${Math.round(stability * 100)}%`;
+  meterFill.style.background =
+    Pcalc > Pmax
+      ? "rgba(200, 80, 80, 0.8)"
+      : stability >= 1
+        ? "rgba(80, 200, 120, 0.85)"
+        : "rgba(200, 180, 80, 0.8)";
+  meter.appendChild(meterFill);
+
+  const strikeText = document.createElement("div");
+  strikeText.textContent = `Strikes: ${instanceState.strikes}/3`;
+
+  const resetRow = document.createElement("div");
+  const resetButton = document.createElement("button");
+  resetButton.type = "button";
+  resetButton.textContent = "RESET";
+  resetButton.addEventListener("click", () => {
+    instanceState.R_selected = instanceState.R_initial;
+    renderMiniGame();
+  });
+  resetRow.appendChild(resetButton);
+
+  wrapper.appendChild(stats);
+  wrapper.appendChild(resistorReadout);
+  wrapper.appendChild(stepRow);
+  wrapper.appendChild(slider);
+  wrapper.appendChild(currentReadout);
+  wrapper.appendChild(powerReadout);
+  wrapper.appendChild(meter);
+  wrapper.appendChild(strikeText);
+  wrapper.appendChild(resetRow);
+
+  dom.miniGameOptions.appendChild(wrapper);
+  setMiniGameSubmitButton({ label: "Apply Resistor", enabled: true, visible: true });
+}
+
+function submitTitrationQuick(game) {
+  const { instanceState } = game;
+  if (!instanceState.lastSuccess) return;
+  handleMiniGameSuccess(game);
+}
+
+function renderTitrationQuick(game) {
+  const { instanceState, instanceSolution } = game;
+  const { variant, displayValues, targetMl, tolerancePct } = instanceSolution;
+  dom.miniGameText.innerHTML =
+    "Dial the pump until the mix hits the target strength.<br>C1V1 = C2V2";
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "grid";
+  wrapper.style.gap = "10px";
+
+  const description = document.createElement("div");
+  if (variant === "dilution") {
+    description.textContent = `Need ${displayValues.C2.toFixed(2)}M, final volume ${displayValues.V2} mL. Stock acid ${displayValues.C1.toFixed(
+      2
+    )}M.`;
+  } else {
+    description.textContent = `Neutralize ${displayValues.V1} mL of ${displayValues.M1.toFixed(
+      2
+    )}M acid with ${displayValues.M2.toFixed(2)}M base.`;
+  }
+
+  const equation = document.createElement("div");
+  equation.style.fontSize = "12px";
+  equation.innerHTML =
+    variant === "dilution"
+      ? "Equation: C1·<strong>V1</strong> = C2·V2"
+      : "Equation: M1·V1 = M2·<strong>V2</strong>";
+
+  const beakerRow = document.createElement("div");
+  beakerRow.style.display = "flex";
+  beakerRow.style.gap = "12px";
+
+  const beaker = document.createElement("div");
+  beaker.style.position = "relative";
+  beaker.style.width = "90px";
+  beaker.style.height = "120px";
+  beaker.style.border = "1px solid rgba(255,255,255,0.4)";
+  beaker.style.background = "rgba(12, 18, 24, 0.6)";
+  const fill = document.createElement("div");
+  fill.style.position = "absolute";
+  fill.style.left = "0";
+  fill.style.right = "0";
+  fill.style.bottom = "0";
+  fill.style.background = "rgba(80, 160, 220, 0.7)";
+  fill.style.height = "0%";
+  beaker.appendChild(fill);
+
+  const beakerLabel = document.createElement("div");
+  beakerLabel.textContent = `Poured: ${instanceState.mlPoured ?? 0} mL`;
+
+  const indicator = document.createElement("div");
+  indicator.textContent = `Pump: ${instanceState.mlSelected} mL`;
+
+  const setFillLevel = (ml) => {
+    const percent = clamp(ml / 200, 0, 1) * 100;
+    fill.style.height = `${percent}%`;
+    beakerLabel.textContent = `Poured: ${ml} mL`;
+  };
+  if (instanceState.mlPoured !== null) {
+    setFillLevel(instanceState.mlPoured);
+  }
+
+  const pumpRow = document.createElement("div");
+  pumpRow.style.display = "flex";
+  pumpRow.style.flexWrap = "wrap";
+  pumpRow.style.gap = "6px";
+
+  const adjustPump = (delta) => {
+    instanceState.mlSelected = clamp(instanceState.mlSelected + delta, 0, 200);
+    instanceState.lastSuccess = false;
+    renderMiniGame();
+  };
+
+  [5, 10].forEach((step) => {
+    const down = document.createElement("button");
+    down.type = "button";
+    down.textContent = `-${step} mL`;
+    down.addEventListener("click", () => adjustPump(-step));
+    const up = document.createElement("button");
+    up.type = "button";
+    up.textContent = `+${step} mL`;
+    up.addEventListener("click", () => adjustPump(step));
+    pumpRow.appendChild(down);
+    pumpRow.appendChild(up);
+  });
+
+  const slider = document.createElement("input");
+  slider.type = "range";
+  slider.min = "0";
+  slider.max = "200";
+  slider.value = String(instanceState.mlSelected);
+  slider.addEventListener("input", (event) => {
+    instanceState.mlSelected = Number(event.target.value);
+    instanceState.lastSuccess = false;
+    renderMiniGame();
+  });
+
+  const feedback = document.createElement("div");
+  feedback.textContent = instanceState.lastFeedback || "Test the mix to check strength.";
+
+  const actionRow = document.createElement("div");
+  actionRow.style.display = "flex";
+  actionRow.style.gap = "8px";
+  actionRow.style.flexWrap = "wrap";
+
+  const pourButton = document.createElement("button");
+  pourButton.type = "button";
+  pourButton.textContent = "Pour";
+  pourButton.addEventListener("click", () => {
+    instanceState.mlPoured = instanceState.mlSelected;
+    instanceState.lastSuccess = false;
+    setFillLevel(instanceState.mlPoured);
+  });
+
+  const testButton = document.createElement("button");
+  testButton.type = "button";
+  testButton.textContent = "TEST MIX";
+  testButton.addEventListener("click", () => {
+    const poured = instanceState.mlPoured ?? instanceState.mlSelected;
+    const diffPct = Math.abs(poured - targetMl) / targetMl * 100;
+    if (diffPct <= tolerancePct) {
+      instanceState.lastFeedback = `Within ${tolerancePct}% — mix ready.`;
+      instanceState.lastSuccess = true;
+    } else {
+      const isHigh = poured > targetMl;
+      instanceState.lastFeedback = `${isHigh ? "Too strong" : "Too weak"} (${Math.round(
+        diffPct
+      )}% off)`;
+      instanceState.attempts += 1;
+      instanceState.lastSuccess = false;
+      if (instanceState.attempts >= 3) {
+        handleMiniGameFailure(game);
+        return;
+      }
+    }
+    renderMiniGame();
+  });
+
+  const commitButton = document.createElement("button");
+  commitButton.type = "button";
+  commitButton.textContent = "COMMIT MIX";
+  commitButton.disabled = !instanceState.lastSuccess;
+  commitButton.addEventListener("click", () => {
+    submitTitrationQuick(game);
+  });
+
+  actionRow.appendChild(pourButton);
+  actionRow.appendChild(testButton);
+  actionRow.appendChild(commitButton);
+
+  beakerRow.appendChild(beaker);
+
+  wrapper.appendChild(description);
+  wrapper.appendChild(equation);
+  wrapper.appendChild(beakerRow);
+  wrapper.appendChild(beakerLabel);
+  wrapper.appendChild(indicator);
+  wrapper.appendChild(pumpRow);
+  wrapper.appendChild(slider);
+  wrapper.appendChild(feedback);
+  wrapper.appendChild(actionRow);
+
+  dom.miniGameOptions.appendChild(wrapper);
   setMiniGameSubmitButton({ visible: false });
 }
 
@@ -11923,6 +12449,8 @@ function placePatchTile(tileId, slotIndex) {
   const { slots } = game.instanceState;
   slots[slotIndex] = tileId;
   game.instanceState.selectedTileId = null;
+  resetPatchSim(game);
+  game.instanceState.simMessage = "";
   renderMiniGame();
 }
 
@@ -11930,6 +12458,8 @@ function clearPatchSlot(slotIndex) {
   const game = state.miniGame;
   if (!game) return;
   game.instanceState.slots[slotIndex] = null;
+  resetPatchSim(game);
+  game.instanceState.simMessage = "";
   renderMiniGame();
 }
 
@@ -11955,60 +12485,203 @@ function handlePatchSlotDrop(event) {
   placePatchTile(tileId, slotIndex);
 }
 
-function submitPatchDrag(game) {
-  const { tiles, slots, initialCx, maxSteps } = game.instanceState;
-  if (slots.some((slot) => !slot)) return;
-  const program = slots.map((slot) => tiles.find((tile) => tile.id === slot)?.op ?? "NOP");
-  let cx = initialCx;
-  let pc = 0;
-  for (let step = 0; step < maxSteps; step += 1) {
-    const op = program[pc];
-    switch (op) {
-      case "DEC":
-        cx -= 1;
-        pc += 1;
-        break;
-      case "INC":
-        cx += 1;
-        pc += 1;
-        break;
-      case "JNZ":
-        pc = cx !== 0 ? 0 : pc + 1;
-        break;
-      case "RET":
-        if (cx === 0) {
-          handleMiniGameSuccess(game);
-          return;
-        }
-        handleMiniGameFailure(game);
-        return;
-      case "ADD":
-        cx += 2;
-        pc += 1;
-        break;
-      case "XOR":
-        cx = 0;
-        pc += 1;
-        break;
-      default:
-        pc += 1;
-        break;
-    }
-    if (pc >= program.length) {
-      handleMiniGameFailure(game);
-      return;
-    }
+function getPatchProgram(game) {
+  const { tiles, slots } = game.instanceState;
+  return slots.map((slot) => tiles.find((tile) => tile.id === slot)?.op ?? "NOP");
+}
+
+function resetPatchSim(game) {
+  const { initialCx } = game.instanceState;
+  game.instanceState.sim = {
+    pc: 0,
+    cx: initialCx,
+    steps: 0,
+    halted: false,
+    status: "idle",
+    firstErrorIndex: null,
+    latch: 0,
+    failReason: null,
+  };
+  game.instanceState.lastTestSuccess = false;
+  game.instanceState.simMessage = "";
+}
+
+function updatePatchLatch(sim, prevCx, prevPc, nextCx, nextPc) {
+  let latch = sim.latch;
+  const towardZero = Math.abs(nextCx) < Math.abs(prevCx);
+  if (towardZero && nextPc !== prevPc) {
+    latch += 10;
+  } else if (Math.abs(nextCx) > Math.abs(prevCx)) {
+    latch -= 8;
+  } else if (nextPc === prevPc) {
+    latch -= 6;
+  } else {
+    latch += 3;
   }
-  handleMiniGameFailure(game);
+  sim.latch = clamp(latch, 0, 100);
+}
+
+function stepPatchSim(game) {
+  const { sim, maxSteps } = game.instanceState;
+  const program = getPatchProgram(game);
+  if (sim.halted) return { ok: false, reason: "halted" };
+  if (sim.pc < 0 || sim.pc >= program.length) {
+    sim.halted = true;
+    sim.status = "fail";
+    sim.failReason = "ran_off_end";
+    sim.firstErrorIndex ??= clamp(sim.pc, 0, program.length - 1);
+    return { ok: false, reason: "ran_off" };
+  }
+  if (sim.steps >= maxSteps) {
+    sim.halted = true;
+    sim.status = "fail";
+    sim.failReason = "loop";
+    sim.firstErrorIndex ??= sim.pc;
+    return { ok: false, reason: "loop" };
+  }
+  const op = program[sim.pc];
+  const prevCx = sim.cx;
+  const prevPc = sim.pc;
+  let nextPc = sim.pc;
+  let nextCx = sim.cx;
+  let halted = false;
+  let status = "running";
+  switch (op) {
+    case "DEC":
+      nextCx -= 1;
+      nextPc += 1;
+      break;
+    case "INC":
+      nextCx += 1;
+      nextPc += 1;
+      break;
+    case "XOR":
+      nextCx = 0;
+      nextPc += 1;
+      break;
+    case "ADD":
+      nextCx += 2;
+      nextPc += 1;
+      break;
+    case "JNZ":
+      nextPc = nextCx !== 0 ? 0 : nextPc + 1;
+      break;
+    case "RET":
+      if (nextCx === 0) {
+        halted = true;
+        status = "success";
+      } else {
+        halted = true;
+        status = "fail";
+        sim.failReason = "ret_fail";
+        sim.firstErrorIndex ??= sim.pc;
+      }
+      break;
+    default:
+      nextPc += 1;
+      break;
+  }
+  sim.steps += 1;
+  sim.pc = nextPc;
+  sim.cx = nextCx;
+  updatePatchLatch(sim, prevCx, prevPc, nextCx, nextPc);
+
+  if (!halted && nextPc >= program.length) {
+    halted = true;
+    status = "fail";
+    sim.failReason = "ran_off_end";
+    sim.firstErrorIndex ??= clamp(prevPc, 0, program.length - 1);
+  }
+  sim.halted = halted;
+  sim.status = status;
+  return { ok: status === "success", reason: status };
+}
+
+function runPatchSim(game, maxStepsOverride) {
+  const { sim } = game.instanceState;
+  const limit = maxStepsOverride ?? game.instanceState.maxSteps;
+  while (!sim.halted && sim.steps < limit) {
+    const result = stepPatchSim(game);
+    if (result.reason === "loop") break;
+  }
+  return sim.status;
+}
+
+function submitPatchDrag(game) {
+  if (game.instanceState.slots.some((slot) => !slot)) return;
+  if (!game.instanceState.lastTestSuccess) return;
+  resetPatchSim(game);
+  const status = runPatchSim(game);
+  if (status === "success") {
+    handleMiniGameSuccess(game);
+  } else {
+    handleMiniGameFailure(game);
+  }
 }
 
 function renderPatchDrag(game) {
-  const { tiles, slots, selectedTileId, initialCx } = game.instanceState;
-  dom.miniGameText.textContent = `${game.roomHintText} CX=${initialCx}.`;
+  const { tiles, slots, selectedTileId, initialCx, sim } = game.instanceState;
+  dom.miniGameText.innerHTML =
+    "Patch the loop so CX returns to 0 and unlocks the latch.<br>Step/Test to see what the program does.";
   const board = document.createElement("div");
   board.className = "patch-board";
   board.style.display = "grid";
   board.style.gap = "10px";
+
+  const controls = document.createElement("div");
+  controls.style.display = "flex";
+  controls.style.gap = "8px";
+  controls.style.flexWrap = "wrap";
+
+  const resetButton = document.createElement("button");
+  resetButton.type = "button";
+  resetButton.textContent = "RESET";
+  resetButton.addEventListener("click", () => {
+    resetPatchSim(game);
+    game.instanceState.simMessage = "";
+    renderMiniGame();
+  });
+
+  const stepButton = document.createElement("button");
+  stepButton.type = "button";
+  stepButton.textContent = "STEP";
+  stepButton.addEventListener("click", () => {
+    stepPatchSim(game);
+    const simState = game.instanceState.sim;
+    game.instanceState.simMessage = `Latch: ${Math.round(simState.latch)}% — CX=${simState.cx}`;
+    renderMiniGame();
+  });
+
+  const testButton = document.createElement("button");
+  testButton.type = "button";
+  testButton.textContent = "TEST";
+  testButton.addEventListener("click", () => {
+    resetPatchSim(game);
+    const status = runPatchSim(game);
+    const simState = game.instanceState.sim;
+    if (status === "success") {
+      game.instanceState.lastTestSuccess = true;
+      game.instanceState.simMessage = "Latch: 100% — door unlock sequence valid.";
+    } else {
+      game.instanceState.lastTestSuccess = false;
+      const label = simState.failReason === "loop" ? "looping" : "stalled";
+      game.instanceState.simMessage = `Latch: ${Math.round(
+        simState.latch
+      )}% — ${label} (CX=${simState.cx}).`;
+    }
+    renderMiniGame();
+  });
+
+  const commitButton = document.createElement("button");
+  commitButton.type = "button";
+  commitButton.textContent = "COMMIT PATCH";
+  commitButton.disabled = !game.instanceState.lastTestSuccess || slots.some((slot) => !slot);
+  commitButton.addEventListener("click", () => submitPatchDrag(game));
+
+  controls.appendChild(resetButton);
+  controls.appendChild(stepButton);
+  controls.appendChild(testButton);
+  controls.appendChild(commitButton);
 
   const slotsRow = document.createElement("div");
   slotsRow.style.display = "grid";
@@ -12025,6 +12698,12 @@ function renderPatchDrag(game) {
     slotEl.style.alignItems = "center";
     slotEl.style.justifyContent = "center";
     slotEl.style.background = "rgba(12, 18, 24, 0.5)";
+    if (!sim.halted && sim.pc === index) {
+      slotEl.style.outline = "2px solid rgba(120, 200, 240, 0.8)";
+    }
+    if (sim.firstErrorIndex === index) {
+      slotEl.style.outline = "2px solid rgba(220, 80, 80, 0.9)";
+    }
     slotEl.addEventListener("click", handlePatchSlotClick);
     slotEl.addEventListener("dragover", (event) => event.preventDefault());
     slotEl.addEventListener("drop", handlePatchSlotDrop);
@@ -12065,20 +12744,40 @@ function renderPatchDrag(game) {
     tray.appendChild(tileEl);
   });
 
+  const outputPanel = document.createElement("div");
+  outputPanel.style.display = "grid";
+  outputPanel.style.gap = "4px";
+  outputPanel.style.fontSize = "12px";
+  outputPanel.textContent = `PC=${sim.pc} | CX=${sim.cx} | Steps=${sim.steps} | Latch=${Math.round(
+    sim.latch
+  )}%`;
+
+  const simMessage = document.createElement("div");
+  simMessage.style.fontSize = "12px";
+  simMessage.textContent = game.instanceState.simMessage || `Start CX=${initialCx}.`;
+
+  board.appendChild(controls);
   board.appendChild(slotsRow);
   board.appendChild(tray);
+  board.appendChild(outputPanel);
+  board.appendChild(simMessage);
   dom.miniGameOptions.appendChild(board);
 
-  setMiniGameSubmitButton({
-    label: "Deploy Patch",
-    enabled: !slots.some((slot) => !slot),
-    visible: true,
-  });
+  setMiniGameSubmitButton({ visible: false });
 }
 
 function renderBossFinish(game) {
   const { instanceState, instanceSolution } = game;
-  dom.miniGameText.textContent = `Step ${instanceState.step}/3: ${game.roomHintText}`;
+  if (instanceState.step === 1) {
+    dom.miniGameText.innerHTML =
+      "Step 1/3: Build heat and release inside the green band.<br>Hold to heat, release to lock.";
+  } else if (instanceState.step === 2) {
+    dom.miniGameText.innerHTML =
+      "Step 2/3: Align the saw with the green zone.<br>Tap lock when the marker is inside.";
+  } else {
+    dom.miniGameText.innerHTML =
+      "Step 3/3: Apply steady pressure in the green band.<br>Land 5 good strokes before time runs out.";
+  }
 
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";
@@ -12182,29 +12881,90 @@ function renderBossFinish(game) {
     return;
   }
 
-  const rhythm = document.createElement("div");
-  rhythm.textContent = "Click 3 times in rhythm to cut.";
+  const bar = document.createElement("div");
+  bar.style.position = "relative";
+  bar.style.height = "16px";
+  bar.style.border = "1px solid rgba(255,255,255,0.4)";
+  bar.style.background = "rgba(10, 15, 20, 0.6)";
+  const band = document.createElement("div");
+  band.style.position = "absolute";
+  band.style.top = "0";
+  band.style.bottom = "0";
+  band.style.background = "rgba(80, 200, 120, 0.5)";
+  const marker = document.createElement("div");
+  marker.style.position = "absolute";
+  marker.style.top = "-3px";
+  marker.style.width = "4px";
+  marker.style.height = "22px";
+  marker.style.background = "rgba(220, 220, 220, 0.9)";
+  bar.appendChild(band);
+  bar.appendChild(marker);
+
+  const progress = document.createElement("div");
+  progress.textContent = `Strokes: ${instanceState.goodStrokes}/${instanceSolution.cutStrokesNeeded}`;
+
+  const feedback = document.createElement("div");
+  feedback.textContent = instanceState.cutFeedback || "Tap when pressure is inside the green band.";
+
   const button = document.createElement("button");
-  button.textContent = "Cut";
-  button.addEventListener("click", () => {
+  button.textContent = "Cut Stroke";
+  button.addEventListener("pointerdown", () => {
     if (!instanceState.cutStart) {
       instanceState.cutStart = performance.now();
-      instanceState.cutClicks = 0;
     }
-    instanceState.cutClicks += 1;
     const elapsed = performance.now() - instanceState.cutStart;
-    if (instanceState.cutClicks >= 3) {
-      if (elapsed <= instanceSolution.cutWindow) {
-        handleMiniGameSuccess(game);
-      } else {
+    if (elapsed > instanceSolution.cutTimeLimitMs) {
+      handleMiniGameFailure(game);
+      return;
+    }
+    const pressure = getBossCutPressure(game);
+    const [start, end] = getBossCutBand(game);
+    if (pressure >= start && pressure <= end) {
+      instanceState.goodStrokes += 1;
+      instanceState.cutFeedback = "Good cut.";
+    } else if (pressure < start) {
+      instanceState.missCount += 1;
+      instanceState.cutFeedback = "Too cold.";
+    } else {
+      instanceState.missCount += 1;
+      instanceState.cutFeedback = "Skidding.";
+    }
+    if (instanceState.goodStrokes >= instanceSolution.cutStrokesNeeded) {
+      handleMiniGameSuccess(game);
+      return;
+    }
+    if (instanceState.missCount >= 3) {
+      handleMiniGameFailure(game);
+      return;
+    }
+    renderMiniGame();
+  });
+
+  wrapper.appendChild(bar);
+  wrapper.appendChild(progress);
+  wrapper.appendChild(feedback);
+  wrapper.appendChild(button);
+  dom.miniGameOptions.appendChild(wrapper);
+  setMiniGameSubmitButton({ visible: false });
+  startMiniGameAnimation(() => {
+    const [start, end] = getBossCutBand(game);
+    const pressure = getBossCutPressure(game);
+    band.style.left = `${start * 100}%`;
+    band.style.width = `${(end - start) * 100}%`;
+    marker.style.left = `${pressure * 100}%`;
+    if (instanceState.cutStart) {
+      const remaining = Math.max(
+        0,
+        instanceSolution.cutTimeLimitMs - (performance.now() - instanceState.cutStart)
+      );
+      progress.textContent = `Strokes: ${instanceState.goodStrokes}/${instanceSolution.cutStrokesNeeded} | ${Math.ceil(
+        remaining / 1000
+      )}s`;
+      if (remaining === 0) {
         handleMiniGameFailure(game);
       }
     }
   });
-  wrapper.appendChild(rhythm);
-  wrapper.appendChild(button);
-  dom.miniGameOptions.appendChild(wrapper);
-  setMiniGameSubmitButton({ visible: false });
 }
 
 function applyMiniGameFailurePenalty(tries = 0) {
@@ -12290,8 +13050,14 @@ function submitMiniGameAnswer() {
     case "dial_lock":
       confirmDialLockStep(game);
       break;
+    case "titration_quick":
+      submitTitrationQuick(game);
+      break;
     case "patch_drag":
       submitPatchDrag(game);
+      break;
+    case "circuit_stabilize_numeric":
+      submitCircuitStabilizeNumeric(game);
       break;
     default:
       break;
