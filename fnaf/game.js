@@ -12212,7 +12212,7 @@ function renderCircuitStabilizeNumeric(game) {
     renderMiniGame();
   };
 
-  [1, 5, 10].forEach((step) => {
+  [1, 10].forEach((step) => {
     const down = document.createElement("button");
     down.type = "button";
     down.textContent = `-${step}Ω`;
@@ -12312,13 +12312,7 @@ function renderCircuitStabilizeNumeric(game) {
   applyButton.textContent = "Apply";
   applyButton.addEventListener("click", () => submitCircuitStabilizeNumeric(game));
 
-  const cancelButton = document.createElement("button");
-  cancelButton.type = "button";
-  cancelButton.textContent = "Cancel";
-  cancelButton.addEventListener("click", () => cancelMiniGame());
-
   actionRow.appendChild(applyButton);
-  actionRow.appendChild(cancelButton);
   dom.miniGameOptions.appendChild(actionRow);
   setMiniGameSubmitButton({ visible: false });
 }
@@ -12333,7 +12327,7 @@ function renderTitrationQuick(game) {
   const { instanceState, instanceSolution } = game;
   const { variant, displayValues, targetMl, tolerancePct } = instanceSolution;
   dom.miniGameText.innerHTML =
-    "Dial the pump until the mix hits the target strength.<br>C1V1 = C2V2";
+    "Set the pump with the slider, pour, then test the mix.<br>C1V1 = C2V2";
 
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";
@@ -12380,7 +12374,7 @@ function renderTitrationQuick(game) {
   beakerLabel.textContent = `Poured: ${instanceState.mlPoured ?? 0} mL`;
 
   const indicator = document.createElement("div");
-  indicator.textContent = `Pump: ${instanceState.mlSelected} mL`;
+  indicator.textContent = `Pump setting: ${instanceState.mlSelected} mL`;
 
   const setFillLevel = (ml) => {
     const percent = clamp(ml / 200, 0, 1) * 100;
@@ -12390,30 +12384,6 @@ function renderTitrationQuick(game) {
   if (instanceState.mlPoured !== null) {
     setFillLevel(instanceState.mlPoured);
   }
-
-  const pumpRow = document.createElement("div");
-  pumpRow.style.display = "flex";
-  pumpRow.style.flexWrap = "wrap";
-  pumpRow.style.gap = "6px";
-
-  const adjustPump = (delta) => {
-    instanceState.mlSelected = clamp(instanceState.mlSelected + delta, 0, 200);
-    instanceState.lastSuccess = false;
-    renderMiniGame();
-  };
-
-  [5, 10].forEach((step) => {
-    const down = document.createElement("button");
-    down.type = "button";
-    down.textContent = `-${step} mL`;
-    down.addEventListener("click", () => adjustPump(-step));
-    const up = document.createElement("button");
-    up.type = "button";
-    up.textContent = `+${step} mL`;
-    up.addEventListener("click", () => adjustPump(step));
-    pumpRow.appendChild(down);
-    pumpRow.appendChild(up);
-  });
 
   const slider = document.createElement("input");
   slider.type = "range";
@@ -12439,24 +12409,6 @@ function renderTitrationQuick(game) {
   pourButton.textContent = "Pour";
   pourButton.addEventListener("click", () => {
     instanceState.mlPoured = instanceState.mlSelected;
-    instanceState.lastSuccess = false;
-    setFillLevel(instanceState.mlPoured);
-  });
-
-  const pourFiveButton = document.createElement("button");
-  pourFiveButton.type = "button";
-  pourFiveButton.textContent = "+5 mL pour";
-  pourFiveButton.addEventListener("click", () => {
-    instanceState.mlPoured = clamp((instanceState.mlPoured ?? 0) + 5, 0, 200);
-    instanceState.lastSuccess = false;
-    setFillLevel(instanceState.mlPoured);
-  });
-
-  const pourTenButton = document.createElement("button");
-  pourTenButton.type = "button";
-  pourTenButton.textContent = "+10 mL pour";
-  pourTenButton.addEventListener("click", () => {
-    instanceState.mlPoured = clamp((instanceState.mlPoured ?? 0) + 10, 0, 200);
     instanceState.lastSuccess = false;
     setFillLevel(instanceState.mlPoured);
   });
@@ -12499,8 +12451,6 @@ function renderTitrationQuick(game) {
   });
 
   actionRow.appendChild(pourButton);
-  actionRow.appendChild(pourFiveButton);
-  actionRow.appendChild(pourTenButton);
   actionRow.appendChild(testButton);
   actionRow.appendChild(commitButton);
 
@@ -12511,7 +12461,6 @@ function renderTitrationQuick(game) {
   wrapper.appendChild(beakerRow);
   wrapper.appendChild(beakerLabel);
   wrapper.appendChild(indicator);
-  wrapper.appendChild(pumpRow);
   wrapper.appendChild(slider);
   wrapper.appendChild(feedback);
   wrapper.appendChild(actionRow);
