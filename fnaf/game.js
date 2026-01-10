@@ -1465,6 +1465,7 @@ const state = {
   hideHistory: new Map(),
   threat: 1,
   turn: 0,
+  titrationBatch: 0,
   inventory: new Map(),
   foundSchematics: new Set(),
   objectiveItemName: null,
@@ -11689,15 +11690,22 @@ function getMiniGameConfig(miniGameId) {
   return MINI_GAME_TEMPLATES[miniGameId] ?? null;
 }
 
-function getMiniGameSeed(night, turn, tries) {
-  return night * 100000 + turn * 100 + tries;
+function getMiniGameSeed(night, turn, tries, variation = 0) {
+  return night * 100000 + turn * 100 + tries + variation * 10000;
+}
+
+function getMiniGameSeedOffset(miniGameId) {
+  if (miniGameId === "CHEM_BALANCE") {
+    return state.titrationBatch ?? 0;
+  }
+  return 0;
 }
 
 function buildMiniGameInstance(miniGameId, tries = 0) {
   const config = getMiniGameConfig(miniGameId);
   if (!config) return null;
   const night = state.currentNight;
-  const seed = getMiniGameSeed(night, state.turn, tries);
+  const seed = getMiniGameSeed(night, state.turn, tries, getMiniGameSeedOffset(miniGameId));
   const generated = config.generate(seed, night, config);
   return {
     id: miniGameId,
@@ -11721,7 +11729,12 @@ function regenerateMiniGameInstance() {
   const tries = state.miniGame.tries;
   const config = getMiniGameConfig(state.miniGame.id);
   if (!config) return;
-  const seed = getMiniGameSeed(state.currentNight, state.turn, tries);
+  const seed = getMiniGameSeed(
+    state.currentNight,
+    state.turn,
+    tries,
+    getMiniGameSeedOffset(state.miniGame.id)
+  );
   const generated = config.generate(seed, state.currentNight, config);
   state.miniGame.seed = seed;
   state.miniGame.instanceState = generated.state;
@@ -13937,8 +13950,15 @@ function triggerTitrationExplosion(game) {
   pulseActionSignal(state.playerRoom, "trace");
   applyRoomStress(state.playerRoom);
   pushStatus("The mix explodes. Trace spike in the room.", 4);
+  state.titrationBatch += 1;
   closeMiniGame();
   resolveMiniGameFailure(game.id);
+}
+
+function resetTitrationQuickState(instanceState) {
+  instanceState.mlPoured = 0;
+  instanceState.lastFeedback = "Adjust and pour again.";
+  instanceState.lastSuccess = false;
 }
 
 function handleTitrationAttemptFailure(game) {
@@ -13947,7 +13967,11 @@ function handleTitrationAttemptFailure(game) {
     triggerTitrationExplosion(game);
     return true;
   }
-  regenerateMiniGameInstance();
+  if (game.type === "titration_transfer") {
+    resetTitrationTransferState(game.instanceState);
+  } else {
+    resetTitrationQuickState(game.instanceState);
+  }
   renderMiniGame();
   return false;
 }
