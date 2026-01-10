@@ -12610,20 +12610,6 @@ function renderTitrationTransfer(game) {
   wrapper.style.gap = "8px";
   wrapper.style.position = "relative";
 
-  const threatBar = document.createElement("div");
-  threatBar.style.position = "relative";
-  threatBar.style.height = "6px";
-  threatBar.style.borderRadius = "999px";
-  threatBar.style.background = "rgba(255, 255, 255, 0.08)";
-  threatBar.style.overflow = "hidden";
-  const threatFill = document.createElement("div");
-  threatFill.style.height = "100%";
-  threatFill.style.width = "100%";
-  threatFill.style.background =
-    "linear-gradient(90deg, rgba(120, 220, 170, 0.9), rgba(240, 160, 90, 0.95), rgba(240, 80, 80, 0.95))";
-  threatFill.style.transition = "width 0.1s linear";
-  threatBar.appendChild(threatFill);
-
   const beakerRow = document.createElement("div");
   beakerRow.style.display = "flex";
   beakerRow.style.gap = "8px";
@@ -12771,7 +12757,6 @@ function renderTitrationTransfer(game) {
   transferButton.style.flex = "1";
   cancelButton.style.flex = "1";
 
-  wrapper.appendChild(threatBar);
   wrapper.appendChild(beakerRow);
   wrapper.appendChild(readouts);
   if (!isReadout) {
@@ -12864,16 +12849,18 @@ function renderTitrationTransfer(game) {
   if (isPouring) {
     const stream = document.createElement("div");
     stream.style.position = "absolute";
-    stream.style.width = "60px";
-    stream.style.height = "4px";
-    stream.style.background = "rgba(90, 150, 240, 0.85)";
-    stream.style.boxShadow = "0 0 6px rgba(120, 190, 255, 0.7)";
+    stream.style.width = "10px";
+    stream.style.height = "0px";
+    stream.style.background =
+      "linear-gradient(180deg, rgba(120, 190, 255, 0.0), rgba(120, 190, 255, 0.85), rgba(120, 190, 255, 0.0))";
+    stream.style.boxShadow = "0 0 10px rgba(120, 190, 255, 0.35)";
     stream.style.left = "50%";
-    stream.style.top = "50%";
-    stream.style.transform = "translate(-50%, -50%) rotate(18deg)";
+    stream.style.top = "40px";
+    stream.style.transform = "translateX(-50%) rotate(-12deg)";
     stream.style.borderRadius = "999px";
-    stream.style.opacity = "0.9";
-    beakerRow.appendChild(stream);
+    stream.style.opacity = "0";
+    stream.style.pointerEvents = "none";
+    wrapper.appendChild(stream);
 
     updatePour = () => {
       const start = instanceState.pourStartAt ?? performance.now();
@@ -12883,8 +12870,7 @@ function renderTitrationTransfer(game) {
       const startLoad = instanceState.pourStartLoadMl ?? 0;
       const startBase = instanceState.pourStartBaseMl ?? 0;
       const remainingLoad = startLoad * (1 - progress);
-      const pouredMl = startLoad * progress;
-      const totalBase = startBase + pouredMl;
+      const totalBase = startBase + startLoad * progress;
       baseBeaker.fill.style.height = `${clamp(remainingLoad / maxLoadMl, 0, 1) * 100}%`;
       if (baseBeaker.bottomEl) {
         baseBeaker.bottomEl.textContent = `Loaded: ${formatMl(remainingLoad)} mL`;
@@ -12896,7 +12882,14 @@ function renderTitrationTransfer(game) {
           totalBase
         )} mL base`;
       }
+      const ramp =
+        progress < 0.15 ? progress / 0.15 : progress > 0.85 ? (1 - progress) / 0.15 : 1;
+      const streamHeight = Math.max(0, Math.min(1, ramp));
+      stream.style.height = `${Math.round(110 * streamHeight)}px`;
+      stream.style.opacity = `${0.85 * streamHeight}`;
       if (progress >= 1) {
+        stream.style.opacity = "0";
+        stream.style.height = "0px";
         stopMiniGameAnimation();
         instanceState.baseAddedMl = startBase + startLoad;
         instanceState.loadedMl = 0;
@@ -12920,8 +12913,6 @@ function renderTitrationTransfer(game) {
     const now = performance.now();
     const elapsed = now - (instanceState.attemptStartedAtMs ?? now);
     const remaining = Math.max(0, attemptLimitMs - elapsed);
-    const pct = clamp(remaining / attemptLimitMs, 0, 1);
-    threatFill.style.width = `${Math.max(4, pct * 100)}%`;
     if (remaining <= 0 && !instanceState.timeoutHandled) {
       if (instanceState.phase === "loading" || instanceState.phase === "pouring") {
         instanceState.timeoutHandled = true;
