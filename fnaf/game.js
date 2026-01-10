@@ -336,9 +336,9 @@ const MINI_GAME_TEMPLATES = {
     id: "CIRCUIT_STABILIZE",
     title: "Circuit Stabilization",
     actionLabel: "Stabilize Door Coil",
-    type: "circuit_stabilize_numeric",
+    type: "resistor_kit",
     roomHintText: "Stabilize the coil regulator.",
-    generate: generateCircuitStabilizeNumeric,
+    generate: generateCircuitStabilizeResistorKit,
   },
   ALARM_CALIBRATION: {
     id: "ALARM_CALIBRATION",
@@ -604,40 +604,109 @@ function generateCircuitTrace(rngSeed, night, template) {
   };
 }
 
-function generateCircuitStabilizeNumeric(rngSeed, night, template) {
+const E12_VALUES = [10, 12, 15, 18, 22, 27, 33, 39, 47, 56, 68, 82];
+const E24_VALUES = [
+  10, 11, 12, 13, 15, 16, 18, 20, 22, 24, 27, 30, 33, 36, 39, 43, 47, 51, 56, 62, 68, 75,
+  82, 91,
+];
+
+function getResistorDecadeBase(idealR) {
+  if (idealR >= 1000) return 100;
+  if (idealR >= 100) return 10;
+  return 1;
+}
+
+function pickResistorKit({ rng, series = "E24", count = 8, decadeBase = 1 }) {
+  const values = series === "E12" ? E12_VALUES : E24_VALUES;
+  const desiredUnique = Math.min(values.length, Math.min(count, 6));
+  const pool = [...values];
+  const unique = [];
+  for (let i = 0; i < desiredUnique; i += 1) {
+    const index = rng.nextInt(0, pool.length - 1);
+    unique.push(pool.splice(index, 1)[0]);
+  }
+  const duplicates = [];
+  const duplicateCount = Math.max(0, count - unique.length);
+  for (let i = 0; i < duplicateCount; i += 1) {
+    const dup = unique[rng.nextInt(0, unique.length - 1)];
+    duplicates.push(dup);
+  }
+  return [...unique, ...duplicates].map((value) => value * decadeBase).sort((a, b) => a - b);
+}
+
+function isResistorKitSolvable({ kit, V, I_target, toleranceA, PmaxW }) {
+  const total = 1 << kit.length;
+  for (let mask = 1; mask < total; mask += 1) {
+    let req = 0;
+    for (let i = 0; i < kit.length; i += 1) {
+      if (mask & (1 << i)) req += kit[i];
+    }
+    const Icalc = V / req;
+    const Pcalc = (V * V) / req;
+    if (Pcalc <= PmaxW && Math.abs(Icalc - I_target) <= toleranceA) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function forceSolvableResistorKit({ rng, V, I_target, toleranceA, PmaxW, idealR }) {
+  const decades = [getResistorDecadeBase(idealR), 1, 10, 100];
+  const checked = new Set();
+  for (const decade of decades) {
+    if (checked.has(decade)) continue;
+    checked.add(decade);
+    for (const value of E24_VALUES) {
+      const resistor = value * decade;
+      const Icalc = V / resistor;
+      const Pcalc = (V * V) / resistor;
+      if (Pcalc <= PmaxW && Math.abs(Icalc - I_target) <= toleranceA) {
+        const baseKit = pickResistorKit({ rng, series: "E24", count: 7, decadeBase: decade });
+        return [...baseKit, resistor].sort((a, b) => a - b);
+      }
+    }
+  }
+  const decade = getResistorDecadeBase(idealR);
+  return pickResistorKit({ rng, series: "E24", count: 8, decadeBase: decade });
+}
+
+function generateCircuitStabilizeResistorKit(rngSeed, night, template) {
   const rng = createRng(rngSeed);
-  const tolerance = night < 5 ? 0.05 : 0.03;
-  const R_min = 5;
-  const R_max = 100;
+  const toleranceA = night < 5 ? 0.05 : 0.03;
   let V = 12;
   let I_target = 0.6;
-  let Pmax = 8;
-  for (let attempt = 0; attempt < 60; attempt += 1) {
+  let PmaxW = 8;
+  let idealR = V / I_target;
+  let kit = [];
+  for (let attempt = 0; attempt < 80; attempt += 1) {
     V = rng.nextInt(8, 18);
     I_target = rng.nextInt(4, 12) / 10;
     const P = V * I_target;
     if (P > 11.2) continue;
     const margin = rng.nextInt(1, 3);
-    Pmax = clamp(Math.round(P + margin), 6, 12);
-    const R_target = V / I_target;
-    if (R_target >= R_min && R_target <= R_max) {
+    PmaxW = clamp(Math.round(P + margin), 6, 12);
+    idealR = V / I_target;
+    const decadeBase = getResistorDecadeBase(idealR);
+    kit = pickResistorKit({ rng, series: "E24", count: 8, decadeBase });
+    if (isResistorKitSolvable({ kit, V, I_target, toleranceA, PmaxW })) {
       break;
     }
   }
-  const R_target = V / I_target;
-  const R_selected = clamp(Math.round(R_target), R_min, R_max);
+  if (!isResistorKitSolvable({ kit, V, I_target, toleranceA, PmaxW })) {
+    kit = forceSolvableResistorKit({ rng, V, I_target, toleranceA, PmaxW, idealR });
+  }
   return {
     state: {
-      R_selected,
-      R_initial: R_selected,
+      kit,
+      selected: Array(kit.length).fill(false),
+      reqOhms: 0,
     },
     solution: {
       V,
       I_target,
-      tolerance,
-      Pmax,
-      R_min,
-      R_max,
+      toleranceA,
+      PmaxW,
+      idealR,
     },
     ui: {
       text: template.roomHintText,
@@ -11809,8 +11878,8 @@ function renderMiniGame() {
     case "circuit_trace":
       renderCircuitTrace(game);
       break;
-    case "circuit_stabilize_numeric":
-      renderCircuitStabilizeNumeric(game);
+    case "resistor_kit":
+      renderResistorKit(game);
       break;
     case "patch_drag":
       renderPatchDrag(game);
@@ -12359,13 +12428,14 @@ function renderCircuitTrace(game) {
   setMiniGameSubmitButton({ visible: false });
 }
 
-function submitCircuitStabilizeNumeric(game) {
+function submitResistorKit(game) {
   const { instanceState, instanceSolution } = game;
-  const { V, I_target, tolerance, Pmax } = instanceSolution;
-  const R = instanceState.R_selected;
-  const Icalc = V / R;
-  const Pcalc = (V * V) / R;
-  if (Pcalc <= Pmax && Math.abs(Icalc - I_target) <= tolerance) {
+  const { V, I_target, toleranceA, PmaxW } = instanceSolution;
+  const req = instanceState.reqOhms;
+  if (!req) return;
+  const Icalc = V / req;
+  const Pcalc = (V * V) / req;
+  if (Pcalc <= PmaxW && Math.abs(Icalc - I_target) <= toleranceA) {
     handleMiniGameSuccess(game);
     return;
   }
@@ -12380,11 +12450,11 @@ function submitCircuitStabilizeNumeric(game) {
   closeMiniGame();
 }
 
-function renderCircuitStabilizeNumeric(game) {
+function renderResistorKit(game) {
   const { instanceState, instanceSolution } = game;
-  const { V, I_target, tolerance, Pmax, R_min, R_max } = instanceSolution;
+  const { V, I_target, toleranceA, PmaxW } = instanceSolution;
   dom.miniGameText.innerHTML =
-    "Set resistor so current hits target without overheating.<br>I = V/R";
+    "Build the circuit with E-series chips. Sum resistors in series to hit target current without overheating.<br>I = V/R";
   setMiniGameCancelVisibility({ showBottomBar: false, showInline: true });
 
   const wrapper = document.createElement("div");
@@ -12394,52 +12464,109 @@ function renderCircuitStabilizeNumeric(game) {
 
   const stats = document.createElement("div");
   stats.style.fontSize = "12px";
-  stats.textContent = `Supply V=${V}V | Target I=${I_target.toFixed(2)}A | Pmax=${Pmax}W`;
+  stats.textContent = `Supply V=${V}V | Target I=${I_target.toFixed(2)}A | Pmax=${PmaxW}W`;
 
-  const resistorReadout = document.createElement("div");
-  resistorReadout.style.fontWeight = "600";
-  resistorReadout.textContent = `Resistor: ${instanceState.R_selected}Ω`;
-
-  const adjustResistor = (delta) => {
-    instanceState.R_selected = clamp(instanceState.R_selected + delta, R_min, R_max);
-    renderMiniGame();
+  const computeReq = () => {
+    let req = 0;
+    instanceState.selected.forEach((active, index) => {
+      if (active) req += instanceState.kit[index];
+    });
+    instanceState.reqOhms = req;
+    return req;
   };
 
-  const stepButtons = [-1, 1, -5, 5].map((step) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = `${step > 0 ? "+" : ""}${step}Ω`;
-    button.addEventListener("click", () => adjustResistor(step));
-    return button;
-  });
-  const stepRow = makeBtnRow(stepButtons);
+  const req = computeReq();
+  const hasSelection = req > 0;
+  const Icalc = hasSelection ? V / req : null;
+  const Pcalc = hasSelection ? (V * V) / req : null;
+  const isOverheat = hasSelection ? Pcalc > PmaxW : false;
+  const isNearMax = hasSelection ? Pcalc > PmaxW * 0.9 : false;
+  const isHigh = hasSelection ? Icalc > I_target + toleranceA || isNearMax : false;
+  const isLow = hasSelection ? Icalc < I_target - toleranceA : false;
+  const statusText = !hasSelection
+    ? "NO CIRCUIT"
+    : isOverheat
+      ? "OVERHEAT"
+      : isHigh
+        ? "HIGH"
+        : isLow
+          ? "LOW"
+          : "OK";
+  const statusColor = !hasSelection
+    ? "rgba(140, 140, 140, 0.85)"
+    : isOverheat
+      ? "rgba(220, 140, 60, 0.9)"
+      : isHigh
+        ? "rgba(200, 80, 80, 0.85)"
+        : isLow
+          ? "rgba(150, 150, 150, 0.85)"
+          : "rgba(80, 200, 120, 0.9)";
 
-  const slider = document.createElement("input");
-  slider.type = "range";
-  slider.min = String(R_min);
-  slider.max = String(R_max);
-  slider.value = String(instanceState.R_selected);
-  slider.className = "mini-game-slider";
-  slider.style.width = "100%";
-  slider.addEventListener("input", (event) => {
-    const value = Number(event.target.value);
-    instanceState.R_selected = value;
+  const kitLabel = document.createElement("div");
+  kitLabel.style.textTransform = "uppercase";
+  kitLabel.style.fontSize = "11px";
+  kitLabel.style.letterSpacing = "1px";
+  kitLabel.style.opacity = "0.8";
+  kitLabel.textContent = "E24 kit";
+
+  const kitTray = document.createElement("div");
+  kitTray.style.display = "grid";
+  kitTray.style.gap = "8px";
+  kitTray.style.width = "100%";
+  kitTray.style.gridTemplateColumns = isMiniGameMobile()
+    ? "repeat(2, minmax(0, 1fr))"
+    : "repeat(4, minmax(0, 1fr))";
+
+  instanceState.kit.forEach((value, index) => {
+    const active = instanceState.selected[index];
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.style.display = "grid";
+    chip.style.alignItems = "center";
+    chip.style.justifyItems = "center";
+    chip.style.padding = "8px 10px";
+    chip.style.minHeight = "48px";
+    chip.style.borderRadius = "10px";
+    chip.style.border = active ? "2px solid rgba(140, 220, 255, 0.9)" : "1px solid rgba(255,255,255,0.35)";
+    chip.style.background = active ? "rgba(40, 80, 120, 0.7)" : "rgba(20, 28, 38, 0.85)";
+    chip.style.color = "white";
+    chip.style.fontWeight = "600";
+    chip.style.boxShadow = active ? "0 0 12px rgba(140, 220, 255, 0.35)" : "none";
+    const label = document.createElement("div");
+    label.textContent = `${value}Ω`;
+    const sub = document.createElement("div");
+    sub.style.fontSize = "10px";
+    sub.style.opacity = "0.85";
+    sub.textContent = active ? "IN CIRCUIT" : "TAP TO ADD";
+    chip.appendChild(label);
+    chip.appendChild(sub);
+    chip.addEventListener("click", () => {
+      instanceState.selected[index] = !instanceState.selected[index];
+      renderMiniGame();
+    });
+    kitTray.appendChild(chip);
+  });
+
+  const clearButton = document.createElement("button");
+  clearButton.type = "button";
+  clearButton.textContent = "Clear Selection";
+  clearButton.addEventListener("click", () => {
+    instanceState.selected = instanceState.selected.map(() => false);
+    instanceState.reqOhms = 0;
     renderMiniGame();
   });
 
-  const Icalc = V / instanceState.R_selected;
-  const Pcalc = (V * V) / instanceState.R_selected;
-  const isOverheat = Pcalc > Pmax;
-  const isHigh = Icalc > I_target + tolerance || isOverheat;
-  const isLow = Icalc < I_target - tolerance;
-  const statusText = isOverheat ? "OVERHEAT" : isHigh ? "HIGH" : isLow ? "LOW" : "OK";
-  const statusColor = isOverheat
-    ? "rgba(220, 140, 60, 0.9)"
-    : isHigh
-      ? "rgba(200, 80, 80, 0.85)"
-      : isLow
-        ? "rgba(150, 150, 150, 0.85)"
-        : "rgba(80, 200, 120, 0.9)";
+  const reqReadout = document.createElement("div");
+  reqReadout.style.fontWeight = "700";
+  reqReadout.style.fontSize = "18px";
+  reqReadout.textContent = hasSelection ? `Req: ${req}Ω` : "Req: —";
+
+  const selectedLine = document.createElement("div");
+  const selectedValues = instanceState.kit.filter((_, index) => instanceState.selected[index]);
+  if (selectedValues.length >= 2) {
+    selectedLine.style.fontSize = "12px";
+    selectedLine.textContent = `Selected: ${selectedValues.join("Ω + ")}Ω = ${req}Ω`;
+  }
 
   const statusPill = document.createElement("div");
   statusPill.textContent = statusText;
@@ -12453,14 +12580,14 @@ function renderCircuitStabilizeNumeric(game) {
   const formatSigned = (value, digits = 2) => `${value >= 0 ? "+" : ""}${value.toFixed(digits)}`;
   const deltaRow = document.createElement("div");
   deltaRow.style.fontSize = "12px";
-  deltaRow.textContent = `ΔI: ${formatSigned(Icalc - I_target)}A | P margin: ${formatSigned(
-    Pmax - Pcalc
-  )}W`;
+  deltaRow.textContent = hasSelection
+    ? `ΔI: ${formatSigned(Icalc - I_target)}A | P margin: ${formatSigned(PmaxW - Pcalc)}W`
+    : "ΔI: — | P margin: —";
 
   const currentReadout = document.createElement("div");
-  currentReadout.textContent = `Icalc: ${Icalc.toFixed(2)}A`;
+  currentReadout.textContent = hasSelection ? `Icalc: ${Icalc.toFixed(2)}A` : "Icalc: —";
   const powerReadout = document.createElement("div");
-  powerReadout.textContent = `Pcalc: ${Pcalc.toFixed(2)}W`;
+  powerReadout.textContent = hasSelection ? `Pcalc: ${Pcalc.toFixed(2)}W` : "Pcalc: —";
   const readoutRow = document.createElement("div");
   readoutRow.style.display = "flex";
   readoutRow.style.gap = "10px";
@@ -12475,69 +12602,48 @@ function renderCircuitStabilizeNumeric(game) {
   meter.style.height = "12px";
   meter.style.border = "1px solid rgba(255,255,255,0.4)";
   meter.style.background = "rgba(10, 15, 20, 0.6)";
-  const scaleMax = Math.max(I_target + tolerance * 3, I_target * 1.8);
-  const bandStartPct = clamp((I_target - tolerance) / scaleMax, 0, 1) * 100;
-  const bandEndPct = clamp((I_target + tolerance) / scaleMax, 0, 1) * 100;
+  const scaleMax = Math.max(I_target + toleranceA * 3, I_target * 1.8);
+  const bandStartPct = clamp((I_target - toleranceA) / scaleMax, 0, 1) * 100;
+  const bandEndPct = clamp((I_target + toleranceA) / scaleMax, 0, 1) * 100;
   const band = document.createElement("div");
   band.style.position = "absolute";
   band.style.left = `${bandStartPct}%`;
   band.style.width = `${Math.max(2, bandEndPct - bandStartPct)}%`;
   band.style.top = "0";
   band.style.bottom = "0";
-  band.style.background = "rgba(80, 200, 120, 0.4)";
-  band.style.boxShadow = "0 0 0 1px rgba(80, 200, 120, 0.7)";
-  const meterFill = document.createElement("div");
-  meterFill.style.position = "absolute";
-  meterFill.style.left = "0";
-  meterFill.style.top = "0";
-  meterFill.style.bottom = "0";
-  const meterFillPct = clamp(Icalc / scaleMax, 0, 1) * 100;
-  meterFill.style.width = `${Math.round(meterFillPct)}%`;
-  meterFill.style.background = isHigh
-    ? "rgba(200, 80, 80, 0.85)"
-    : isLow
-      ? "rgba(160, 160, 160, 0.85)"
-      : "rgba(80, 200, 120, 0.9)";
-  meter.appendChild(meterFill);
+  band.style.background = statusColor.replace("0.9", "0.35").replace("0.85", "0.35");
+  band.style.boxShadow = `0 0 0 1px ${statusColor}`;
+  const marker = document.createElement("div");
+  marker.style.position = "absolute";
+  marker.style.top = "-3px";
+  marker.style.width = "3px";
+  marker.style.height = "18px";
+  marker.style.background = statusColor;
+  const markerPct = hasSelection ? clamp(Icalc / scaleMax, 0, 1) * 100 : 0;
+  marker.style.left = `${markerPct}%`;
   meter.appendChild(band);
-
-  const resetButton = document.createElement("button");
-  resetButton.type = "button";
-  resetButton.textContent = "RESET";
-  resetButton.addEventListener("click", () => {
-    instanceState.R_selected = instanceState.R_initial;
-    renderMiniGame();
-  });
-  const isMobileLayout = isMiniGameMobile();
-  const mobileRowButtons = [-10, 10].map((step) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = `${step > 0 ? "+" : ""}${step}Ω`;
-    button.addEventListener("click", () => adjustResistor(step));
-    return button;
-  });
-  const mobileRow = isMobileLayout ? makeBtnRow([...mobileRowButtons, resetButton]) : null;
+  meter.appendChild(marker);
 
   wrapper.appendChild(stats);
-  wrapper.appendChild(resistorReadout);
+  wrapper.appendChild(kitLabel);
+  wrapper.appendChild(kitTray);
+  wrapper.appendChild(clearButton);
+  wrapper.appendChild(reqReadout);
+  if (selectedValues.length >= 2) {
+    wrapper.appendChild(selectedLine);
+  }
   wrapper.appendChild(statusPill);
   wrapper.appendChild(deltaRow);
   wrapper.appendChild(meter);
   wrapper.appendChild(readoutRow);
-  wrapper.appendChild(stepRow);
-  if (mobileRow) wrapper.appendChild(mobileRow);
-  wrapper.appendChild(slider);
-  if (!mobileRow) {
-    const resetRow = makeBtnRow([resetButton], { wrap: false });
-    wrapper.appendChild(resetRow);
-  }
 
   dom.miniGameOptions.appendChild(wrapper);
 
   const applyButton = document.createElement("button");
   applyButton.type = "button";
   applyButton.textContent = "Apply";
-  applyButton.addEventListener("click", () => submitCircuitStabilizeNumeric(game));
+  applyButton.disabled = statusText !== "OK";
+  applyButton.addEventListener("click", () => submitResistorKit(game));
 
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
@@ -14114,8 +14220,8 @@ function submitMiniGameAnswer() {
     case "patch_drag":
       submitPatchDrag(game);
       break;
-    case "circuit_stabilize_numeric":
-      submitCircuitStabilizeNumeric(game);
+    case "resistor_kit":
+      submitResistorKit(game);
       break;
     default:
       break;
