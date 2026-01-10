@@ -11973,6 +11973,14 @@ function ensureMiniGameStylesInjected() {
     #miniGamePanel .patch-tile.selected { border: 1px solid rgba(140, 220, 255, 0.9); box-shadow: 0 0 10px rgba(140, 220, 255, 0.7); }
     #miniGamePanel .patch-tile.disabled { opacity: 0.45; cursor: not-allowed; }
     #miniGamePanel .commit-pulse { animation: miniGameCommitPulse 0.6s ease-out; }
+    #miniGamePanel .reskit-hud { padding: 10px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.35); width: 100%; display: grid; gap: 4px; }
+    #miniGamePanel .reskit-hud .big { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+    #miniGamePanel .reskit-hud .status { font-size: 14px; opacity: 0.9; text-transform: uppercase; }
+    #miniGamePanel .reskit-hud .hint { font-size: 12px; opacity: 0.8; }
+    #miniGamePanel .reskit-meter { height: 18px; border-radius: 8px; }
+    #miniGamePanel .reskit-chip { min-height: 54px; font-size: 18px; }
+    #miniGamePanel .reskit-chip.active { box-shadow: 0 0 16px rgba(140, 220, 255, 0.55); }
+    #miniGamePanel .reskit-chip.inactive { background: rgba(14, 18, 26, 0.9); border-color: rgba(255,255,255,0.2); color: rgba(255,255,255,0.8); }
     @keyframes miniGameCommitPulse {
       0% { box-shadow: 0 0 0 0 rgba(140, 220, 255, 0.9); }
       100% { box-shadow: 0 0 0 12px rgba(140, 220, 255, 0); }
@@ -12455,17 +12463,14 @@ function renderResistorKit(game) {
   const { instanceState, instanceSolution } = game;
   const { V, I_target, toleranceA, PmaxW } = instanceSolution;
   dom.miniGameText.innerHTML =
-    "Build the circuit with E-series chips. Sum resistors in series to hit target current without overheating.<br>I = V/R";
+    "Assemble resistors in series to hit the target current without overheating.";
   setMiniGameCancelVisibility({ showBottomBar: false, showInline: true });
 
   const wrapper = document.createElement("div");
+  wrapper.className = "reskit-root";
   wrapper.style.display = "grid";
-  wrapper.style.gap = "8px";
-  wrapper.style.justifyItems = "center";
-
-  const stats = document.createElement("div");
-  stats.style.fontSize = "12px";
-  stats.textContent = `Supply V=${V}V | Target I=${I_target.toFixed(2)}A | Pmax=${PmaxW}W`;
+  wrapper.style.gap = "10px";
+  wrapper.style.width = "100%";
 
   const computeReq = () => {
     let req = 0;
@@ -12493,22 +12498,165 @@ function renderResistorKit(game) {
         : isLow
           ? "LOW"
           : "OK";
-  const statusColor = !hasSelection
-    ? "rgba(140, 140, 140, 0.85)"
-    : isOverheat
-      ? "rgba(220, 140, 60, 0.9)"
-      : isHigh
-        ? "rgba(200, 80, 80, 0.85)"
-        : isLow
-          ? "rgba(150, 150, 150, 0.85)"
-          : "rgba(80, 200, 120, 0.9)";
+  const markerColor = !hasSelection
+    ? "rgba(160, 160, 160, 0.9)"
+    : isHigh || isOverheat
+      ? "rgba(220, 80, 80, 0.95)"
+      : isLow
+        ? "rgba(170, 170, 170, 0.95)"
+        : "rgba(80, 200, 120, 0.95)";
+
+  const selectedValues = instanceState.kit.filter((_, index) => instanceState.selected[index]);
+  const selectedCount = selectedValues.length;
+
+  const hud = document.createElement("div");
+  hud.className = "reskit-hud";
+
+  const targetLine = document.createElement("div");
+  targetLine.className = "big";
+  targetLine.textContent = `TARGET: ${I_target.toFixed(2)}A`;
+
+  const nowLine = document.createElement("div");
+  nowLine.className = "big";
+  nowLine.textContent = hasSelection ? `NOW: ${Icalc.toFixed(2)}A` : "NOW: —";
+
+  const statusLine = document.createElement("div");
+  statusLine.className = "status";
+  statusLine.textContent = `Status: ${statusText}`;
+
+  const hintLine = document.createElement("div");
+  hintLine.className = "hint";
+  if (statusText === "LOW") {
+    hintLine.textContent = "Remove resistance ↑ current";
+  } else if (statusText === "HIGH" || statusText === "OVERHEAT") {
+    hintLine.textContent = "Add resistance ↓ current";
+  } else {
+    hintLine.textContent = "";
+  }
+
+  hud.appendChild(targetLine);
+  hud.appendChild(nowLine);
+  hud.appendChild(statusLine);
+  if (hintLine.textContent) {
+    hud.appendChild(hintLine);
+  }
+
+  const microCopy = document.createElement("div");
+  microCopy.style.fontSize = "12px";
+  microCopy.style.opacity = "0.85";
+  microCopy.style.textAlign = "center";
+  if (statusText === "LOW") {
+    microCopy.textContent = "Remove a chip to raise current.";
+  } else if (statusText === "HIGH") {
+    microCopy.textContent = "Add a chip to drop current.";
+  } else if (statusText === "OVERHEAT") {
+    microCopy.textContent = "Too hot. Add resistance.";
+  } else if (statusText === "OK") {
+    microCopy.textContent = "Locked. Press APPLY.";
+  } else {
+    microCopy.textContent = "Select chips to begin.";
+  }
+
+  const meterBlock = document.createElement("div");
+  meterBlock.style.display = "grid";
+  meterBlock.style.gap = "6px";
+  meterBlock.style.width = "100%";
+
+  const meterLabels = document.createElement("div");
+  meterLabels.style.display = "flex";
+  meterLabels.style.justifyContent = "space-between";
+  meterLabels.style.fontSize = "11px";
+  meterLabels.style.opacity = "0.7";
+  const highLabel = document.createElement("div");
+  highLabel.textContent = "HIGH current";
+  const lowLabel = document.createElement("div");
+  lowLabel.textContent = "LOW current";
+  meterLabels.appendChild(highLabel);
+  meterLabels.appendChild(lowLabel);
+
+  const meter = document.createElement("div");
+  meter.className = "reskit-meter";
+  meter.style.position = "relative";
+  meter.style.width = "100%";
+  meter.style.border = "1px solid rgba(255,255,255,0.4)";
+  meter.style.background = "rgba(10, 15, 20, 0.6)";
+  meter.style.overflow = "hidden";
+
+  const scaleMax = Math.max(I_target + toleranceA * 3, I_target * 1.8);
+  const mapCurrentToPct = (value) => (1 - clamp(value / scaleMax, 0, 1)) * 100;
+  const bandLeft = mapCurrentToPct(I_target + toleranceA);
+  const bandRight = mapCurrentToPct(I_target - toleranceA);
+  const band = document.createElement("div");
+  band.style.position = "absolute";
+  band.style.left = `${Math.min(bandLeft, bandRight)}%`;
+  band.style.width = `${Math.max(2, Math.abs(bandRight - bandLeft))}%`;
+  band.style.top = "0";
+  band.style.bottom = "0";
+  band.style.background = "rgba(80, 200, 120, 0.35)";
+  band.style.boxShadow = "0 0 0 1px rgba(80, 200, 120, 0.75)";
+
+  const marker = document.createElement("div");
+  marker.style.position = "absolute";
+  marker.style.top = "-4px";
+  marker.style.width = "6px";
+  marker.style.height = "26px";
+  marker.style.borderRadius = "4px";
+  marker.style.background = markerColor;
+  const markerPct = hasSelection ? mapCurrentToPct(Icalc) : 100;
+  marker.style.left = `${markerPct}%`;
+
+  meter.appendChild(band);
+  meter.appendChild(marker);
+
+  const reqReadout = document.createElement("div");
+  reqReadout.style.fontSize = "12px";
+  reqReadout.style.opacity = "0.85";
+  reqReadout.textContent = hasSelection ? `Req: ${req}Ω` : "Req: —";
+
+  const selectedLine = document.createElement("div");
+  if (selectedCount >= 2) {
+    selectedLine.style.fontSize = "11px";
+    selectedLine.style.opacity = "0.7";
+    selectedLine.textContent = `Selected: ${selectedValues.join("Ω + ")}Ω = ${req}Ω`;
+  }
+
+  const powerLine = document.createElement("div");
+  if (hasSelection && (isNearMax || isOverheat)) {
+    powerLine.textContent = `HEAT: ${Pcalc.toFixed(2)}W / ${PmaxW}W`;
+    powerLine.style.fontSize = "12px";
+    powerLine.style.fontWeight = "700";
+    powerLine.style.color = "rgba(220, 80, 80, 0.95)";
+  }
+
+  const secondaryRow = document.createElement("div");
+  secondaryRow.style.display = "flex";
+  secondaryRow.style.justifyContent = "space-between";
+  secondaryRow.style.fontSize = "11px";
+  secondaryRow.style.opacity = "0.7";
+  const supplyLine = document.createElement("div");
+  supplyLine.textContent = `V=${V}V  Pmax=${PmaxW}W`;
+  const formulaLine = document.createElement("div");
+  formulaLine.textContent = "I = V/R";
+  secondaryRow.appendChild(supplyLine);
+  secondaryRow.appendChild(formulaLine);
+
+  meterBlock.appendChild(meterLabels);
+  meterBlock.appendChild(meter);
+  meterBlock.appendChild(reqReadout);
+  if (selectedCount >= 2) {
+    meterBlock.appendChild(selectedLine);
+  }
+  if (powerLine.textContent) {
+    meterBlock.appendChild(powerLine);
+  }
+  meterBlock.appendChild(secondaryRow);
 
   const kitLabel = document.createElement("div");
   kitLabel.style.textTransform = "uppercase";
   kitLabel.style.fontSize = "11px";
   kitLabel.style.letterSpacing = "1px";
   kitLabel.style.opacity = "0.8";
-  kitLabel.textContent = "E24 kit";
+  kitLabel.textContent = "SELECT CHIPS (SERIES)";
 
   const kitTray = document.createElement("div");
   kitTray.style.display = "grid";
@@ -12522,25 +12670,17 @@ function renderResistorKit(game) {
     const active = instanceState.selected[index];
     const chip = document.createElement("button");
     chip.type = "button";
+    chip.className = `reskit-chip ${active ? "active" : "inactive"}`;
     chip.style.display = "grid";
     chip.style.alignItems = "center";
     chip.style.justifyItems = "center";
     chip.style.padding = "8px 10px";
-    chip.style.minHeight = "48px";
     chip.style.borderRadius = "10px";
     chip.style.border = active ? "2px solid rgba(140, 220, 255, 0.9)" : "1px solid rgba(255,255,255,0.35)";
     chip.style.background = active ? "rgba(40, 80, 120, 0.7)" : "rgba(20, 28, 38, 0.85)";
     chip.style.color = "white";
     chip.style.fontWeight = "600";
-    chip.style.boxShadow = active ? "0 0 12px rgba(140, 220, 255, 0.35)" : "none";
-    const label = document.createElement("div");
-    label.textContent = `${value}Ω`;
-    const sub = document.createElement("div");
-    sub.style.fontSize = "10px";
-    sub.style.opacity = "0.85";
-    sub.textContent = active ? "IN CIRCUIT" : "TAP TO ADD";
-    chip.appendChild(label);
-    chip.appendChild(sub);
+    chip.textContent = active ? `${value}Ω ✓` : `${value}Ω`;
     chip.addEventListener("click", () => {
       instanceState.selected[index] = !instanceState.selected[index];
       renderMiniGame();
@@ -12548,95 +12688,29 @@ function renderResistorKit(game) {
     kitTray.appendChild(chip);
   });
 
-  const clearButton = document.createElement("button");
-  clearButton.type = "button";
-  clearButton.textContent = "Clear Selection";
-  clearButton.addEventListener("click", () => {
+  const clearLink = document.createElement("button");
+  clearLink.type = "button";
+  clearLink.textContent = "Clear";
+  clearLink.style.background = "none";
+  clearLink.style.border = "none";
+  clearLink.style.color = "rgba(200, 220, 255, 0.9)";
+  clearLink.style.fontSize = "12px";
+  clearLink.style.textDecoration = "underline";
+  clearLink.style.cursor = "pointer";
+  clearLink.addEventListener("click", () => {
     instanceState.selected = instanceState.selected.map(() => false);
     instanceState.reqOhms = 0;
     renderMiniGame();
   });
 
-  const reqReadout = document.createElement("div");
-  reqReadout.style.fontWeight = "700";
-  reqReadout.style.fontSize = "18px";
-  reqReadout.textContent = hasSelection ? `Req: ${req}Ω` : "Req: —";
-
-  const selectedLine = document.createElement("div");
-  const selectedValues = instanceState.kit.filter((_, index) => instanceState.selected[index]);
-  if (selectedValues.length >= 2) {
-    selectedLine.style.fontSize = "12px";
-    selectedLine.textContent = `Selected: ${selectedValues.join("Ω + ")}Ω = ${req}Ω`;
-  }
-
-  const statusPill = document.createElement("div");
-  statusPill.textContent = statusText;
-  statusPill.style.padding = "6px 12px";
-  statusPill.style.borderRadius = "999px";
-  statusPill.style.fontWeight = "700";
-  statusPill.style.letterSpacing = "1px";
-  statusPill.style.background = statusColor;
-  statusPill.style.color = "#0b0f12";
-
-  const formatSigned = (value, digits = 2) => `${value >= 0 ? "+" : ""}${value.toFixed(digits)}`;
-  const deltaRow = document.createElement("div");
-  deltaRow.style.fontSize = "12px";
-  deltaRow.textContent = hasSelection
-    ? `ΔI: ${formatSigned(Icalc - I_target)}A | P margin: ${formatSigned(PmaxW - Pcalc)}W`
-    : "ΔI: — | P margin: —";
-
-  const currentReadout = document.createElement("div");
-  currentReadout.textContent = hasSelection ? `Icalc: ${Icalc.toFixed(2)}A` : "Icalc: —";
-  const powerReadout = document.createElement("div");
-  powerReadout.textContent = hasSelection ? `Pcalc: ${Pcalc.toFixed(2)}W` : "Pcalc: —";
-  const readoutRow = document.createElement("div");
-  readoutRow.style.display = "flex";
-  readoutRow.style.gap = "10px";
-  readoutRow.style.flexWrap = "wrap";
-  readoutRow.style.justifyContent = "center";
-  readoutRow.appendChild(currentReadout);
-  readoutRow.appendChild(powerReadout);
-
-  const meter = document.createElement("div");
-  meter.style.position = "relative";
-  meter.style.width = "240px";
-  meter.style.height = "12px";
-  meter.style.border = "1px solid rgba(255,255,255,0.4)";
-  meter.style.background = "rgba(10, 15, 20, 0.6)";
-  const scaleMax = Math.max(I_target + toleranceA * 3, I_target * 1.8);
-  const bandStartPct = clamp((I_target - toleranceA) / scaleMax, 0, 1) * 100;
-  const bandEndPct = clamp((I_target + toleranceA) / scaleMax, 0, 1) * 100;
-  const band = document.createElement("div");
-  band.style.position = "absolute";
-  band.style.left = `${bandStartPct}%`;
-  band.style.width = `${Math.max(2, bandEndPct - bandStartPct)}%`;
-  band.style.top = "0";
-  band.style.bottom = "0";
-  band.style.background = statusColor.replace("0.9", "0.35").replace("0.85", "0.35");
-  band.style.boxShadow = `0 0 0 1px ${statusColor}`;
-  const marker = document.createElement("div");
-  marker.style.position = "absolute";
-  marker.style.top = "-3px";
-  marker.style.width = "3px";
-  marker.style.height = "18px";
-  marker.style.background = statusColor;
-  const markerPct = hasSelection ? clamp(Icalc / scaleMax, 0, 1) * 100 : 0;
-  marker.style.left = `${markerPct}%`;
-  meter.appendChild(band);
-  meter.appendChild(marker);
-
-  wrapper.appendChild(stats);
+  wrapper.appendChild(hud);
+  wrapper.appendChild(microCopy);
+  wrapper.appendChild(meterBlock);
   wrapper.appendChild(kitLabel);
   wrapper.appendChild(kitTray);
-  wrapper.appendChild(clearButton);
-  wrapper.appendChild(reqReadout);
-  if (selectedValues.length >= 2) {
-    wrapper.appendChild(selectedLine);
+  if (selectedCount >= 3) {
+    wrapper.appendChild(clearLink);
   }
-  wrapper.appendChild(statusPill);
-  wrapper.appendChild(deltaRow);
-  wrapper.appendChild(meter);
-  wrapper.appendChild(readoutRow);
 
   dom.miniGameOptions.appendChild(wrapper);
 
