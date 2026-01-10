@@ -12538,11 +12538,11 @@ function renderResistorKit(game) {
   if (statusText === "LOW") {
     microCopy.textContent = "Remove a chip to raise current.";
   } else if (statusText === "HIGH") {
-    microCopy.textContent = "Add a chip to drop current.";
+    microCopy.textContent = "";
   } else if (statusText === "OVERHEAT") {
     microCopy.textContent = "Too hot. Add resistance.";
   } else if (statusText === "OK") {
-    microCopy.textContent = "Locked. Press APPLY.";
+    microCopy.textContent = "";
   } else {
     microCopy.textContent = "";
   }
@@ -12598,17 +12598,22 @@ function renderResistorKit(game) {
   meter.appendChild(band);
   meter.appendChild(marker);
 
+  const scienceBlock = document.createElement("div");
+  scienceBlock.style.display = "grid";
+  scienceBlock.style.justifyItems = "end";
+  scienceBlock.style.fontSize = "11px";
+  scienceBlock.style.opacity = "0.75";
+  const ohmsLine = document.createElement("div");
+  ohmsLine.textContent = "V = I·R";
+  const powerLineDetail = document.createElement("div");
+  powerLineDetail.textContent = "P = I²R = V²/R";
+  scienceBlock.appendChild(ohmsLine);
+  scienceBlock.appendChild(powerLineDetail);
+
   const reqReadout = document.createElement("div");
   reqReadout.style.fontSize = "12px";
   reqReadout.style.opacity = "0.85";
   reqReadout.textContent = hasSelection ? `Req: ${req}Ω` : "Req: —";
-
-  const selectedLine = document.createElement("div");
-  if (selectedCount >= 2) {
-    selectedLine.style.fontSize = "11px";
-    selectedLine.style.opacity = "0.7";
-    selectedLine.textContent = `Selected: ${selectedValues.join("Ω + ")}Ω = ${req}Ω`;
-  }
 
   const powerLine = document.createElement("div");
   if (hasSelection && (isNearMax || isOverheat)) {
@@ -12632,10 +12637,8 @@ function renderResistorKit(game) {
 
   meterBlock.appendChild(meterLabels);
   meterBlock.appendChild(meter);
+  meterBlock.appendChild(scienceBlock);
   meterBlock.appendChild(reqReadout);
-  if (selectedCount >= 2) {
-    meterBlock.appendChild(selectedLine);
-  }
   if (powerLine.textContent) {
     meterBlock.appendChild(powerLine);
   }
