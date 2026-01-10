@@ -12528,35 +12528,52 @@ function submitTitrationQuick(game) {
   handleMiniGameSuccess(game);
 }
 
-function computeTitrationColor(diff, tol) {
-  if (Math.abs(diff) <= tol) {
-    return { color: "rgba(245, 245, 245, 0.95)", label: "neutral" };
-  }
-  if (diff < 0) {
-    const nearNeutral = Math.abs(diff) <= tol * 2;
-    return {
-      color: nearNeutral ? "rgba(230, 120, 120, 0.85)" : "rgba(210, 70, 70, 0.9)",
-      label: "acidic",
-    };
-  }
-  const nearNeutral = diff <= tol * 2;
-  return {
-    color: nearNeutral ? "rgba(120, 170, 240, 0.85)" : "rgba(80, 130, 230, 0.9)",
-    label: "basic",
-  };
+function mixRgb(start, end, amount) {
+  const t = clamp(amount, 0, 1);
+  const r = Math.round(start[0] + (end[0] - start[0]) * t);
+  const g = Math.round(start[1] + (end[1] - start[1]) * t);
+  const b = Math.round(start[2] + (end[2] - start[2]) * t);
+  return [r, g, b];
 }
 
-function getTitrationReadout(diff, toleranceMl) {
+function getTitrationPh(diff, toleranceMl) {
   const isSuccess = Math.abs(diff) <= toleranceMl;
-  const phOffset = Math.min(5, Math.abs(diff) / (toleranceMl * 2));
+  const phOffset = Math.min(7, Math.abs(diff) / (toleranceMl * 2));
   let ph = 7.0;
   if (!isSuccess) {
     if (diff < 0) {
       ph = clamp(7.0 - phOffset, 1.0, 6.9);
     } else if (diff > 0) {
-      ph = clamp(7.0 + phOffset, 7.1, 13.0);
+      ph = clamp(7.0 + phOffset, 7.1, 14.0);
     }
   }
+  return ph;
+}
+
+function getTitrationPhColor(ph) {
+  const clamped = clamp(ph, 1, 14);
+  const acidic = [80, 130, 230];
+  const neutral = [245, 245, 245];
+  const basic = [210, 70, 70];
+  if (clamped <= 7) {
+    const t = (clamped - 1) / 6;
+    const [r, g, b] = mixRgb(acidic, neutral, t);
+    return `rgba(${r}, ${g}, ${b}, 0.9)`;
+  }
+  const t = (clamped - 7) / 7;
+  const [r, g, b] = mixRgb(neutral, basic, t);
+  return `rgba(${r}, ${g}, ${b}, 0.9)`;
+}
+
+function computeTitrationColor(diff, tol) {
+  const ph = getTitrationPh(diff, tol);
+  const label = Math.abs(diff) <= tol ? "neutral" : diff < 0 ? "acidic" : "basic";
+  return { color: getTitrationPhColor(ph), label };
+}
+
+function getTitrationReadout(diff, toleranceMl) {
+  const isSuccess = Math.abs(diff) <= toleranceMl;
+  const ph = getTitrationPh(diff, toleranceMl);
   const statusLabel = isSuccess ? "NEUTRAL" : diff < 0 ? "TOO ACIDIC" : "TOO BASIC";
   return {
     ph,
@@ -12667,8 +12684,11 @@ function renderTitrationTransfer(game) {
   const rightTotalMl = acidMl + baseAddedMl;
   const sampleFillPercent = clamp(rightTotalMl / transferCapMl, 0, 1) * 100;
   const diff = baseAddedMl - baseTargetMl;
-  const colorInfo = computeTitrationColor(diff, toleranceMl);
-  const sampleColor = isReadout ? colorInfo.color : "rgba(210, 70, 70, 0.9)";
+  const currentPh =
+    isReadout && instanceState.lastResult
+      ? instanceState.lastResult.ph
+      : getTitrationPh(diff, toleranceMl);
+  const sampleColor = getTitrationPhColor(currentPh);
 
   const baseBeaker = makeBeaker({
     label: "BASE DISPENSER",
@@ -12877,6 +12897,8 @@ function renderTitrationTransfer(game) {
       }
       const rightTotal = acidMl + totalBase;
       sampleBeaker.fill.style.height = `${clamp(rightTotal / transferCapMl, 0, 1) * 100}%`;
+      const samplePh = getTitrationPh(totalBase - baseTargetMl, toleranceMl);
+      sampleBeaker.fill.style.background = getTitrationPhColor(samplePh);
       if (sampleBeaker.bottomEl) {
         sampleBeaker.bottomEl.textContent = `Sample: ${formatMl(acidMl)} mL acid + ${formatMl(
           totalBase
