@@ -12526,26 +12526,8 @@ function renderResistorKit(game) {
   nowLine.className = "big";
   nowLine.textContent = hasSelection ? `NOW: ${Icalc.toFixed(2)}A` : "NOW: —";
 
-  const statusLine = document.createElement("div");
-  statusLine.className = "status";
-  statusLine.textContent = `Status: ${statusText}`;
-
-  const hintLine = document.createElement("div");
-  hintLine.className = "hint";
-  if (statusText === "LOW") {
-    hintLine.textContent = "Remove resistance ↑ current";
-  } else if (statusText === "HIGH" || statusText === "OVERHEAT") {
-    hintLine.textContent = "Add resistance ↓ current";
-  } else {
-    hintLine.textContent = "";
-  }
-
   hud.appendChild(targetLine);
   hud.appendChild(nowLine);
-  hud.appendChild(statusLine);
-  if (hintLine.textContent) {
-    hud.appendChild(hintLine);
-  }
 
   const microCopy = document.createElement("div");
   microCopy.style.fontSize = "12px";
@@ -12560,7 +12542,7 @@ function renderResistorKit(game) {
   } else if (statusText === "OK") {
     microCopy.textContent = "Locked. Press APPLY.";
   } else {
-    microCopy.textContent = "Select chips to begin.";
+    microCopy.textContent = "";
   }
 
   const meterBlock = document.createElement("div");
@@ -12657,13 +12639,6 @@ function renderResistorKit(game) {
   }
   meterBlock.appendChild(secondaryRow);
 
-  const kitLabel = document.createElement("div");
-  kitLabel.style.textTransform = "uppercase";
-  kitLabel.style.fontSize = "11px";
-  kitLabel.style.letterSpacing = "1px";
-  kitLabel.style.opacity = "0.8";
-  kitLabel.textContent = "SELECT CHIPS (SERIES)";
-
   const kitTray = document.createElement("div");
   kitTray.style.display = "grid";
   kitTray.style.gap = "8px";
@@ -12712,7 +12687,6 @@ function renderResistorKit(game) {
   wrapper.appendChild(hud);
   wrapper.appendChild(microCopy);
   wrapper.appendChild(meterBlock);
-  wrapper.appendChild(kitLabel);
   wrapper.appendChild(kitTray);
   if (selectedCount >= 3) {
     wrapper.appendChild(clearLink);
