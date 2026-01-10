@@ -802,10 +802,9 @@ function generatePatchDrag(rngSeed, night, template) {
     { op: "DEC", label: "DEC" },
     { op: "JNZ", label: "JNZ" },
     { op: "RET", label: "RET" },
-    { op: "NOP", label: "NOP" },
     { op: "INC", label: "INC" },
     { op: "XOR", label: "CLR" },
-    { op: "ADD", label: "ADD" },
+    { op: "ADD", label: "ADD +2" },
   ];
   const required = ["DEC", "JNZ", "RET"];
   const tiles = [];
@@ -834,7 +833,6 @@ function generatePatchDrag(rngSeed, night, template) {
         firstErrorIndex: null,
         latch: 0,
         failReason: null,
-        pcHistory: [],
       },
       lastTestSuccess: false,
       simMessage: "",
@@ -13181,16 +13179,16 @@ function renderTitrationQuick(game) {
   setMiniGameSubmitButton({ visible: false });
 }
 
-const PATCH_OP_ORDER = ["NOP", "DEC", "INC", "ADD", "XOR", "JNZ", "RET"];
+const PATCH_OP_ORDER = [null, "DEC", "INC", "ADD", "XOR", "JNZ", "RET"];
 
 function getPatchOpLabel(op) {
-  return op === "XOR" ? "CLR" : op;
+  if (op === "XOR") return "CLR";
+  if (op === "ADD") return "ADD +2";
+  return op;
 }
 
 function getPatchAvailableOps(game) {
-  const available = new Set(game.instanceState.tiles.map((tile) => tile.op));
-  available.add("NOP");
-  return available;
+  return new Set(game.instanceState.tiles.map((tile) => tile.op));
 }
 
 function getPatchSimStatus(sim) {
@@ -13209,7 +13207,7 @@ function selectPatchOp(op) {
   const game = state.miniGame;
   if (!game) return;
   const tiles = game.instanceState.tiles;
-  if (op !== "NOP" && !tiles.some((tile) => tile.op === op)) return;
+  if (!tiles.some((tile) => tile.op === op)) return;
   game.instanceState.selectedOp = game.instanceState.selectedOp === op ? null : op;
   renderMiniGame();
 }
@@ -13238,12 +13236,12 @@ function clearPatchSlot(slotIndex) {
 
 function cyclePatchSlot(game, slotIndex) {
   const available = getPatchAvailableOps(game);
-  const currentOp = game.instanceState.slots[slotIndex] ?? "NOP";
+  const currentOp = game.instanceState.slots[slotIndex] ?? null;
   const startIndex = PATCH_OP_ORDER.indexOf(currentOp);
   for (let i = 1; i <= PATCH_OP_ORDER.length; i += 1) {
     const nextOp = PATCH_OP_ORDER[(startIndex + i) % PATCH_OP_ORDER.length];
-    if (nextOp === "NOP" || available.has(nextOp)) {
-      game.instanceState.slots[slotIndex] = nextOp === "NOP" ? "NOP" : nextOp;
+    if (nextOp === null || available.has(nextOp)) {
+      game.instanceState.slots[slotIndex] = nextOp ?? null;
       game.instanceState.focusedSlot = slotIndex;
       resetPatchSim(game);
       game.instanceState.simMessage = "";
@@ -13279,13 +13277,15 @@ function handlePatchSlotDrop(event) {
   if (!op) return;
   const game = state.miniGame;
   if (!game) return;
-  if (op !== "NOP" && !game.instanceState.tiles.some((tile) => tile.op === op)) return;
+  if (!game.instanceState.tiles.some((tile) => tile.op === op)) return;
   placePatchOp(op, slotIndex);
 }
 
 function getPatchProgram(game) {
   const { slots } = game.instanceState;
-  return slots.map((slot) => slot ?? "NOP");
+  const lastFilled = slots.reduce((lastIndex, slot, index) => (slot ? index : lastIndex), -1);
+  if (lastFilled < 0) return [];
+  return slots.slice(0, lastFilled + 1).map((slot) => slot ?? "NOP");
 }
 
 function resetPatchSim(game) {
@@ -13299,7 +13299,6 @@ function resetPatchSim(game) {
     firstErrorIndex: null,
     latch: 0,
     failReason: null,
-    pcHistory: [],
   };
   game.instanceState.lastTestSuccess = false;
   game.instanceState.simMessage = "";
@@ -13332,13 +13331,6 @@ function stepPatchSim(game) {
     sim.firstErrorIndex ??= clamp(sim.pc - 1, 0, program.length - 1);
     return { ok: false, reason: "ran_off" };
   }
-  if (sim.pcHistory.includes(sim.pc)) {
-    sim.halted = true;
-    sim.status = "fail";
-    sim.failReason = "loop";
-    sim.firstErrorIndex ??= sim.pc;
-    return { ok: false, reason: "loop" };
-  }
   if (sim.steps >= maxSteps) {
     sim.halted = true;
     sim.status = "fail";
@@ -13347,10 +13339,6 @@ function stepPatchSim(game) {
     return { ok: false, reason: "loop" };
   }
   const op = program[sim.pc];
-  sim.pcHistory.push(sim.pc);
-  if (sim.pcHistory.length > maxSteps) {
-    sim.pcHistory.shift();
-  }
   const prevCx = sim.cx;
   const prevPc = sim.pc;
   let nextPc = sim.pc;
@@ -13419,7 +13407,7 @@ function runPatchSim(game, maxStepsOverride) {
 }
 
 function submitPatchDrag(game) {
-  if (game.instanceState.slots.some((slot) => slot === null)) return;
+  if (game.instanceState.slots.every((slot) => slot === null)) return;
   if (!game.instanceState.lastTestSuccess) return;
   resetPatchSim(game);
   const status = runPatchSim(game);
@@ -13433,7 +13421,7 @@ function submitPatchDrag(game) {
 function renderPatchDrag(game) {
   const { slots, selectedOp, initialCx, sim } = game.instanceState;
   dom.miniGameText.innerHTML =
-    "Patch the loop so CX returns to 0 and unlocks the latch.<br>Step/Test to see what the program does.";
+    "Patch the loop so CX returns to 0 and unlocks the latch.<br>Use as few steps as you need, then Step/Test to verify.";
   setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
   const board = document.createElement("div");
   board.className = "patch-board";
@@ -13499,8 +13487,8 @@ function renderPatchDrag(game) {
   const commitButton = document.createElement("button");
   commitButton.type = "button";
   commitButton.textContent = "COMMIT PATCH";
-  commitButton.disabled =
-    !game.instanceState.lastTestSuccess || slots.some((slot) => slot === null);
+  const hasProgram = slots.some((slot) => slot !== null);
+  commitButton.disabled = !game.instanceState.lastTestSuccess || !hasProgram;
   commitButton.addEventListener("click", () => submitPatchDrag(game));
   if (game.instanceState.commitPulse) {
     commitButton.classList.add("commit-pulse");
@@ -13564,7 +13552,7 @@ function renderPatchDrag(game) {
       token.style.background = "rgba(22, 30, 40, 0.9)";
       slotEl.appendChild(token);
     } else {
-      slotEl.textContent = "Slot";
+      slotEl.textContent = "Empty";
       slotEl.style.opacity = "0.7";
     }
     slotsRow.appendChild(slotEl);
@@ -13575,7 +13563,7 @@ function renderPatchDrag(game) {
   tray.style.flexWrap = "wrap";
   tray.style.gap = "8px";
   const availableOps = getPatchAvailableOps(game);
-  const orderedOps = ["DEC", "INC", "ADD", "XOR", "JNZ", "RET", "NOP"];
+  const orderedOps = ["DEC", "INC", "ADD", "XOR", "JNZ", "RET"];
   orderedOps.forEach((op) => {
     const tileEl = document.createElement("button");
     tileEl.type = "button";
@@ -13608,7 +13596,7 @@ function renderPatchDrag(game) {
   legend.style.display = "grid";
   legend.style.gap = "2px";
   const legendLine1 = document.createElement("div");
-  legendLine1.textContent = "DEC/INC/ADD: CX adjust | CLR: CX=0";
+  legendLine1.textContent = "DEC/INC/ADD +2: CX adjust | CLR: CX=0";
   const legendLine2 = document.createElement("div");
   legendLine2.textContent = "JNZ: jump to start if CX!=0 | RET: succeed only if CX==0";
   legend.appendChild(legendLine1);
