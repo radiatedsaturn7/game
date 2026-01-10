@@ -12471,7 +12471,7 @@ function renderResistorKit(game) {
   const { instanceState, instanceSolution } = game;
   const { V, I_target, toleranceA, PmaxW } = instanceSolution;
   dom.miniGameText.innerHTML =
-    "Assemble resistors in series to hit the target current without overheating.";
+    "Assemble resistors to hit the target current without overheating.";
   setMiniGameCancelVisibility({ showBottomBar: false, showInline: true });
 
   const wrapper = document.createElement("div");
@@ -12536,7 +12536,7 @@ function renderResistorKit(game) {
   microCopy.style.opacity = "0.85";
   microCopy.style.textAlign = "center";
   if (statusText === "LOW") {
-    microCopy.textContent = "Remove a chip to raise current.";
+    microCopy.textContent = "";
   } else if (statusText === "HIGH") {
     microCopy.textContent = "";
   } else if (statusText === "OVERHEAT") {
