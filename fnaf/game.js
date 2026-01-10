@@ -782,6 +782,10 @@ function generateTitrationTransfer(rngSeed, night, template) {
       phase: "loading",
       lastResult: null,
       lockControls: false,
+      attemptStartedAtMs: null,
+      attemptTimeLimitMs: 25000,
+      timeoutHandled: false,
+      timeoutResetQueued: false,
     },
   };
 }
@@ -12553,16 +12557,12 @@ function getTitrationReadout(diff, toleranceMl) {
       ph = clamp(7.0 + phOffset, 7.1, 13.0);
     }
   }
-  const message = isSuccess
-    ? "Neutral. Target reached."
-    : diff < 0
-      ? "Too acidic. Under-dosed."
-      : "Too basic. Over-dosed.";
+  const statusLabel = isSuccess ? "NEUTRAL" : diff < 0 ? "TOO ACIDIC" : "TOO BASIC";
   return {
     ph,
     diffMl: diff,
-    message,
     isSuccess,
+    statusLabel,
   };
 }
 
@@ -12578,6 +12578,10 @@ function resetTitrationTransferState(instanceState) {
   instanceState.pourStartLoadMl = null;
   instanceState.pourStartBaseMl = null;
   instanceState.successQueued = false;
+  instanceState.attemptTimeLimitMs = instanceState.attemptTimeLimitMs ?? 25000;
+  instanceState.attemptStartedAtMs = performance.now();
+  instanceState.timeoutHandled = false;
+  instanceState.timeoutResetQueued = false;
 }
 
 function renderTitrationTransfer(game) {
@@ -12585,11 +12589,10 @@ function renderTitrationTransfer(game) {
   const { acidMl, acidM, baseM, baseTargetMl, toleranceMl, targetPh, maxLoadMl } =
     instanceSolution;
   dom.miniGameText.innerHTML = `
-    Load base in the left beaker, then pour once to neutralize the acid sample.<br>
-    <span style="font-size:12px">M<sub>a</sub> · V<sub>a</sub> = M<sub>b</sub> · V<sub>b</sub></span><br>
-    <span style="font-size:11px">Compute V<sub>b</sub> = (M<sub>a</sub> · V<sub>a</sub>) / M<sub>b</sub></span>
+    Load base, then POUR once.<br>
+    <span style="font-size:11px">V<sub>b</sub> = (M<sub>a</sub> · V<sub>a</sub>) / M<sub>b</sub></span>
   `;
-  setMiniGameCancelVisibility({ showBottomBar: false, showInline: true });
+  setMiniGameCancelVisibility({ showBottomBar: false, showInline: false });
 
   const isLoading = instanceState.phase === "loading";
   const isPouring = instanceState.phase === "pouring";
@@ -12597,14 +12600,33 @@ function renderTitrationTransfer(game) {
   const locked = instanceState.lockControls;
   const loadedMl = instanceState.loadedMl ?? 0;
   const baseAddedMl = instanceState.baseAddedMl ?? 0;
+  const attemptLimitMs = instanceState.attemptTimeLimitMs ?? 25000;
+  if (!instanceState.attemptStartedAtMs) {
+    instanceState.attemptStartedAtMs = performance.now();
+  }
 
   const wrapper = document.createElement("div");
   wrapper.style.display = "grid";
-  wrapper.style.gap = "10px";
+  wrapper.style.gap = "8px";
+  wrapper.style.position = "relative";
+
+  const threatBar = document.createElement("div");
+  threatBar.style.position = "relative";
+  threatBar.style.height = "6px";
+  threatBar.style.borderRadius = "999px";
+  threatBar.style.background = "rgba(255, 255, 255, 0.08)";
+  threatBar.style.overflow = "hidden";
+  const threatFill = document.createElement("div");
+  threatFill.style.height = "100%";
+  threatFill.style.width = "100%";
+  threatFill.style.background =
+    "linear-gradient(90deg, rgba(120, 220, 170, 0.9), rgba(240, 160, 90, 0.95), rgba(240, 80, 80, 0.95))";
+  threatFill.style.transition = "width 0.1s linear";
+  threatBar.appendChild(threatFill);
 
   const beakerRow = document.createElement("div");
   beakerRow.style.display = "flex";
-  beakerRow.style.gap = "12px";
+  beakerRow.style.gap = "8px";
   beakerRow.style.alignItems = "stretch";
   beakerRow.style.justifyContent = "space-between";
   beakerRow.style.position = "relative";
@@ -12663,13 +12685,13 @@ function renderTitrationTransfer(game) {
   const sampleColor = isReadout ? colorInfo.color : "rgba(210, 70, 70, 0.9)";
 
   const baseBeaker = makeBeaker({
-    label: "BASE DISPENSER (BLUE)",
+    label: "BASE DISPENSER",
     color: "rgba(70, 140, 230, 0.9)",
     fillPercent: clamp(loadedMl / maxLoadMl, 0, 1) * 100,
     bottomText: `Loaded: ${formatMl(loadedMl)} mL`,
   });
   const sampleBeaker = makeBeaker({
-    label: "ACID SAMPLE (RED)",
+    label: "ACID SAMPLE",
     color: sampleColor,
     fillPercent: sampleFillPercent,
     bottomText: isLoading
@@ -12682,7 +12704,7 @@ function renderTitrationTransfer(game) {
 
   const readouts = document.createElement("div");
   readouts.style.display = "grid";
-  readouts.style.gap = "4px";
+  readouts.style.gap = "2px";
   readouts.style.fontSize = "12px";
   readouts.style.textAlign = "center";
   const acidReadout = document.createElement("div");
@@ -12713,14 +12735,15 @@ function renderTitrationTransfer(game) {
 
   const clearButton = document.createElement("button");
   clearButton.type = "button";
-  clearButton.textContent = "CLEAR LOAD";
+  clearButton.textContent = "CLEAR";
+  clearButton.style.fontSize = "11px";
+  clearButton.style.padding = "6px 10px";
   clearButton.disabled = locked || !isLoading;
   clearButton.addEventListener("click", () => {
     if (instanceState.lockControls || instanceState.phase !== "loading") return;
     instanceState.loadedMl = 0;
     renderMiniGame();
   });
-  doseRow.appendChild(clearButton);
 
   const transferButton = document.createElement("button");
   transferButton.type = "button";
@@ -12738,78 +12761,91 @@ function renderTitrationTransfer(game) {
     renderMiniGame();
   });
 
-  const resetButton = document.createElement("button");
-  resetButton.type = "button";
-  resetButton.textContent = "RESET";
-  resetButton.addEventListener("click", () => {
-    resetTitrationTransferState(instanceState);
-    renderMiniGame();
-  });
-
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.textContent = "CANCEL";
   cancelButton.addEventListener("click", cancelMiniGame);
 
-  const actionRow = makeBtnRow([transferButton, resetButton, cancelButton], { wrap: true });
+  const actionRow = makeBtnRow([clearButton, transferButton, cancelButton], { wrap: true });
   actionRow.style.width = "100%";
+  transferButton.style.flex = "1";
+  cancelButton.style.flex = "1";
 
+  wrapper.appendChild(threatBar);
   wrapper.appendChild(beakerRow);
   wrapper.appendChild(readouts);
-  wrapper.appendChild(doseRow);
-  wrapper.appendChild(actionRow);
+  if (!isReadout) {
+    wrapper.appendChild(doseRow);
+    wrapper.appendChild(actionRow);
+  }
 
   if (isReadout && instanceState.lastResult) {
     const result = instanceState.lastResult;
+    const readoutOverlay = document.createElement("div");
+    readoutOverlay.style.position = "absolute";
+    readoutOverlay.style.left = "0";
+    readoutOverlay.style.right = "0";
+    readoutOverlay.style.bottom = "0";
+    readoutOverlay.style.padding = "12px";
+    readoutOverlay.style.background = "rgba(0,0,0,0.78)";
+    readoutOverlay.style.borderTop = "1px solid rgba(255,255,255,0.15)";
+    readoutOverlay.style.backdropFilter = "blur(2px)";
+
     const readoutPanel = document.createElement("div");
     readoutPanel.style.display = "grid";
-    readoutPanel.style.gap = "6px";
-    readoutPanel.style.padding = "10px 12px";
-    readoutPanel.style.border = "1px solid rgba(255,255,255,0.2)";
-    readoutPanel.style.background = "rgba(8, 12, 18, 0.65)";
+    readoutPanel.style.gap = "4px";
     readoutPanel.style.textAlign = "center";
 
     const title = document.createElement("div");
     title.textContent = "READOUT";
-    title.style.fontSize = "16px";
+    title.style.fontSize = "14px";
     title.style.fontWeight = "700";
 
     const target = document.createElement("div");
-    target.textContent = `Target pH: ${targetPh.toFixed(1)}`;
-
-    const measured = document.createElement("div");
-    measured.textContent = `Measured pH: ${result.ph.toFixed(1)}`;
-    measured.style.fontSize = "14px";
-    measured.style.fontWeight = "600";
+    target.textContent = `Target pH: ${targetPh.toFixed(1)}   Measured: ${result.ph.toFixed(1)}`;
+    target.style.fontSize = "12px";
 
     const message = document.createElement("div");
-    message.textContent = result.message;
+    message.textContent = result.statusLabel;
+    message.style.fontSize = "18px";
+    message.style.fontWeight = "700";
+    message.style.letterSpacing = "0.5px";
 
     readoutPanel.appendChild(title);
     readoutPanel.appendChild(target);
-    readoutPanel.appendChild(measured);
     readoutPanel.appendChild(message);
 
-    if (result.diffMl !== 0) {
-      const estimate = document.createElement("div");
+    const hint = document.createElement("div");
+    hint.style.fontSize = "12px";
+    if (result.hint) {
+      hint.textContent = result.hint;
+    } else if (result.diffMl !== 0) {
       const direction = result.diffMl < 0 ? "under" : "over";
-      estimate.textContent = `Estimate: ${formatMl(Math.abs(result.diffMl))} mL ${direction}`;
-      estimate.style.fontSize = "12px";
-      readoutPanel.appendChild(estimate);
+      hint.textContent = `Estimate: ${formatMl(Math.abs(result.diffMl))} mL ${direction}`;
+    } else {
+      hint.textContent = "Estimate: 0 mL offset";
     }
+    readoutPanel.appendChild(hint);
 
-    if (!result.isSuccess) {
-      const tryAgain = document.createElement("button");
-      tryAgain.type = "button";
-      tryAgain.textContent = "TRY AGAIN";
-      tryAgain.addEventListener("click", () => {
-        resetTitrationTransferState(instanceState);
-        renderMiniGame();
-      });
-      readoutPanel.appendChild(tryAgain);
-    }
+    const buttonRow = makeBtnRow([], { wrap: false });
+    buttonRow.style.marginTop = "6px";
+    const tryAgain = document.createElement("button");
+    tryAgain.type = "button";
+    tryAgain.textContent = "TRY AGAIN";
+    tryAgain.addEventListener("click", () => {
+      resetTitrationTransferState(instanceState);
+      renderMiniGame();
+    });
+    const cancelReadout = document.createElement("button");
+    cancelReadout.type = "button";
+    cancelReadout.textContent = "CANCEL";
+    cancelReadout.addEventListener("click", cancelMiniGame);
+    buttonRow.appendChild(tryAgain);
+    buttonRow.appendChild(cancelReadout);
+    readoutPanel.appendChild(buttonRow);
 
-    wrapper.appendChild(readoutPanel);
+    readoutOverlay.appendChild(readoutPanel);
+    wrapper.appendChild(readoutOverlay);
 
     if (result.isSuccess && !instanceState.successQueued) {
       instanceState.successQueued = true;
@@ -12824,6 +12860,7 @@ function renderTitrationTransfer(game) {
   dom.miniGameOptions.appendChild(wrapper);
   setMiniGameSubmitButton({ visible: false });
 
+  let updatePour = null;
   if (isPouring) {
     const stream = document.createElement("div");
     stream.style.position = "absolute";
@@ -12838,7 +12875,7 @@ function renderTitrationTransfer(game) {
     stream.style.opacity = "0.9";
     beakerRow.appendChild(stream);
 
-    const updateFill = () => {
+    updatePour = () => {
       const start = instanceState.pourStartAt ?? performance.now();
       const duration = instanceState.pourDurationMs ?? 800;
       const elapsed = performance.now() - start;
@@ -12877,7 +12914,56 @@ function renderTitrationTransfer(game) {
     if (!instanceState.pourStartAt) {
       instanceState.pourStartAt = performance.now();
     }
-    startMiniGameAnimation(updateFill);
+  }
+
+  const updateThreat = () => {
+    const now = performance.now();
+    const elapsed = now - (instanceState.attemptStartedAtMs ?? now);
+    const remaining = Math.max(0, attemptLimitMs - elapsed);
+    const pct = clamp(remaining / attemptLimitMs, 0, 1);
+    threatFill.style.width = `${Math.max(4, pct * 100)}%`;
+    if (remaining <= 0 && !instanceState.timeoutHandled) {
+      if (instanceState.phase === "loading" || instanceState.phase === "pouring") {
+        instanceState.timeoutHandled = true;
+        applyMiniGamePressurePenalty();
+        instanceState.phase = "readout";
+        instanceState.lockControls = false;
+        instanceState.loadedMl = 0;
+        instanceState.baseAddedMl = 0;
+        instanceState.pourStartAt = null;
+        instanceState.pourDurationMs = null;
+        instanceState.pourStartLoadMl = null;
+        instanceState.pourStartBaseMl = null;
+        instanceState.lastResult = {
+          ph: targetPh,
+          diffMl: 0,
+          isSuccess: false,
+          statusLabel: "INTERRUPTED",
+          hint: "Interrupted. Try again.",
+        };
+        if (!instanceState.timeoutResetQueued) {
+          instanceState.timeoutResetQueued = true;
+          setTimeout(() => {
+            if (!state.miniGameActive || state.miniGame !== game) return;
+            if (game.instanceState.phase !== "readout") return;
+            if (game.instanceState.lastResult?.statusLabel !== "INTERRUPTED") return;
+            resetTitrationTransferState(game.instanceState);
+            renderMiniGame();
+          }, 700);
+        }
+        stopMiniGameAnimation();
+        renderMiniGame();
+      }
+    }
+  };
+
+  if (updatePour || !isReadout) {
+    startMiniGameAnimation(() => {
+      updateThreat();
+      if (updatePour) {
+        updatePour();
+      }
+    });
   }
 }
 
@@ -13777,6 +13863,19 @@ function applyMiniGameCancelPenalty() {
   );
   state.threat = Math.min(5, state.threat + 0.05);
   pushStatus("You back away from the panel.", 2);
+  updateUI();
+}
+
+function applyMiniGamePressurePenalty() {
+  const profile = getNightProfile();
+  const effects = getPassiveEffects();
+  registerSignal(
+    state.playerRoom,
+    0.04 * profile.signalStrength.device * effects.signalSpike,
+    { type: "minigame-pressure", lastKnownChance: 0.04 }
+  );
+  state.threat = Math.min(5, state.threat + 0.03);
+  pushStatus("Proximity spike. Try again.", 2);
   updateUI();
 }
 
