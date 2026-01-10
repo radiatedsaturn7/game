@@ -873,7 +873,9 @@ function generatePatchDrag(rngSeed, night, template) {
     { op: "RET", label: "RET" },
     { op: "INC", label: "INC" },
     { op: "XOR", label: "CLR" },
-    { op: "ADD", label: "ADD +2" },
+    { op: "ADD", label: "ADD 2" },
+    { op: "SUB2", label: "SUB 2" },
+    { op: "PRT", label: "PRT" },
   ];
   const required = ["DEC", "JNZ", "RET"];
   const tiles = [];
@@ -899,7 +901,6 @@ function generatePatchDrag(rngSeed, night, template) {
       autoRunning: false,
       autoRunTimer: null,
       autoRunIntervalMs: 420,
-      showLegend: false,
       sim: {
         pc: 0,
         cx: initialCx,
@@ -909,6 +910,7 @@ function generatePatchDrag(rngSeed, night, template) {
         firstErrorIndex: null,
         latch: 0,
         failReason: null,
+        trace: [],
       },
       simMessage: "",
     },
@@ -11969,7 +11971,11 @@ function ensureMiniGameStylesInjected() {
     #miniGamePanel.miniGameMobile input[type="range"] { height: 32px; }
     #miniGamePanel.miniGameMobile .chem-beaker { height: 120px; }
     #miniGamePanel .patch-output { font-family: ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    #miniGamePanel .patch-output { background: rgba(8, 12, 18, 0.65); border: 1px solid rgba(255,255,255,0.2); padding: 6px 8px; white-space: pre-line; }
+    #miniGamePanel .patch-output { background: rgba(8, 12, 18, 0.65); border: 1px solid rgba(255,255,255,0.2); padding: 6px 8px; display: grid; gap: 4px; }
+    #miniGamePanel .patch-trace-line { font-size: 11px; opacity: 0.85; }
+    #miniGamePanel .patch-instruction { font-size: 12px; opacity: 0.85; }
+    #miniGamePanel .patch-info { font-size: 12px; }
+    #miniGamePanel .patch-running { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.75; }
     #miniGamePanel .patch-tile.selected { border: 1px solid rgba(140, 220, 255, 0.9); box-shadow: 0 0 10px rgba(140, 220, 255, 0.7); }
     #miniGamePanel .patch-tile.disabled { opacity: 0.45; cursor: not-allowed; }
     #miniGamePanel .commit-pulse { animation: miniGameCommitPulse 0.6s ease-out; }
@@ -13386,12 +13392,13 @@ function renderTitrationQuick(game) {
   setMiniGameSubmitButton({ visible: false });
 }
 
-const PATCH_OPS = ["DEC", "INC", "ADD", "XOR", "JNZ", "RET", "NOP"];
+const PATCH_OPS = ["DEC", "INC", "ADD", "SUB2", "XOR", "JNZ", "RET", "PRT"];
 const PATCH_OP_ORDER = [null, ...PATCH_OPS];
 
 function getPatchOpLabel(op) {
   if (op === "XOR") return "CLR";
-  if (op === "ADD") return "ADD +2";
+  if (op === "ADD") return "ADD 2";
+  if (op === "SUB2") return "SUB 2";
   return op;
 }
 
@@ -13402,15 +13409,17 @@ function getPatchOpInfo(op) {
     case "INC":
       return { title: "INC", description: "CX = CX + 1" };
     case "ADD":
-      return { title: "ADD+2", description: "CX = CX + 2" };
+      return { title: "ADD 2", description: "CX = CX + 2" };
+    case "SUB2":
+      return { title: "SUB 2", description: "CX = CX - 2" };
     case "XOR":
       return { title: "CLR", description: "CX = 0" };
     case "JNZ":
       return { title: "JNZ", description: "If CX != 0, jump back to start" };
     case "RET":
       return { title: "RET", description: "Stop. Succeeds only if CX == 0" };
-    case "NOP":
-      return { title: "NOP", description: "Do nothing" };
+    case "PRT":
+      return { title: "PRT", description: "Log current CX" };
     default:
       return null;
   }
@@ -13530,6 +13539,7 @@ function resetPatchSim(game) {
     firstErrorIndex: null,
     latch: 0,
     failReason: null,
+    trace: [],
   };
   game.instanceState.phase = "idle";
   game.instanceState.simMessage = "";
@@ -13593,6 +13603,18 @@ function stepPatchSim(game) {
       nextCx += 2;
       nextPc += 1;
       break;
+    case "SUB2":
+      nextCx = Math.max(0, nextCx - 2);
+      nextPc += 1;
+      break;
+    case "PRT":
+      sim.trace ??= [];
+      sim.trace.push(`PRT: CX=${nextCx}`);
+      if (sim.trace.length > 4) {
+        sim.trace.shift();
+      }
+      nextPc += 1;
+      break;
     case "JNZ":
       nextPc = nextCx !== 0 ? 0 : nextPc + 1;
       break;
@@ -13622,6 +13644,8 @@ function stepPatchSim(game) {
       game.instanceState.simMessage = "Executing: NOP";
     } else if (op === "XOR") {
       game.instanceState.simMessage = `Executing: ${label} (CX -> 0)`;
+    } else if (op === "PRT") {
+      game.instanceState.simMessage = `Executing: ${label} (trace CX=${nextCx})`;
     } else {
       game.instanceState.simMessage = `Executing: ${label} (CX -> ${nextCx})`;
     }
@@ -13745,6 +13769,21 @@ function renderPatchDrag(game) {
   const phase = game.instanceState.phase ?? "idle";
   dom.miniGameText.textContent = "";
   setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
+  const buildAttemptsLine = () => {
+    const attempts = document.createElement("div");
+    attempts.style.fontSize = "12px";
+    attempts.style.fontWeight = "600";
+    const remaining = game.instanceState.commitAttemptsMax - game.instanceState.commitAttemptsUsed;
+    let attemptsColor = "rgba(180, 220, 255, 0.9)";
+    if (remaining <= 1) {
+      attemptsColor = "rgba(255, 90, 90, 0.95)";
+    } else if (remaining <= 2) {
+      attemptsColor = "rgba(255, 180, 90, 0.9)";
+    }
+    attempts.style.color = attemptsColor;
+    attempts.textContent = `ATTEMPTS: ${game.instanceState.commitAttemptsUsed}/${game.instanceState.commitAttemptsMax}`;
+    return attempts;
+  };
   const board = document.createElement("div");
   board.className = "patch-board";
   board.style.display = "grid";
@@ -13778,19 +13817,6 @@ function renderPatchDrag(game) {
   taskCard.appendChild(taskTarget);
   taskCard.appendChild(taskConstraint);
 
-  const attempts = document.createElement("div");
-  attempts.style.fontSize = "12px";
-  attempts.style.fontWeight = "600";
-  const remaining = game.instanceState.commitAttemptsMax - game.instanceState.commitAttemptsUsed;
-  let attemptsColor = "rgba(180, 220, 255, 0.9)";
-  if (remaining <= 1) {
-    attemptsColor = "rgba(255, 90, 90, 0.95)";
-  } else if (remaining <= 2) {
-    attemptsColor = "rgba(255, 180, 90, 0.9)";
-  }
-  attempts.style.color = attemptsColor;
-  attempts.textContent = `ATTEMPTS: ${game.instanceState.commitAttemptsUsed}/${game.instanceState.commitAttemptsMax}`;
-
   const controls = document.createElement("div");
   controls.style.display = "flex";
   controls.style.gap = "8px";
@@ -13818,19 +13844,8 @@ function renderPatchDrag(game) {
     commitButton.classList.add("commit-pulse");
   }
 
-  const legendToggle = document.createElement("button");
-  legendToggle.type = "button";
-  legendToggle.textContent = "?";
-  legendToggle.style.minWidth = "36px";
-  legendToggle.disabled = game.instanceState.autoRunning;
-  legendToggle.addEventListener("click", () => {
-    game.instanceState.showLegend = !game.instanceState.showLegend;
-    renderMiniGame();
-  });
-
   controls.appendChild(resetButton);
   controls.appendChild(commitButton);
-  controls.appendChild(legendToggle);
 
   const slotsRow = document.createElement("div");
   slotsRow.style.display = "grid";
@@ -13874,11 +13889,11 @@ function renderPatchDrag(game) {
 
   const tray = document.createElement("div");
   tray.className = "patch-tray";
-  tray.style.display = "flex";
-  tray.style.flexWrap = "wrap";
+  tray.style.display = "grid";
+  tray.style.gridTemplateColumns = "repeat(4, minmax(0, 1fr))";
   tray.style.gap = "8px";
   const availableOps = getPatchAvailableOps();
-  const orderedOps = ["DEC", "INC", "ADD", "XOR", "JNZ", "RET", "NOP"];
+  const orderedOps = ["DEC", "INC", "ADD", "SUB2", "XOR", "JNZ", "RET", "PRT"];
   orderedOps.forEach((op) => {
     const tileEl = document.createElement("button");
     tileEl.type = "button";
@@ -13900,47 +13915,42 @@ function renderPatchDrag(game) {
   commandInfo.className = "patch-info";
   const selectedInfo = selectedOp ? getPatchOpInfo(selectedOp) : null;
   if (selectedInfo) {
-    const infoTitle = document.createElement("div");
-    infoTitle.textContent = `SELECTED: ${selectedInfo.title}`;
-    infoTitle.className = "patch-info-title";
-    const infoDesc = document.createElement("div");
-    infoDesc.textContent = selectedInfo.description;
-    infoDesc.className = "patch-info-desc";
-    commandInfo.appendChild(infoTitle);
-    commandInfo.appendChild(infoDesc);
+    commandInfo.textContent = `${selectedInfo.title}: ${selectedInfo.description}`;
   } else {
-    const hintLine = document.createElement("div");
-    hintLine.textContent = "Tap a command, then tap a slot.";
-    commandInfo.appendChild(hintLine);
+    commandInfo.textContent = "Tap a command, then tap a slot.";
   }
 
-  const legend = document.createElement("div");
-  legend.style.fontSize = "11px";
-  legend.style.display = game.instanceState.showLegend ? "grid" : "none";
-  legend.style.gap = "4px";
-  const legendLine1 = document.createElement("div");
-  legendLine1.textContent = "Objective: reach CX = 0, then RET.";
-  const legendLine2 = document.createElement("div");
-  legendLine2.textContent = "Controls: tap a command, tap a slot. Tap slot to clear.";
-  legend.appendChild(legendLine1);
-  legend.appendChild(legendLine2);
+  const instructionLine = document.createElement("div");
+  instructionLine.className = "patch-instruction";
+  instructionLine.textContent = "Build a 5-slot program. Make CX reach 0, then RET.";
 
   const outputPanel = document.createElement("div");
   outputPanel.className = "patch-output";
-  outputPanel.textContent = `PC:${sim.pc}  CX:${sim.cx}  Steps:${sim.steps}  Latch:${Math.round(
-    sim.latch
-  )}%\nStatus: ${getPatchSimStatus(sim)}`;
+  const outputHeader = document.createElement("div");
+  outputHeader.textContent = `PC:${sim.pc}  CX:${sim.cx}  Steps:${sim.steps}  Latch:${Math.round(sim.latch)}%`;
+  const outputStatus = document.createElement("div");
+  outputStatus.textContent = `Status: ${getPatchSimStatus(sim)}`;
+  outputPanel.appendChild(outputHeader);
+  outputPanel.appendChild(outputStatus);
+  if (sim.trace?.length) {
+    sim.trace.forEach((line) => {
+      const traceLine = document.createElement("div");
+      traceLine.className = "patch-trace-line";
+      traceLine.textContent = line;
+      outputPanel.appendChild(traceLine);
+    });
+  }
 
   const runningHeader = document.createElement("div");
   runningHeader.className = "patch-running";
-  runningHeader.textContent = "RUNNING PATCH...";
+  runningHeader.textContent = "RUNNING...";
 
   const resultLine = document.createElement("div");
   resultLine.className = "patch-result";
   if (sim.status === "success") {
-    resultLine.textContent = `RESULT: SUCCESS (CX=${sim.cx})`;
+    resultLine.textContent = "RESULT: SUCCESS";
   } else if (sim.status === "fail") {
-    resultLine.textContent = `RESULT: FAIL (CX=${sim.cx})`;
+    resultLine.textContent = "RESULT: FAIL";
   } else {
     resultLine.textContent = "RESULT: --";
   }
@@ -13948,29 +13958,46 @@ function renderPatchDrag(game) {
   const simMessage = document.createElement("div");
   simMessage.className = "patch-sim-message";
   simMessage.textContent = game.instanceState.simMessage;
-
-  board.appendChild(taskCard);
-  board.appendChild(attempts);
+  const topPanel = document.createElement("div");
+  topPanel.style.display = "grid";
+  topPanel.style.gap = "6px";
+  if (phase === "idle") {
+    topPanel.appendChild(taskCard);
+    topPanel.appendChild(buildAttemptsLine());
+  } else {
+    const outputCard = document.createElement("div");
+    outputCard.style.display = "grid";
+    outputCard.style.gap = "4px";
+    outputCard.style.padding = "8px";
+    outputCard.style.border = "1px solid rgba(255,255,255,0.25)";
+    outputCard.style.background = "rgba(10, 16, 22, 0.75)";
+    const outputLabel = document.createElement("div");
+    outputLabel.style.fontSize = "12px";
+    outputLabel.style.opacity = "0.8";
+    outputLabel.textContent = "SIM OUTPUT";
+    outputCard.appendChild(outputLabel);
+    if (phase === "running") {
+      outputCard.appendChild(runningHeader);
+    }
+    outputCard.appendChild(outputPanel);
+    outputCard.appendChild(buildAttemptsLine());
+    if (phase === "running") {
+      outputCard.appendChild(simMessage);
+    }
+    if (phase === "result") {
+      outputCard.appendChild(resultLine);
+      if (game.instanceState.simMessage) {
+        outputCard.appendChild(simMessage);
+      }
+    }
+    topPanel.appendChild(outputCard);
+  }
+  board.appendChild(topPanel);
   board.appendChild(controls);
   board.appendChild(slotsRow);
   board.appendChild(tray);
+  board.appendChild(instructionLine);
   board.appendChild(commandInfo);
-  board.appendChild(legend);
-  const outputLabel = document.createElement("div");
-  outputLabel.style.fontSize = "12px";
-  outputLabel.style.opacity = "0.8";
-  outputLabel.textContent = "SIM OUTPUT";
-  board.appendChild(outputLabel);
-  if (phase === "running") {
-    board.appendChild(runningHeader);
-  }
-  board.appendChild(outputPanel);
-  if (phase === "running") {
-    board.appendChild(simMessage);
-  }
-  if (phase === "result") {
-    board.appendChild(resultLine);
-  }
   dom.miniGameOptions.appendChild(board);
 
   setMiniGameSubmitButton({ visible: false });
