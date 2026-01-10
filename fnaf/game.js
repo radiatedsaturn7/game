@@ -893,6 +893,7 @@ function generatePatchDrag(rngSeed, night, template) {
       tiles: shuffled,
       slots: Array.from({ length: 5 }, () => null),
       selectedOp: null,
+      focusedSlot: 4,
       phase: "idle",
       initialCx,
       maxSteps,
@@ -11862,6 +11863,7 @@ function renderMiniGame() {
   ensureMiniGameStylesInjected();
   dom.miniGameTitle.textContent = game.title;
   dom.miniGameText.textContent = game.ui?.text || game.roomHintText || "";
+  dom.miniGameText.classList.remove("patch-instruction");
   dom.miniGameOptions.innerHTML = "";
   stopMiniGameAnimation();
   setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
@@ -13420,8 +13422,24 @@ function selectPatchOp(op) {
   if (!game) return;
   if (game.instanceState.autoRunning) return;
   if (!PATCH_OPS.includes(op)) return;
-  game.instanceState.selectedOp = game.instanceState.selectedOp === op ? null : op;
-  renderMiniGame();
+  game.instanceState.selectedOp = op;
+  const { slots } = game.instanceState;
+  const startIndex = game.instanceState.focusedSlot ?? slots.length - 1;
+  const slotIndex = getNextPatchSlotIndex(slots, startIndex);
+  if (slotIndex === null) {
+    renderMiniGame();
+    return;
+  }
+  placePatchOp(op, slotIndex);
+}
+
+function getNextPatchSlotIndex(slots, startIndex) {
+  for (let index = startIndex; index >= 0; index -= 1) {
+    if (!slots[index]) {
+      return index;
+    }
+  }
+  return null;
 }
 
 function placePatchOp(op, slotIndex) {
@@ -13430,8 +13448,8 @@ function placePatchOp(op, slotIndex) {
   if (game.instanceState.autoRunning) return;
   const { slots } = game.instanceState;
   slots[slotIndex] = op;
-  game.instanceState.selectedOp = null;
-  game.instanceState.focusedSlot = slotIndex;
+  game.instanceState.selectedOp = op;
+  game.instanceState.focusedSlot = getNextPatchSlotIndex(slots, slotIndex - 1);
   game.instanceState.phase = "idle";
   resetPatchSim(game);
   game.instanceState.simMessage = "";
@@ -13443,7 +13461,7 @@ function clearPatchSlot(slotIndex) {
   if (!game) return;
   if (game.instanceState.autoRunning) return;
   game.instanceState.slots[slotIndex] = null;
-  game.instanceState.focusedSlot = slotIndex;
+  game.instanceState.focusedSlot = getNextPatchSlotIndex(game.instanceState.slots, slotIndex);
   game.instanceState.phase = "idle";
   resetPatchSim(game);
   game.instanceState.simMessage = "";
@@ -13741,7 +13759,8 @@ function submitPatchDrag(game) {
 function renderPatchDrag(game) {
   const { slots, selectedOp, initialCx, sim } = game.instanceState;
   const phase = game.instanceState.phase ?? "idle";
-  dom.miniGameText.textContent = "";
+  dom.miniGameText.textContent = "Build a 5-slot program. Make CX reach 0, then RET.";
+  dom.miniGameText.classList.add("patch-instruction");
   setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
   const buildAttemptsLine = () => {
     const attempts = document.createElement("div");
@@ -13803,7 +13822,7 @@ function renderPatchDrag(game) {
   resetButton.addEventListener("click", () => {
     game.instanceState.slots = Array.from({ length: 5 }, () => null);
     game.instanceState.selectedOp = null;
-    game.instanceState.focusedSlot = null;
+    game.instanceState.focusedSlot = game.instanceState.slots.length - 1;
     resetPatchSim(game);
     renderMiniGame();
   });
@@ -13843,9 +13862,6 @@ function renderPatchDrag(game) {
     if (game.instanceState.focusedSlot === index) {
       slotEl.style.boxShadow = "0 0 0 2px rgba(180, 180, 240, 0.5)";
     }
-    slotEl.addEventListener("click", handlePatchSlotClick);
-    slotEl.addEventListener("dragover", (event) => event.preventDefault());
-    slotEl.addEventListener("drop", handlePatchSlotDrop);
     if (slot) {
       const label = getPatchOpLabel(slot);
       const token = document.createElement("div");
@@ -13876,27 +13892,16 @@ function renderPatchDrag(game) {
     tileEl.classList.toggle("selected", selectedOp === op);
     const isAvailable = availableOps.has(op);
     tileEl.disabled = !isAvailable || game.instanceState.autoRunning;
-    tileEl.draggable = !tileEl.disabled;
-    tileEl.addEventListener("dragstart", (event) => {
-      if (tileEl.disabled) return;
-      event.dataTransfer?.setData("text/plain", op);
-    });
     tileEl.addEventListener("click", () => selectPatchOp(op));
     tray.appendChild(tileEl);
   });
 
-  const commandInfo = document.createElement("div");
-  commandInfo.className = "patch-info";
   const selectedInfo = selectedOp ? getPatchOpInfo(selectedOp) : null;
-  if (selectedInfo) {
+  const commandInfo = selectedInfo ? document.createElement("div") : null;
+  if (commandInfo && selectedInfo) {
+    commandInfo.className = "patch-instruction patch-help";
     commandInfo.textContent = `${selectedInfo.title}: ${selectedInfo.description}`;
-  } else {
-    commandInfo.textContent = "Tap a command, then tap a slot.";
   }
-
-  const instructionLine = document.createElement("div");
-  instructionLine.className = "patch-instruction";
-  instructionLine.textContent = "Build a 5-slot program. Make CX reach 0, then RET.";
 
   const outputPanel = document.createElement("div");
   outputPanel.className = "patch-output";
@@ -13970,8 +13975,9 @@ function renderPatchDrag(game) {
   board.appendChild(controls);
   board.appendChild(slotsRow);
   board.appendChild(tray);
-  board.appendChild(instructionLine);
-  board.appendChild(commandInfo);
+  if (commandInfo) {
+    board.appendChild(commandInfo);
+  }
   dom.miniGameOptions.appendChild(board);
 
   setMiniGameSubmitButton({ visible: false });
