@@ -657,36 +657,35 @@ function generateTitrationQuick(rngSeed, night, template) {
     if (variant === "dilution") {
       const C1 = rng.nextInt(10, 30) / 10;
       const C2 = rng.nextInt(2, 10) / 10;
-      const V2 = rng.nextInt(50, 150) / 10 * 10;
+      const V2 = rng.nextInt(40, 100) / 10 * 10;
       const V1 = (C2 * V2) / C1;
-      if (V1 <= 0 || V1 > 200) continue;
+      if (V1 <= 0 || V1 > 100) continue;
       if (Math.abs(V1 / 5 - Math.round(V1 / 5)) > 0.01) continue;
       targetMl = Math.round(V1);
       displayValues = { C1, C2, V2 };
       break;
     } else {
       const M1 = rng.nextInt(5, 15) / 10;
-      const V1 = rng.nextInt(20, 60);
+      const V1 = rng.nextInt(20, 80);
       const M2 = rng.nextInt(5, 20) / 10;
       const V2 = (M1 * V1) / M2;
-      if (V2 <= 0 || V2 > 200) continue;
+      if (V2 <= 0 || V2 > 100) continue;
       if (Math.abs(V2 / 5 - Math.round(V2 / 5)) > 0.01) continue;
       targetMl = Math.round(V2);
       displayValues = { M1, V1, M2 };
       break;
     }
   }
-  let mlSelected = clamp(targetMl + rng.nextInt(-30, 30), 0, 200);
+  let mlSelected = clamp(targetMl + rng.nextInt(-30, 30), 0, 100);
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const diffPct = Math.abs(mlSelected - targetMl) / targetMl * 100;
     if (diffPct > tolerancePct) break;
-    mlSelected = clamp(targetMl + rng.nextInt(-30, 30), 0, 200);
+    mlSelected = clamp(targetMl + rng.nextInt(-30, 30), 0, 100);
   }
   return {
     state: {
       mlSelected,
       mlPoured: 0,
-      attempts: 0,
       lastFeedback: "",
       lastSuccess: false,
     },
@@ -704,9 +703,10 @@ function generateTitrationQuick(rngSeed, night, template) {
 
 function generateTitrationTransfer(rngSeed, night, template) {
   const rng = createRng(rngSeed);
-  const maxLoadMl = 60;
+  const maxLoadMl = 100;
+  const maxSampleMl = 100;
   const acidMlOptions = [];
-  for (let ml = 30; ml <= 150; ml += 5) {
+  for (let ml = 20; ml <= maxSampleMl; ml += 5) {
     acidMlOptions.push(ml);
   }
   const acidMOptions = new Set();
@@ -732,6 +732,7 @@ function generateTitrationTransfer(rngSeed, night, template) {
     const baseM = baseMList[rng.nextInt(0, baseMList.length - 1)];
     const baseTargetRaw = (acidM * acidMl) / baseM;
     if (baseTargetRaw < 8 || baseTargetRaw > maxLoadMl) continue;
+    if (baseTargetRaw > maxSampleMl - acidMl) continue;
     const rounded = Math.round(baseTargetRaw * 2) / 2;
     const isClean = Math.abs(baseTargetRaw * 2 - Math.round(baseTargetRaw * 2)) <= 0.05;
     if (!isClean) continue;
@@ -751,7 +752,8 @@ function generateTitrationTransfer(rngSeed, night, template) {
     const acidMl = acidMlOptions[rng.nextInt(0, acidMlOptions.length - 1)];
     const acidM = acidMList[rng.nextInt(0, acidMList.length - 1)];
     const baseM = baseMList[rng.nextInt(0, baseMList.length - 1)];
-    const baseTargetRaw = clamp((acidM * acidMl) / baseM, 8, maxLoadMl);
+    const maxAllowedBase = Math.max(8, maxSampleMl - acidMl);
+    const baseTargetRaw = clamp((acidM * acidMl) / baseM, 8, Math.min(maxLoadMl, maxAllowedBase));
     bestCandidate = {
       acidMl,
       acidM,
@@ -774,6 +776,7 @@ function generateTitrationTransfer(rngSeed, night, template) {
       sampleMl: bestCandidate.acidMl,
       targetPh: 7.0,
       maxLoadMl,
+      maxSampleMl,
     },
     state: {
       selectedLoadStep: 10,
@@ -12603,7 +12606,7 @@ function resetTitrationTransferState(instanceState) {
 
 function renderTitrationTransfer(game) {
   const { instanceState, instanceSolution } = game;
-  const { acidMl, acidM, baseM, baseTargetMl, toleranceMl, targetPh, maxLoadMl } =
+  const { acidMl, acidM, baseM, baseTargetMl, toleranceMl, targetPh, maxLoadMl, maxSampleMl } =
     instanceSolution;
   dom.miniGameText.innerHTML = `
     Load base, then POUR once.<br>
@@ -12680,7 +12683,7 @@ function renderTitrationTransfer(game) {
   };
 
   const formatMl = (value) => (value % 1 === 0 ? value.toFixed(0) : value.toFixed(1));
-  const transferCapMl = acidMl + maxLoadMl;
+  const transferCapMl = maxSampleMl;
   const rightTotalMl = acidMl + baseAddedMl;
   const sampleFillPercent = clamp(rightTotalMl / transferCapMl, 0, 1) * 100;
   const diff = baseAddedMl - baseTargetMl;
@@ -12692,7 +12695,7 @@ function renderTitrationTransfer(game) {
 
   const baseBeaker = makeBeaker({
     label: "BASE DISPENSER",
-    color: "rgba(70, 140, 230, 0.9)",
+    color: "rgba(210, 70, 70, 0.9)",
     fillPercent: clamp(loadedMl / maxLoadMl, 0, 1) * 100,
     bottomText: `Loaded: ${formatMl(loadedMl)} mL`,
   });
@@ -12838,6 +12841,10 @@ function renderTitrationTransfer(game) {
     tryAgain.type = "button";
     tryAgain.textContent = "TRY AGAIN";
     tryAgain.addEventListener("click", () => {
+      if (!result.isSuccess) {
+        handleTitrationAttemptFailure(game);
+        return;
+      }
       resetTitrationTransferState(instanceState);
       renderMiniGame();
     });
@@ -12872,8 +12879,8 @@ function renderTitrationTransfer(game) {
     stream.style.width = "10px";
     stream.style.height = "0px";
     stream.style.background =
-      "linear-gradient(180deg, rgba(120, 190, 255, 0.0), rgba(120, 190, 255, 0.85), rgba(120, 190, 255, 0.0))";
-    stream.style.boxShadow = "0 0 10px rgba(120, 190, 255, 0.35)";
+      "linear-gradient(180deg, rgba(220, 80, 80, 0.0), rgba(220, 80, 80, 0.85), rgba(220, 80, 80, 0.0))";
+    stream.style.boxShadow = "0 0 10px rgba(220, 80, 80, 0.35)";
     stream.style.left = "50%";
     stream.style.top = "40px";
     stream.style.transform = "translateX(-50%) rotate(-12deg)";
@@ -13052,7 +13059,7 @@ function renderTitrationQuick(game) {
   indicator.textContent = `Pump: ${instanceState.mlSelected} mL`;
 
   const setFillLevel = (ml) => {
-    const percent = clamp(ml / 200, 0, 1) * 100;
+    const percent = clamp(ml / 100, 0, 1) * 100;
     fill.style.height = `${percent}%`;
     beakerLabel.textContent = `Poured: ${ml} mL`;
   };
@@ -13063,7 +13070,7 @@ function renderTitrationQuick(game) {
   const slider = document.createElement("input");
   slider.type = "range";
   slider.min = "0";
-  slider.max = "200";
+  slider.max = "100";
   slider.value = String(instanceState.mlSelected);
   slider.style.width = "100%";
   slider.addEventListener("input", (event) => {
@@ -13081,7 +13088,7 @@ function renderTitrationQuick(game) {
     button.type = "button";
     button.textContent = `${step > 0 ? "+" : ""}${step}`;
     button.addEventListener("click", () => {
-      instanceState.mlSelected = clamp(instanceState.mlSelected + step, 0, 200);
+      instanceState.mlSelected = clamp(instanceState.mlSelected + step, 0, 100);
       instanceState.lastSuccess = false;
       renderMiniGame();
     });
@@ -13096,7 +13103,7 @@ function renderTitrationQuick(game) {
       button.textContent = `POUR +${step} mL`;
       button.style.fontSize = "12px";
       button.addEventListener("click", () => {
-        instanceState.mlSelected = clamp(instanceState.mlSelected + step, 0, 200);
+        instanceState.mlSelected = clamp(instanceState.mlSelected + step, 0, 100);
         instanceState.mlPoured = instanceState.mlSelected;
         instanceState.lastSuccess = false;
         renderMiniGame();
@@ -13134,10 +13141,8 @@ function renderTitrationQuick(game) {
       instanceState.lastFeedback = `${isHigh ? "Too strong" : "Too weak"} (${Math.round(
         diffPct
       )}% off)`;
-      instanceState.attempts += 1;
       instanceState.lastSuccess = false;
-      if (instanceState.attempts >= 3) {
-        handleMiniGameFailure(game);
+      if (handleTitrationAttemptFailure(game)) {
         return;
       }
     }
@@ -13934,6 +13939,29 @@ function handleMiniGameFailure(game) {
   if (!state.miniGameActive || game.id === "FLAMESAW_FINISH") return;
   regenerateMiniGameInstance();
   renderMiniGame();
+}
+
+const TITRATION_MAX_ATTEMPTS = 5;
+
+function triggerTitrationExplosion(game) {
+  playSurgeCrack(0.9);
+  playNoiseBurst({ durationMs: 220, volume: 0.9, frequency: 700 });
+  pulseActionSignal(state.playerRoom, "trace");
+  applyRoomStress(state.playerRoom);
+  pushStatus("The mix explodes. Trace spike in the room.", 4);
+  closeMiniGame();
+  resolveMiniGameFailure(game.id);
+}
+
+function handleTitrationAttemptFailure(game) {
+  game.tries += 1;
+  if (game.tries >= TITRATION_MAX_ATTEMPTS) {
+    triggerTitrationExplosion(game);
+    return true;
+  }
+  regenerateMiniGameInstance();
+  renderMiniGame();
+  return false;
 }
 
 function submitMiniGameAnswer() {
