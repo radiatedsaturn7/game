@@ -853,7 +853,7 @@ function generateTitrationTransfer(rngSeed, night, template) {
       baseAddedMl: 0,
       phase: "loading",
       lastResult: null,
-      statusMessage: "Adjust the mix, then apply the solution.",
+      statusMessage: "",
       lockControls: false,
       attemptStartedAtMs: null,
       attemptTimeLimitMs: 25000,
@@ -12813,7 +12813,7 @@ function resetTitrationTransferState(instanceState) {
   instanceState.baseAddedMl = 0;
   instanceState.phase = "loading";
   instanceState.lastResult = null;
-  instanceState.statusMessage = "Adjust the mix, then apply the solution.";
+  instanceState.statusMessage = "";
   instanceState.lockControls = false;
   instanceState.pourStartAt = null;
   instanceState.pourDurationMs = null;
@@ -12922,8 +12922,8 @@ function renderTitrationTransfer(game) {
     color: sampleColor,
     fillPercent: sampleFillPercent,
     bottomText: isLoading
-      ? `Sample: ${formatMl(acidMl)} mL acid`
-      : `Sample: ${formatMl(acidMl)} mL acid + ${formatMl(baseAddedMl)} mL base`,
+      ? `Sample: ${formatMl(acidMl)}ml`
+      : `Sample: ${formatMl(rightTotalMl)}ml`,
   });
 
   beakerRow.appendChild(baseBeaker.container);
@@ -13073,7 +13073,7 @@ function renderTitrationTransfer(game) {
   statusLine.style.fontSize = "12px";
   statusLine.style.textAlign = "center";
   statusLine.style.opacity = "0.9";
-  statusLine.textContent = instanceState.statusMessage ?? "Adjust the mix, then apply the solution.";
+  statusLine.textContent = instanceState.statusMessage ?? "";
 
   wrapper.appendChild(beakerRow);
   wrapper.appendChild(readouts);
@@ -13121,9 +13121,7 @@ function renderTitrationTransfer(game) {
       sampleBeaker.fill.style.background = getTitrationPhColor(samplePh);
       updatePhDisplay(samplePh);
       if (sampleBeaker.bottomEl) {
-        sampleBeaker.bottomEl.textContent = `Sample: ${formatMl(acidMl)} mL acid + ${formatMl(
-          totalBase
-        )} mL base`;
+        sampleBeaker.bottomEl.textContent = `Sample: ${formatMl(acidMl + totalBase)}ml`;
       }
       const ramp =
         progress < 0.15 ? progress / 0.15 : progress > 0.85 ? (1 - progress) / 0.15 : 1;
@@ -13143,7 +13141,7 @@ function renderTitrationTransfer(game) {
         instanceState.lastResult = { isSuccess: result.isSuccess, ph: result.ph };
         instanceState.statusMessage = result.isSuccess
           ? "Solution balanced. Apply the solution."
-          : "pH off. Try again.";
+          : "";
         instanceState.pourStartAt = null;
         instanceState.pourDurationMs = null;
         instanceState.pourStartLoadMl = null;
@@ -13165,7 +13163,6 @@ function renderTitrationTransfer(game) {
         instanceState.timeoutHandled = true;
         applyMiniGamePressurePenalty();
         resetTitrationTransferState(instanceState);
-        instanceState.statusMessage = "Interrupted. Resetting the mix.";
         stopMiniGameAnimation();
         renderMiniGame();
       }
