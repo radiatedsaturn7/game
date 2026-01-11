@@ -874,8 +874,8 @@ function generatePatchDrag(rngSeed, night, template) {
     { op: "RET", label: "RET" },
     { op: "INC", label: "INC" },
     { op: "XOR", label: "CLR" },
-    { op: "ADD", label: "ADD 2" },
-    { op: "SUB2", label: "SUB 2" },
+    { op: "ADD", label: "MUL 2" },
+    { op: "SUB2", label: "DIV 2" },
   ];
   const required = ["DEC", "JNZ", "RET"];
   const tiles = [];
@@ -13375,8 +13375,8 @@ const PATCH_OP_ORDER = [null, ...PATCH_OPS];
 
 function getPatchOpLabel(op) {
   if (op === "XOR") return "CLR";
-  if (op === "ADD") return "ADD 2";
-  if (op === "SUB2") return "SUB 2";
+  if (op === "ADD") return "MUL 2";
+  if (op === "SUB2") return "DIV 2";
   return op;
 }
 
@@ -13387,9 +13387,9 @@ function getPatchOpInfo(op) {
     case "INC":
       return { title: "INC", description: "CX = CX + 1" };
     case "ADD":
-      return { title: "ADD 2", description: "CX = CX + 2" };
+      return { title: "MUL 2", description: "CX = CX × 2" };
     case "SUB2":
-      return { title: "SUB 2", description: "CX = CX - 2" };
+      return { title: "DIV 2", description: "CX = floor(CX ÷ 2)" };
     case "XOR":
       return { title: "CLR", description: "CX = 0" };
     case "JNZ":
@@ -13641,11 +13641,11 @@ function stepPatchSim(game) {
       nextPc += 1;
       break;
     case "ADD":
-      nextCx += 2;
+      nextCx *= 2;
       nextPc += 1;
       break;
     case "SUB2":
-      nextCx = Math.max(0, nextCx - 2);
+      nextCx = Math.max(0, Math.floor(nextCx / 2));
       nextPc += 1;
       break;
     case "JNZ":
@@ -13779,6 +13779,7 @@ function runPatchAutoSim(game) {
 function ensurePatchRet(game) {
   const { slots } = game.instanceState;
   if (slots.includes("RET")) return;
+  if (slots.every((slot) => slot !== null)) return;
   let slotIndex = slots.findIndex((slot) => slot === null);
   if (slotIndex === -1) {
     slotIndex = slots.length - 1;
@@ -13807,7 +13808,7 @@ function submitPatchDrag(game) {
 function renderPatchDrag(game) {
   const { slots, selectedOp, initialCx, sim } = game.instanceState;
   const phase = game.instanceState.phase ?? "idle";
-  dom.miniGameText.textContent = "Write a program to make CX = 0.";
+  dom.miniGameText.textContent = "Write a program to make CX match the target.";
   dom.miniGameText.classList.remove("patch-instruction");
   setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
   const hasProgram = slots.some((slot) => slot !== null);
@@ -13833,17 +13834,27 @@ function renderPatchDrag(game) {
   taskCard.style.padding = "8px";
   taskCard.style.border = "1px solid rgba(255,255,255,0.25)";
   taskCard.style.background = "rgba(10, 16, 22, 0.75)";
-  const taskTarget = document.createElement("div");
-  taskTarget.textContent = "TARGET: CX \u2192 0";
-  taskTarget.style.fontWeight = "600";
-  taskTarget.style.color = "rgba(220, 240, 255, 0.95)";
-  const taskInput = document.createElement("div");
-  const currentCx = Number.isFinite(sim?.cx) ? sim.cx : initialCx;
-  taskInput.textContent = `CURRENT: CX = ${currentCx}`;
-  taskInput.style.color = "rgba(220, 240, 255, 0.95)";
-  taskInput.style.fontWeight = "600";
-  taskCard.appendChild(taskTarget);
-  taskCard.appendChild(taskInput);
+  const makeTaskLine = (text) => {
+    const line = document.createElement("div");
+    line.textContent = text;
+    line.style.fontWeight = "600";
+    line.style.color = "rgba(220, 240, 255, 0.95)";
+    return line;
+  };
+  if (phase === "result") {
+    const resultLine = makeTaskLine(sim.status === "success" ? "RESULT: SUCCESS" : "RESULT: FAIL");
+    const detailLine = makeTaskLine(game.instanceState.simMessage || "");
+    taskCard.appendChild(resultLine);
+    if (detailLine.textContent) {
+      taskCard.appendChild(detailLine);
+    }
+  } else {
+    const taskTarget = makeTaskLine("TARGET: CX \u2192 0");
+    const currentCx = Number.isFinite(sim?.cx) ? sim.cx : initialCx;
+    const taskInput = makeTaskLine(`CURRENT: CX = ${currentCx}`);
+    taskCard.appendChild(taskTarget);
+    taskCard.appendChild(taskInput);
+  }
 
   const slotsRow = document.createElement("div");
   slotsRow.style.display = "grid";
@@ -13929,16 +13940,7 @@ function renderPatchDrag(game) {
   board.appendChild(tray);
   board.appendChild(commandInfo);
   if (phase === "result") {
-    const resultLine = document.createElement("div");
-    resultLine.className = "patch-result";
-    resultLine.textContent = sim.status === "success" ? "RESULT: SUCCESS" : "RESULT: FAIL";
-    board.appendChild(resultLine);
-    if (game.instanceState.simMessage) {
-      const simMessage = document.createElement("div");
-      simMessage.className = "patch-sim-message";
-      simMessage.textContent = game.instanceState.simMessage;
-      board.appendChild(simMessage);
-    }
+    // Result details are displayed in the task card.
   }
   dom.miniGameOptions.appendChild(board);
 
