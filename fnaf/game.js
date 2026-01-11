@@ -12596,12 +12596,12 @@ function renderResistorKit(game) {
   meterLabels.style.justifyContent = "space-between";
   meterLabels.style.fontSize = "11px";
   meterLabels.style.opacity = "0.7";
-  const highLabel = document.createElement("div");
-  highLabel.textContent = "HIGH current";
   const lowLabel = document.createElement("div");
   lowLabel.textContent = "LOW current";
-  meterLabels.appendChild(highLabel);
+  const highLabel = document.createElement("div");
+  highLabel.textContent = "HIGH current";
   meterLabels.appendChild(lowLabel);
+  meterLabels.appendChild(highLabel);
 
   const meter = document.createElement("div");
   meter.className = "reskit-meter";
@@ -12612,9 +12612,9 @@ function renderResistorKit(game) {
   meter.style.overflow = "hidden";
 
   const scaleMax = Math.max(I_target + toleranceA * 3, I_target * 1.8);
-  const mapCurrentToPct = (value) => (1 - clamp(value / scaleMax, 0, 1)) * 100;
-  const bandLeft = mapCurrentToPct(I_target + toleranceA);
-  const bandRight = mapCurrentToPct(I_target - toleranceA);
+  const mapCurrentToPct = (value) => clamp(value / scaleMax, 0, 1) * 100;
+  const bandLeft = mapCurrentToPct(I_target - toleranceA);
+  const bandRight = mapCurrentToPct(I_target + toleranceA);
   const band = document.createElement("div");
   band.style.position = "absolute";
   band.style.left = `${Math.min(bandLeft, bandRight)}%`;
@@ -12632,7 +12632,7 @@ function renderResistorKit(game) {
   marker.style.borderRadius = "4px";
   marker.style.background = markerColor;
   marker.style.transition = "left 0.22s ease-out";
-  const markerPct = hasSelection ? mapCurrentToPct(Icalc) : 100;
+  const markerPct = hasSelection ? mapCurrentToPct(Icalc) : 0;
   const previousMarkerPct = instanceState.markerPct ?? markerPct;
   marker.style.left = `${previousMarkerPct}%`;
 
