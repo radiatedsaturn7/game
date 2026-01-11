@@ -12555,8 +12555,6 @@ function renderResistorKit(game) {
         ? "rgba(170, 170, 170, 0.95)"
         : "rgba(80, 200, 120, 0.95)";
 
-  const selectedValues = instanceState.kit.filter((_, index) => instanceState.selected[index]);
-  const selectedCount = selectedValues.length;
 
   const hud = document.createElement("div");
   hud.className = "reskit-hud";
@@ -12643,46 +12641,38 @@ function renderResistorKit(game) {
 
   const scienceBlock = document.createElement("div");
   scienceBlock.style.display = "grid";
-  scienceBlock.style.justifyItems = "end";
+  scienceBlock.style.gridTemplateColumns = "1fr 1fr";
+  scienceBlock.style.gap = "2px 12px";
   scienceBlock.style.fontSize = "11px";
   scienceBlock.style.opacity = "0.75";
+
+  const supplyBlock = document.createElement("div");
+  supplyBlock.style.display = "grid";
+  supplyBlock.style.gap = "2px";
+  const supplyLine = document.createElement("div");
+  supplyLine.textContent = `Supply: ${V}V`;
+  const pmaxLine = document.createElement("div");
+  pmaxLine.textContent = `Pmax: ${PmaxW}W`;
+  supplyBlock.appendChild(supplyLine);
+  supplyBlock.appendChild(pmaxLine);
+
+  const formulaBlock = document.createElement("div");
+  formulaBlock.style.display = "grid";
+  formulaBlock.style.gap = "2px";
+  formulaBlock.style.justifyItems = "end";
   const ohmsLine = document.createElement("div");
   ohmsLine.textContent = "V = I·R";
-  scienceBlock.appendChild(ohmsLine);
+  const powerFormulaLine = document.createElement("div");
+  powerFormulaLine.textContent = "P = I²R = V²/R";
+  formulaBlock.appendChild(ohmsLine);
+  formulaBlock.appendChild(powerFormulaLine);
 
-  const reqReadout = document.createElement("div");
-  reqReadout.style.fontSize = "12px";
-  reqReadout.style.opacity = "0.85";
-  reqReadout.textContent = hasSelection ? `Req: ${req}Ω` : "Req: —";
-
-  const powerLine = document.createElement("div");
-  if (hasSelection && (isNearMax || isOverheat)) {
-    powerLine.textContent = `HEAT: ${Pcalc.toFixed(2)}W / ${PmaxW}W`;
-    powerLine.style.fontSize = "12px";
-    powerLine.style.fontWeight = "700";
-    powerLine.style.color = "rgba(220, 80, 80, 0.95)";
-  }
-
-  const secondaryRow = document.createElement("div");
-  secondaryRow.style.display = "flex";
-  secondaryRow.style.justifyContent = "space-between";
-  secondaryRow.style.fontSize = "11px";
-  secondaryRow.style.opacity = "0.7";
-  const supplyLine = document.createElement("div");
-  supplyLine.textContent = `V=${V}V  Pmax=${PmaxW}W`;
-  const formulaLine = document.createElement("div");
-  formulaLine.textContent = "I = V/R";
-  secondaryRow.appendChild(supplyLine);
-  secondaryRow.appendChild(formulaLine);
+  scienceBlock.appendChild(supplyBlock);
+  scienceBlock.appendChild(formulaBlock);
 
   meterBlock.appendChild(meterLabels);
   meterBlock.appendChild(meter);
   meterBlock.appendChild(scienceBlock);
-  meterBlock.appendChild(reqReadout);
-  if (powerLine.textContent) {
-    meterBlock.appendChild(powerLine);
-  }
-  meterBlock.appendChild(secondaryRow);
 
   const kitTray = document.createElement("div");
   kitTray.style.display = "grid";
@@ -12714,28 +12704,10 @@ function renderResistorKit(game) {
     kitTray.appendChild(chip);
   });
 
-  const clearLink = document.createElement("button");
-  clearLink.type = "button";
-  clearLink.textContent = "Clear";
-  clearLink.style.background = "none";
-  clearLink.style.border = "none";
-  clearLink.style.color = "rgba(200, 220, 255, 0.9)";
-  clearLink.style.fontSize = "12px";
-  clearLink.style.textDecoration = "underline";
-  clearLink.style.cursor = "pointer";
-  clearLink.addEventListener("click", () => {
-    instanceState.selected = instanceState.selected.map(() => false);
-    instanceState.reqOhms = 0;
-    renderMiniGame();
-  });
-
   wrapper.appendChild(hud);
   wrapper.appendChild(microCopy);
   wrapper.appendChild(meterBlock);
   wrapper.appendChild(kitTray);
-  if (selectedCount >= 3) {
-    wrapper.appendChild(clearLink);
-  }
 
   dom.miniGameOptions.appendChild(wrapper);
 
