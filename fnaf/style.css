@@ -3071,6 +3071,13 @@ button.primary {
   border-color: rgba(150, 60, 50, 0.9);
 }
 
+button.patch-apply {
+  background: linear-gradient(135deg, rgba(124, 255, 184, 0.9), rgba(40, 212, 120, 0.9));
+  color: #04110a;
+  border-color: rgba(107, 255, 159, 0.95);
+  box-shadow: 0 0 10px rgba(107, 255, 159, 0.35), 0 0 0 2px rgba(107, 255, 159, 0.35);
+}
+
 button.objective-highlight {
   border: 1px solid rgba(107, 255, 159, 0.95);
   background: linear-gradient(135deg, rgba(124, 255, 184, 0.9), rgba(40, 212, 120, 0.9));

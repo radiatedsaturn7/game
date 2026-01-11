@@ -11860,6 +11860,16 @@ function renderMiniGame() {
   const game = state.miniGame;
   if (!game || !dom.miniGameTitle || !dom.miniGameText || !dom.miniGameOptions) return;
   ensureMiniGameStylesInjected();
+  if (dom.miniGamePanel) {
+    if (game.type === "patch_drag") {
+      dom.miniGamePanel.dataset.patchMode = "true";
+    } else {
+      delete dom.miniGamePanel.dataset.patchMode;
+    }
+  }
+  if (dom.miniGameSubmitBtn) {
+    dom.miniGameSubmitBtn.classList.remove("patch-apply");
+  }
   dom.miniGameTitle.textContent = game.title;
   dom.miniGameText.textContent = game.ui?.text || game.roomHintText || "";
   dom.miniGameText.classList.remove("patch-instruction");
@@ -13723,11 +13733,6 @@ function finishPatchAutoSim(game) {
   if (simState.status === "success") {
     instanceState.simMessage = "Latch: 100% — unlock pulse accepted.";
     renderMiniGame();
-    setTimeout(() => {
-      if (!state.miniGameActive) return;
-      if (state.miniGame?.id !== game.id) return;
-      handleMiniGameSuccess(game);
-    }, 350);
     return;
   }
   if (!simState.failReason && simState.steps >= instanceState.maxSteps) {
@@ -13769,6 +13774,16 @@ function runPatchAutoSim(game) {
 }
 
 function submitPatchDrag(game) {
+  const { instanceState } = game;
+  if (instanceState.phase === "result") {
+    if (instanceState.sim.status === "success") {
+      handleMiniGameSuccess(game);
+      return;
+    }
+    resetPatchProgram(game);
+    return;
+  }
+  if (instanceState.autoRunning) return;
   runPatchAutoSim(game);
 }
 
@@ -13779,11 +13794,17 @@ function renderPatchDrag(game) {
   dom.miniGameText.classList.remove("patch-instruction");
   setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
   const hasProgram = slots.some((slot) => slot !== null);
+  const isResult = phase === "result";
+  const isSuccess = sim.status === "success";
+  const submitLabel = isResult ? (isSuccess ? "Apply" : "Try Again") : "Run";
   setMiniGameSubmitButton({
-    label: "Apply Patch",
-    enabled: hasProgram && !game.instanceState.autoRunning,
+    label: submitLabel,
+    enabled: isResult ? true : hasProgram && !game.instanceState.autoRunning,
     visible: true,
   });
+  if (dom.miniGameSubmitBtn) {
+    dom.miniGameSubmitBtn.classList.toggle("patch-apply", isResult && isSuccess);
+  }
   const board = document.createElement("div");
   board.className = "patch-board";
   board.style.display = "grid";
@@ -13795,16 +13816,20 @@ function renderPatchDrag(game) {
   taskCard.style.padding = "8px";
   taskCard.style.border = "1px solid rgba(255,255,255,0.25)";
   taskCard.style.background = "rgba(10, 16, 22, 0.75)";
-  const taskInput = document.createElement("div");
-  taskInput.textContent = `INPUT: CX = ${initialCx}`;
-  taskInput.style.color = "rgba(220, 240, 255, 0.95)";
-  taskInput.style.fontWeight = "600";
   const taskTarget = document.createElement("div");
   taskTarget.textContent = "TARGET: CX \u2192 0";
   taskTarget.style.fontWeight = "600";
   taskTarget.style.color = "rgba(220, 240, 255, 0.95)";
-  taskCard.appendChild(taskInput);
+  const taskInput = document.createElement("div");
+  taskInput.textContent = `INPUT: CX = ${initialCx}`;
+  taskInput.style.color = "rgba(220, 240, 255, 0.95)";
+  taskInput.style.fontWeight = "600";
+  const taskCurrent = document.createElement("div");
+  taskCurrent.className = "patch-output";
+  taskCurrent.textContent = `CURRENT: CX = ${sim.cx}`;
   taskCard.appendChild(taskTarget);
+  taskCard.appendChild(taskInput);
+  taskCard.appendChild(taskCurrent);
 
   const slotsRow = document.createElement("div");
   slotsRow.style.display = "grid";
@@ -13884,12 +13909,6 @@ function renderPatchDrag(game) {
   if (commandInfo) {
     board.appendChild(commandInfo);
   }
-  if (phase === "running") {
-    const cxReadout = document.createElement("div");
-    cxReadout.className = "patch-output";
-    cxReadout.textContent = `CX=${sim.cx}`;
-    board.appendChild(cxReadout);
-  }
   if (phase === "result") {
     const resultLine = document.createElement("div");
     resultLine.className = "patch-result";
@@ -13907,6 +13926,16 @@ function renderPatchDrag(game) {
   if (phase === "idle") {
     game.instanceState.simMessage = "";
   }
+}
+
+function resetPatchProgram(game) {
+  game.instanceState.slots = Array.from({ length: game.instanceState.slots.length }, () => null);
+  game.instanceState.selectedOp = null;
+  game.instanceState.focusedSlot = 0;
+  game.instanceState.phase = "idle";
+  resetPatchSim(game);
+  game.instanceState.simMessage = "";
+  renderMiniGame();
 }
 
 function renderBossFinish(game) {
