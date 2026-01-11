@@ -384,10 +384,10 @@ const MINI_GAME_TEMPLATES = {
   },
   CHEM_BALANCE: {
     id: "CHEM_BALANCE",
-    title: "Mix Valve Ratio",
+    title: "Acid-Base Neutralization",
     actionLabel: "Neutralize Sample",
     type: "titration_transfer",
-    roomHintText: "Neutralize the sample. Too much base ruins the batch.",
+    roomHintText: "Achieve acid-base neutralization. Too much base ruins the batch.",
     generate: generateTitrationTransfer,
   },
   MECH_TOLERANCE: {
@@ -833,7 +833,7 @@ function generateTitrationTransfer(rngSeed, night, template) {
   const tol = night <= 4 ? 3 : night <= 7 ? 2 : 1;
   return {
     type: "titration_transfer",
-    title: "MIX VALVE RATIO",
+    title: "ACID-BASE NEUTRALIZATION",
     actionLabel: "POUR",
     roomHintText: template.roomHintText,
     solution: {
@@ -13159,7 +13159,7 @@ function renderTitrationTransfer(game) {
       if (instanceState.phase === "loading" || instanceState.phase === "pouring") {
         instanceState.timeoutHandled = true;
         applyMiniGamePressurePenalty();
-        resetTitrationTransferState(instanceState);
+        instanceState.statusMessage = "Time limit exceeded. Continue neutralizing.";
         stopMiniGameAnimation();
         renderMiniGame();
       }
