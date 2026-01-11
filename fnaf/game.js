@@ -13420,8 +13420,7 @@ function selectPatchOp(op) {
   if (!PATCH_OPS.includes(op)) return;
   game.instanceState.selectedOp = op;
   const { slots } = game.instanceState;
-  const startIndex = game.instanceState.focusedSlot ?? 0;
-  const slotIndex = getNextPatchSlotIndex(slots, startIndex);
+  const slotIndex = getPreferredPatchSlotIndex(slots, game.instanceState.focusedSlot);
   if (slotIndex === null) {
     renderMiniGame();
     return;
@@ -13429,13 +13428,27 @@ function selectPatchOp(op) {
   placePatchOp(op, slotIndex);
 }
 
+function getPreferredPatchSlotIndex(slots, focusedSlot) {
+  const slotLimit = getPatchSlotLimit(slots);
+  if (Number.isInteger(focusedSlot) && focusedSlot <= slotLimit && slots[focusedSlot] === null) {
+    return focusedSlot;
+  }
+  return getNextPatchSlotIndex(slots, 0);
+}
+
 function getNextPatchSlotIndex(slots, startIndex) {
-  for (let index = startIndex; index < slots.length; index += 1) {
+  const slotLimit = getPatchSlotLimit(slots);
+  for (let index = startIndex; index <= slotLimit; index += 1) {
     if (!slots[index]) {
       return index;
     }
   }
   return null;
+}
+
+function getPatchSlotLimit(slots) {
+  const retIndex = slots.findIndex((slot) => slot === "RET");
+  return retIndex === -1 ? slots.length - 1 : retIndex;
 }
 
 function placePatchOp(op, slotIndex) {
@@ -13444,6 +13457,11 @@ function placePatchOp(op, slotIndex) {
   if (game.instanceState.autoRunning) return;
   const { slots } = game.instanceState;
   slots[slotIndex] = op;
+  if (op === "RET") {
+    for (let index = slotIndex + 1; index < slots.length; index += 1) {
+      slots[index] = null;
+    }
+  }
   game.instanceState.selectedOp = op;
   game.instanceState.focusedSlot = getNextPatchSlotIndex(slots, slotIndex + 1);
   game.instanceState.phase = "idle";
@@ -13457,7 +13475,7 @@ function clearPatchSlot(slotIndex) {
   if (!game) return;
   if (game.instanceState.autoRunning) return;
   game.instanceState.slots[slotIndex] = null;
-  game.instanceState.focusedSlot = getNextPatchSlotIndex(game.instanceState.slots, slotIndex);
+  game.instanceState.focusedSlot = slotIndex;
   game.instanceState.phase = "idle";
   resetPatchSim(game);
   game.instanceState.simMessage = "";
@@ -13488,12 +13506,18 @@ function handlePatchSlotClick(event) {
   const game = state.miniGame;
   if (!game) return;
   if (game.instanceState.autoRunning) return;
+  if (slotIndex > getPatchSlotLimit(game.instanceState.slots)) return;
   const selected = game.instanceState.selectedOp;
+  if (game.instanceState.slots[slotIndex]) {
+    clearPatchSlot(slotIndex);
+    return;
+  }
   if (selected) {
     placePatchOp(selected, slotIndex);
     return;
   }
-  clearPatchSlot(slotIndex);
+  game.instanceState.focusedSlot = slotIndex;
+  renderMiniGame();
 }
 
 function handlePatchSlotDrop(event) {
@@ -13506,6 +13530,7 @@ function handlePatchSlotDrop(event) {
   if (!game) return;
   if (game.instanceState.autoRunning) return;
   if (!PATCH_OPS.includes(op)) return;
+  if (slotIndex > getPatchSlotLimit(game.instanceState.slots)) return;
   placePatchOp(op, slotIndex);
 }
 
@@ -13513,7 +13538,12 @@ function getPatchProgram(game) {
   const { slots } = game.instanceState;
   const lastFilled = slots.reduce((lastIndex, slot, index) => (slot ? index : lastIndex), -1);
   if (lastFilled < 0) return [];
-  return slots.slice(0, lastFilled + 1).map((slot) => slot ?? "NOP");
+  const program = slots.slice(0, lastFilled + 1).map((slot) => slot ?? "NOP");
+  const isFull = slots.every((slot) => slot !== null);
+  if (isFull && slots[slots.length - 1] !== "RET") {
+    program.push("RET");
+  }
+  return program;
 }
 
 function resetPatchSim(game) {
@@ -13745,9 +13775,15 @@ function submitPatchDrag(game) {
 function renderPatchDrag(game) {
   const { slots, selectedOp, initialCx, sim } = game.instanceState;
   const phase = game.instanceState.phase ?? "idle";
-  dom.miniGameText.textContent = "Build a 5-slot program. Make CX reach 0, then RET.";
-  dom.miniGameText.classList.add("patch-instruction");
+  dom.miniGameText.textContent = "Write a program to make CX = 0.";
+  dom.miniGameText.classList.remove("patch-instruction");
   setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
+  const hasProgram = slots.some((slot) => slot !== null);
+  setMiniGameSubmitButton({
+    label: "Apply Patch",
+    enabled: hasProgram && !game.instanceState.autoRunning,
+    visible: true,
+  });
   const board = document.createElement("div");
   board.className = "patch-board";
   board.style.display = "grid";
@@ -13759,11 +13795,6 @@ function renderPatchDrag(game) {
   taskCard.style.padding = "8px";
   taskCard.style.border = "1px solid rgba(255,255,255,0.25)";
   taskCard.style.background = "rgba(10, 16, 22, 0.75)";
-  const taskTitle = document.createElement("div");
-  taskTitle.textContent = "PATCH DEPLOYMENT";
-  taskTitle.style.fontSize = "13px";
-  taskTitle.style.fontWeight = "700";
-  taskTitle.style.letterSpacing = "1px";
   const taskInput = document.createElement("div");
   taskInput.textContent = `INPUT: CX = ${initialCx}`;
   taskInput.style.color = "rgba(220, 240, 255, 0.95)";
@@ -13772,44 +13803,8 @@ function renderPatchDrag(game) {
   taskTarget.textContent = "TARGET: CX \u2192 0";
   taskTarget.style.fontWeight = "600";
   taskTarget.style.color = "rgba(220, 240, 255, 0.95)";
-  const taskConstraint = document.createElement("div");
-  taskConstraint.textContent = "Must terminate (RET).";
-  taskConstraint.style.opacity = "0.85";
-  taskConstraint.style.fontSize = "12px";
-  taskCard.appendChild(taskTitle);
   taskCard.appendChild(taskInput);
   taskCard.appendChild(taskTarget);
-  taskCard.appendChild(taskConstraint);
-
-  const controls = document.createElement("div");
-  controls.style.display = "flex";
-  controls.style.gap = "8px";
-  controls.style.flexWrap = "wrap";
-
-  const resetButton = document.createElement("button");
-  resetButton.type = "button";
-  resetButton.textContent = "CLEAR";
-  resetButton.disabled = game.instanceState.autoRunning;
-  resetButton.addEventListener("click", () => {
-    game.instanceState.slots = Array.from({ length: 5 }, () => null);
-    game.instanceState.selectedOp = null;
-    game.instanceState.focusedSlot = 0;
-    resetPatchSim(game);
-    renderMiniGame();
-  });
-
-  const commitButton = document.createElement("button");
-  commitButton.type = "button";
-  commitButton.textContent = "COMMIT PATCH";
-  const hasProgram = slots.some((slot) => slot !== null);
-  commitButton.disabled = !hasProgram || game.instanceState.autoRunning;
-  commitButton.addEventListener("click", () => runPatchAutoSim(game));
-  if (game.instanceState.commitPulse) {
-    commitButton.classList.add("commit-pulse");
-  }
-
-  controls.appendChild(resetButton);
-  controls.appendChild(commitButton);
 
   const slotsRow = document.createElement("div");
   slotsRow.style.display = "grid";
@@ -13819,11 +13814,16 @@ function renderPatchDrag(game) {
     slotsRow.style.opacity = "0.8";
   }
 
+  const retIndex = slots.findIndex((slot) => slot === "RET");
   slots.forEach((slot, index) => {
     const slotEl = document.createElement("div");
     slotEl.className = "patch-slot";
     slotEl.dataset.slotIndex = String(index);
     slotEl.style.position = "relative";
+    if (retIndex !== -1 && index > retIndex) {
+      slotEl.style.visibility = "hidden";
+      slotEl.style.pointerEvents = "none";
+    }
     if (!sim.halted && sim.pc === index) {
       slotEl.style.outline = "3px solid rgba(120, 220, 255, 0.95)";
     }
@@ -13874,82 +13874,39 @@ function renderPatchDrag(game) {
     commandInfo.textContent = `${selectedInfo.title}: ${selectedInfo.description}`;
   }
 
-  const outputPanel = document.createElement("div");
-  outputPanel.className = "patch-output";
-  const outputHeader = document.createElement("div");
-  outputHeader.textContent = `PC:${sim.pc}  CX:${sim.cx}  Steps:${sim.steps}  Latch:${Math.round(sim.latch)}%`;
-  const outputStatus = document.createElement("div");
-  outputStatus.textContent = `Status: ${getPatchSimStatus(sim)}`;
-  outputPanel.appendChild(outputHeader);
-  outputPanel.appendChild(outputStatus);
-  if (sim.trace?.length) {
-    sim.trace.forEach((line) => {
-      const traceLine = document.createElement("div");
-      traceLine.className = "patch-trace-line";
-      traceLine.textContent = line;
-      outputPanel.appendChild(traceLine);
-    });
-  }
-
-  const runningHeader = document.createElement("div");
-  runningHeader.className = "patch-running";
-  runningHeader.textContent = "RUNNING...";
-
-  const resultLine = document.createElement("div");
-  resultLine.className = "patch-result";
-  if (sim.status === "success") {
-    resultLine.textContent = "RESULT: SUCCESS";
-  } else if (sim.status === "fail") {
-    resultLine.textContent = "RESULT: FAIL";
-  } else {
-    resultLine.textContent = "RESULT: --";
-  }
-
-  const simMessage = document.createElement("div");
-  simMessage.className = "patch-sim-message";
-  simMessage.textContent = game.instanceState.simMessage;
   const topPanel = document.createElement("div");
   topPanel.style.display = "grid";
   topPanel.style.gap = "6px";
-  if (phase === "idle") {
-    topPanel.appendChild(taskCard);
-  } else {
-    const outputCard = document.createElement("div");
-    outputCard.style.display = "grid";
-    outputCard.style.gap = "4px";
-    outputCard.style.padding = "8px";
-    outputCard.style.border = "1px solid rgba(255,255,255,0.25)";
-    outputCard.style.background = "rgba(10, 16, 22, 0.75)";
-    const outputLabel = document.createElement("div");
-    outputLabel.style.fontSize = "12px";
-    outputLabel.style.opacity = "0.8";
-    outputLabel.textContent = "SIM OUTPUT";
-    outputCard.appendChild(outputLabel);
-    if (phase === "running") {
-      outputCard.appendChild(runningHeader);
-    }
-    outputCard.appendChild(outputPanel);
-    if (phase === "running") {
-      outputCard.appendChild(simMessage);
-    }
-    if (phase === "result") {
-      outputCard.appendChild(resultLine);
-      if (game.instanceState.simMessage) {
-        outputCard.appendChild(simMessage);
-      }
-    }
-    topPanel.appendChild(outputCard);
-  }
+  topPanel.appendChild(taskCard);
   board.appendChild(topPanel);
-  board.appendChild(controls);
   board.appendChild(slotsRow);
   board.appendChild(tray);
   if (commandInfo) {
     board.appendChild(commandInfo);
   }
+  if (phase === "running") {
+    const cxReadout = document.createElement("div");
+    cxReadout.className = "patch-output";
+    cxReadout.textContent = `CX=${sim.cx}`;
+    board.appendChild(cxReadout);
+  }
+  if (phase === "result") {
+    const resultLine = document.createElement("div");
+    resultLine.className = "patch-result";
+    resultLine.textContent = sim.status === "success" ? "RESULT: SUCCESS" : "RESULT: FAIL";
+    board.appendChild(resultLine);
+    if (game.instanceState.simMessage) {
+      const simMessage = document.createElement("div");
+      simMessage.className = "patch-sim-message";
+      simMessage.textContent = game.instanceState.simMessage;
+      board.appendChild(simMessage);
+    }
+  }
   dom.miniGameOptions.appendChild(board);
 
-  setMiniGameSubmitButton({ visible: false });
+  if (phase === "idle") {
+    game.instanceState.simMessage = "";
+  }
 }
 
 function renderBossFinish(game) {
