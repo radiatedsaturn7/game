@@ -2563,6 +2563,10 @@ body.night-11 .map-node text {
   box-shadow: 0 0 20px rgba(120, 160, 220, 0.15);
 }
 
+.menu-panel.mini-game .mini-game-card {
+  transform: translateY(-10px);
+}
+
 .mini-game-content {
   display: grid;
   gap: 16px;

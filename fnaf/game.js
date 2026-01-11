@@ -12531,28 +12531,33 @@ function renderResistorKit(game) {
 
   const req = computeReq();
   const hasSelection = req > 0;
+  const isShort = req <= 0;
   const Icalc = hasSelection ? V / req : null;
   const Pcalc = hasSelection ? (V * V) / req : null;
-  const isOverheat = hasSelection ? Pcalc > PmaxW : false;
+  const isOverheat = isShort ? true : hasSelection ? Pcalc > PmaxW : false;
   const isNearMax = hasSelection ? Pcalc > PmaxW * 0.9 : false;
-  const isHigh = hasSelection ? Icalc > I_target + toleranceA || isNearMax : false;
+  const isHigh = isShort ? true : hasSelection ? Icalc > I_target + toleranceA || isNearMax : false;
   const isLow = hasSelection ? Icalc < I_target - toleranceA : false;
-  const statusText = !hasSelection
-    ? "NO CIRCUIT"
-    : isOverheat
-      ? "OVERHEAT"
-      : isHigh
-        ? "HIGH"
+  const statusText = isShort
+    ? "OVERHEAT"
+    : !hasSelection
+      ? "NO CIRCUIT"
+      : isOverheat
+        ? "OVERHEAT"
+        : isHigh
+          ? "HIGH"
+          : isLow
+            ? "LOW"
+            : "OK";
+  const markerColor = isShort
+    ? "rgba(220, 80, 80, 0.95)"
+    : !hasSelection
+      ? "rgba(160, 160, 160, 0.9)"
+      : isHigh || isOverheat
+        ? "rgba(220, 80, 80, 0.95)"
         : isLow
-          ? "LOW"
-          : "OK";
-  const markerColor = !hasSelection
-    ? "rgba(160, 160, 160, 0.9)"
-    : isHigh || isOverheat
-      ? "rgba(220, 80, 80, 0.95)"
-      : isLow
-        ? "rgba(170, 170, 170, 0.95)"
-        : "rgba(80, 200, 120, 0.95)";
+          ? "rgba(170, 170, 170, 0.95)"
+          : "rgba(80, 200, 120, 0.95)";
 
 
   const hud = document.createElement("div");
@@ -12568,7 +12573,9 @@ function renderResistorKit(game) {
   hud.appendChild(nowLine);
   hud.appendChild(targetLine);
 
-  updateResistorNowLine(instanceState, nowLine, hasSelection ? Icalc : null);
+  const scaleMax = Math.max(I_target + toleranceA * 3, I_target * 1.8);
+  const displayCurrent = isShort ? scaleMax : Icalc;
+  updateResistorNowLine(instanceState, nowLine, hasSelection || isShort ? displayCurrent : null);
 
   const microCopy = document.createElement("div");
   microCopy.style.fontSize = "12px";
@@ -12611,7 +12618,6 @@ function renderResistorKit(game) {
   meter.style.background = "rgba(10, 15, 20, 0.6)";
   meter.style.overflow = "hidden";
 
-  const scaleMax = Math.max(I_target + toleranceA * 3, I_target * 1.8);
   const mapCurrentToPct = (value) => clamp(value / scaleMax, 0, 1) * 100;
   const bandLeft = mapCurrentToPct(I_target - toleranceA);
   const bandRight = mapCurrentToPct(I_target + toleranceA);
@@ -12632,7 +12638,7 @@ function renderResistorKit(game) {
   marker.style.borderRadius = "4px";
   marker.style.background = markerColor;
   marker.style.transition = "left 0.22s ease-out";
-  const markerPct = hasSelection ? mapCurrentToPct(Icalc) : 0;
+  const markerPct = hasSelection || isShort ? mapCurrentToPct(displayCurrent) : 0;
   const previousMarkerPct = instanceState.markerPct ?? markerPct;
   marker.style.left = `${previousMarkerPct}%`;
 
