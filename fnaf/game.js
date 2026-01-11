@@ -401,7 +401,7 @@ const MINI_GAME_TEMPLATES = {
   },
   ASM_PATCH: {
     id: "ASM_PATCH",
-    title: "ASM Patch",
+    title: "ASM Hack",
     actionLabel: "Patch Door Controller",
     type: "patch_drag",
     roomHintText: "Door controller is stuck. Patch the loop.",
