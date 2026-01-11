@@ -876,7 +876,6 @@ function generatePatchDrag(rngSeed, night, template) {
     { op: "XOR", label: "CLR" },
     { op: "ADD", label: "ADD 2" },
     { op: "SUB2", label: "SUB 2" },
-    { op: "PRT", label: "PRT" },
   ];
   const required = ["DEC", "JNZ", "RET"];
   const tiles = [];
@@ -13371,7 +13370,7 @@ function renderTitrationQuick(game) {
   setMiniGameSubmitButton({ visible: false });
 }
 
-const PATCH_OPS = ["DEC", "INC", "ADD", "SUB2", "XOR", "JNZ", "RET", "PRT"];
+const PATCH_OPS = ["DEC", "INC", "ADD", "SUB2", "XOR", "JNZ", "RET"];
 const PATCH_OP_ORDER = [null, ...PATCH_OPS];
 
 function getPatchOpLabel(op) {
@@ -13397,8 +13396,6 @@ function getPatchOpInfo(op) {
       return { title: "JNZ", description: "If CX != 0, jump back to start" };
     case "RET":
       return { title: "RET", description: "Stop. Succeeds only if CX == 0" };
-    case "PRT":
-      return { title: "PRT", description: "Log current CX" };
     default:
       return null;
   }
@@ -13487,6 +13484,25 @@ function clearPatchSlot(slotIndex) {
   resetPatchSim(game);
   game.instanceState.simMessage = "";
   renderMiniGame();
+}
+
+function deleteRightmostPatchOp() {
+  const game = state.miniGame;
+  if (!game) return;
+  if (game.instanceState.autoRunning) return;
+  const { slots } = game.instanceState;
+  const slotLimit = getPatchSlotLimit(slots);
+  for (let index = slotLimit; index >= 0; index -= 1) {
+    if (slots[index]) {
+      slots[index] = null;
+      game.instanceState.focusedSlot = index;
+      game.instanceState.phase = "idle";
+      resetPatchSim(game);
+      game.instanceState.simMessage = "";
+      renderMiniGame();
+      return;
+    }
+  }
 }
 
 function cyclePatchSlot(game, slotIndex) {
@@ -13632,14 +13648,6 @@ function stepPatchSim(game) {
       nextCx = Math.max(0, nextCx - 2);
       nextPc += 1;
       break;
-    case "PRT":
-      sim.trace ??= [];
-      sim.trace.push(`PRT: CX=${nextCx}`);
-      if (sim.trace.length > 4) {
-        sim.trace.shift();
-      }
-      nextPc += 1;
-      break;
     case "JNZ":
       nextPc = nextCx !== 0 ? 0 : nextPc + 1;
       break;
@@ -13669,8 +13677,6 @@ function stepPatchSim(game) {
       game.instanceState.simMessage = "Executing: NOP";
     } else if (op === "XOR") {
       game.instanceState.simMessage = `Executing: ${label} (CX -> 0)`;
-    } else if (op === "PRT") {
-      game.instanceState.simMessage = `Executing: ${label} (trace CX=${nextCx})`;
     } else {
       game.instanceState.simMessage = `Executing: ${label} (CX -> ${nextCx})`;
     }
@@ -13832,7 +13838,8 @@ function renderPatchDrag(game) {
   taskTarget.style.fontWeight = "600";
   taskTarget.style.color = "rgba(220, 240, 255, 0.95)";
   const taskInput = document.createElement("div");
-  taskInput.textContent = `CURRENT: CX = ${initialCx}`;
+  const currentCx = Number.isFinite(sim?.cx) ? sim.cx : initialCx;
+  taskInput.textContent = `CURRENT: CX = ${currentCx}`;
   taskInput.style.color = "rgba(220, 240, 255, 0.95)";
   taskInput.style.fontWeight = "600";
   taskCard.appendChild(taskTarget);
@@ -13886,7 +13893,7 @@ function renderPatchDrag(game) {
   tray.style.gridTemplateColumns = "repeat(4, minmax(0, 1fr))";
   tray.style.gap = "8px";
   const availableOps = getPatchAvailableOps();
-  const orderedOps = ["DEC", "INC", "ADD", "SUB2", "XOR", "JNZ", "RET", "PRT"];
+  const orderedOps = ["DEC", "INC", "ADD", "SUB2", "XOR", "JNZ", "RET"];
   orderedOps.forEach((op) => {
     const tileEl = document.createElement("button");
     tileEl.type = "button";
@@ -13898,13 +13905,20 @@ function renderPatchDrag(game) {
     tileEl.addEventListener("click", () => selectPatchOp(op));
     tray.appendChild(tileEl);
   });
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.className = "patch-tile patch-delete";
+  deleteButton.textContent = "\u2190";
+  deleteButton.disabled = !hasProgram || game.instanceState.autoRunning;
+  deleteButton.addEventListener("click", deleteRightmostPatchOp);
+  tray.appendChild(deleteButton);
 
   const selectedInfo = selectedOp ? getPatchOpInfo(selectedOp) : null;
-  const commandInfo = selectedInfo ? document.createElement("div") : null;
-  if (commandInfo && selectedInfo) {
-    commandInfo.className = "patch-instruction patch-help";
-    commandInfo.textContent = `${selectedInfo.title}: ${selectedInfo.description}`;
-  }
+  const commandInfo = document.createElement("div");
+  commandInfo.className = "patch-instruction patch-help";
+  commandInfo.textContent = selectedInfo
+    ? `${selectedInfo.title}: ${selectedInfo.description}`
+    : "Place an Instruction";
 
   const topPanel = document.createElement("div");
   topPanel.style.display = "grid";
@@ -13913,9 +13927,7 @@ function renderPatchDrag(game) {
   board.appendChild(topPanel);
   board.appendChild(slotsRow);
   board.appendChild(tray);
-  if (commandInfo) {
-    board.appendChild(commandInfo);
-  }
+  board.appendChild(commandInfo);
   if (phase === "result") {
     const resultLine = document.createElement("div");
     resultLine.className = "patch-result";
