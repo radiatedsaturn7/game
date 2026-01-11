@@ -13010,29 +13010,35 @@ function renderTitrationTransfer(game) {
       if (instanceState.lockControls || instanceState.phase !== "loading") return;
       instanceState.selectedLoadStep = dose;
       instanceState.loadedMl = clamp(instanceState.loadedMl + dose, 0, maxLoadMl);
+      instanceState.lastResult = null;
       renderMiniGame();
     });
     doseRow.appendChild(button);
   });
 
-  const clearButton = document.createElement("button");
-  clearButton.type = "button";
-  clearButton.textContent = "CLEAR";
-  clearButton.style.fontSize = "11px";
-  clearButton.style.padding = "6px 10px";
-  clearButton.disabled = locked || !isLoading;
-  clearButton.addEventListener("click", () => {
-    if (instanceState.lockControls || instanceState.phase !== "loading") return;
-    instanceState.loadedMl = 0;
-    renderMiniGame();
-  });
-
   const transferButton = document.createElement("button");
   transferButton.type = "button";
-  transferButton.textContent = "POUR";
-  transferButton.disabled = locked || !isLoading || loadedMl <= 0;
+  const lastResult = instanceState.lastResult;
+  const hasResult = Boolean(lastResult);
+  const hasSuccess = lastResult?.isSuccess;
+  transferButton.textContent = hasResult ? (hasSuccess ? "APPLY SOLUTION" : "TRY AGAIN") : "POUR";
+  transferButton.disabled = locked || (!hasResult && (!isLoading || loadedMl <= 0));
+  if (hasSuccess) {
+    transferButton.style.background = "rgba(80, 200, 120, 0.9)";
+    transferButton.style.border = "1px solid rgba(80, 220, 140, 0.9)";
+    transferButton.style.color = "rgba(10, 20, 10, 0.95)";
+  }
   transferButton.addEventListener("click", () => {
     if (instanceState.lockControls || instanceState.phase !== "loading") return;
+    if (hasResult) {
+      if (hasSuccess) {
+        handleMiniGameSuccess(game);
+        return;
+      }
+      resetTitrationTransferState(instanceState);
+      renderMiniGame();
+      return;
+    }
     if (instanceState.loadedMl <= 0) return;
     instanceState.phase = "pouring";
     instanceState.lockControls = true;
@@ -13048,7 +13054,7 @@ function renderTitrationTransfer(game) {
   cancelButton.textContent = "CANCEL";
   cancelButton.addEventListener("click", cancelMiniGame);
 
-  const actionRow = makeBtnRow([clearButton, transferButton, cancelButton], { wrap: true });
+  const actionRow = makeBtnRow([transferButton, cancelButton], { wrap: true });
   actionRow.style.width = "100%";
   transferButton.style.flex = "1";
   cancelButton.style.flex = "1";
@@ -13059,42 +13065,12 @@ function renderTitrationTransfer(game) {
   statusLine.style.opacity = "0.9";
   statusLine.textContent = instanceState.statusMessage ?? "Adjust the mix, then apply the solution.";
 
-  const resetMixButton = document.createElement("button");
-  resetMixButton.type = "button";
-  resetMixButton.textContent = "RESET MIX";
-  resetMixButton.disabled = locked;
-  resetMixButton.addEventListener("click", () => {
-    resetTitrationTransferState(instanceState);
-    renderMiniGame();
-  });
-
-  const applyButton = document.createElement("button");
-  applyButton.type = "button";
-  applyButton.textContent = "APPLY SOLUTION";
-  applyButton.disabled = locked;
-  applyButton.addEventListener("click", () => {
-    if (instanceState.lockControls || instanceState.phase === "pouring") return;
-    const diffNow = instanceState.baseAddedMl - baseTargetMl;
-    if (Math.abs(diffNow) <= toleranceMl) {
-      handleMiniGameSuccess(game);
-      return;
-    }
-    instanceState.statusMessage = "Solution out of range. Adjust the mix or reset.";
-    renderMiniGame();
-  });
-
-  const applyRow = makeBtnRow([resetMixButton, applyButton], { wrap: false });
-  applyRow.style.width = "100%";
-  resetMixButton.style.flex = "1";
-  applyButton.style.flex = "2";
-
   wrapper.appendChild(beakerRow);
   wrapper.appendChild(readouts);
   wrapper.appendChild(phPanel);
   wrapper.appendChild(statusLine);
   wrapper.appendChild(doseRow);
   wrapper.appendChild(actionRow);
-  wrapper.appendChild(applyRow);
 
   dom.miniGameOptions.appendChild(wrapper);
   setMiniGameSubmitButton({ visible: false });
@@ -13152,7 +13128,12 @@ function renderTitrationTransfer(game) {
         instanceState.loadedMl = 0;
         instanceState.lockControls = false;
         instanceState.phase = "loading";
-        instanceState.statusMessage = "Pour complete. Adjust or apply the solution.";
+        const diffNow = instanceState.baseAddedMl - baseTargetMl;
+        const result = getTitrationReadout(diffNow, toleranceMl);
+        instanceState.lastResult = { isSuccess: result.isSuccess, ph: result.ph };
+        instanceState.statusMessage = result.isSuccess
+          ? "Solution balanced. Apply the solution."
+          : "pH off. Try again.";
         instanceState.pourStartAt = null;
         instanceState.pourDurationMs = null;
         instanceState.pourStartLoadMl = null;
