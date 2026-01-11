@@ -12920,9 +12920,7 @@ function renderTitrationTransfer(game) {
     label: "ACID SAMPLE",
     color: sampleColor,
     fillPercent: sampleFillPercent,
-    bottomText: isLoading
-      ? `Sample: ${formatMl(acidMl)}ml`
-      : `Sample: ${formatMl(rightTotalMl)}ml`,
+    bottomText: `Sample: ${formatMl(rightTotalMl)}ml`,
   });
 
   beakerRow.appendChild(baseBeaker.container);
