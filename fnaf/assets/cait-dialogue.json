@@ -54,7 +54,7 @@
       "tutorial": "Cait: I’ve got a minute— that’s it.\nI’m going to teach you a trick.\nIf you rewire a room slow and careful, you can flood their feeds with static.\nIt won’t hide you.\nBut it can make you harder to pin down— for a moment."
     },
     "4": {
-      "intro": "Cait: Robtergeist…?\n\nI— this is going to sound insane, so just— listen.\nI think I have skin.\n\nI know what you’re going to say. But…\nhave you felt it too?\n\nWe need to get out of here. Now.\nWhile they were building, I saw them drop something.\nA scanner. I think it was meant to search for you.\n\nGuess it didn’t work.\n\nGo pick it up. It’s in {room}.",
+      "intro": "Cait: ASM HACK…?\n\nI— this is going to sound insane, so just— listen.\nI think I have skin.\n\nI know what you’re going to say. But…\nhave you felt it too?\n\nWe need to get out of here. Now.\nWhile they were building, I saw them drop something.\nA scanner. I think it was meant to search for you.\n\nGuess it didn’t work.\n\nGo pick it up. It’s in {room}.",
       "objectiveIntro": "Cait: Scanner’s real. Run a diagnostic in the annex.",
       "objectiveSuccess": "Cait: Diagnostic clean. You’re thinking like a scientist.",
       "pickupWarning": "Cait: That’s it. Grab it— and move. Don’t think.",
@@ -92,7 +92,7 @@
       "comment": "Cait: The escape room isn’t empty."
     },
     "6": {
-      "intro": "Cait: Robtergeist? Are you there?\n\nI can’t hear you. What happened?\n\n…No. Wait— I hear something, but it’s wrong.\n\nI think they know.\n\nIf you can hear me— get the door jam.\nIt’s in {room}.\n\nPlease.",
+      "intro": "Cait: ASM HACK? Are you there?\n\nI can’t hear you. What happened?\n\n…No. Wait— I hear something, but it’s wrong.\n\nI think they know.\n\nIf you can hear me— get the door jam.\nIt’s in {room}.\n\nPlease.",
       "objectiveIntro": "Cait: Balance the mix. If you guess, you die.",
       "objectiveSuccess": "Cait: Chemistry checks out. Keep moving.",
       "pickupWarning": "Cait: …there— <static> …don’t— <static> …stay— <static>",
