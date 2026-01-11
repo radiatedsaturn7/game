@@ -853,6 +853,7 @@ function generateTitrationTransfer(rngSeed, night, template) {
       baseAddedMl: 0,
       phase: "loading",
       lastResult: null,
+      statusMessage: "Adjust the mix, then apply the solution.",
       lockControls: false,
       attemptStartedAtMs: null,
       attemptTimeLimitMs: 25000,
@@ -893,12 +894,10 @@ function generatePatchDrag(rngSeed, night, template) {
       tiles: shuffled,
       slots: Array.from({ length: 5 }, () => null),
       selectedOp: null,
-      focusedSlot: 4,
+      focusedSlot: 0,
       phase: "idle",
       initialCx,
       maxSteps,
-      commitAttemptsUsed: 0,
-      commitAttemptsMax: 5,
       autoRunning: false,
       autoRunTimer: null,
       autoRunIntervalMs: 420,
@@ -12804,6 +12803,7 @@ function resetTitrationTransferState(instanceState) {
   instanceState.baseAddedMl = 0;
   instanceState.phase = "loading";
   instanceState.lastResult = null;
+  instanceState.statusMessage = "Adjust the mix, then apply the solution.";
   instanceState.lockControls = false;
   instanceState.pourStartAt = null;
   instanceState.pourDurationMs = null;
@@ -12821,14 +12821,13 @@ function renderTitrationTransfer(game) {
   const { acidMl, acidM, baseM, baseTargetMl, toleranceMl, targetPh, maxLoadMl, maxSampleMl } =
     instanceSolution;
   dom.miniGameText.innerHTML = `
-    Load base, then POUR once.<br>
+    Load base, then POUR to adjust the mix.<br>
     <span style="font-size:11px">V<sub>b</sub> = (M<sub>a</sub> · V<sub>a</sub>) / M<sub>b</sub></span>
   `;
   setMiniGameCancelVisibility({ showBottomBar: false, showInline: false });
 
   const isLoading = instanceState.phase === "loading";
   const isPouring = instanceState.phase === "pouring";
-  const isReadout = instanceState.phase === "readout";
   const locked = instanceState.lockControls;
   const loadedMl = instanceState.loadedMl ?? 0;
   const baseAddedMl = instanceState.baseAddedMl ?? 0;
@@ -12899,10 +12898,7 @@ function renderTitrationTransfer(game) {
   const rightTotalMl = acidMl + baseAddedMl;
   const sampleFillPercent = clamp(rightTotalMl / transferCapMl, 0, 1) * 100;
   const diff = baseAddedMl - baseTargetMl;
-  const currentPh =
-    isReadout && instanceState.lastResult
-      ? instanceState.lastResult.ph
-      : getTitrationPh(diff, toleranceMl);
+  const currentPh = getTitrationPh(diff, toleranceMl);
   const sampleColor = getTitrationPhColor(currentPh);
 
   const baseBeaker = makeBeaker({
@@ -12934,6 +12930,71 @@ function renderTitrationTransfer(game) {
   baseReadout.textContent = `Base: ${baseM.toFixed(2)} M`;
   readouts.appendChild(acidReadout);
   readouts.appendChild(baseReadout);
+
+  const phPanel = document.createElement("div");
+  phPanel.style.display = "grid";
+  phPanel.style.gap = "4px";
+  phPanel.style.textAlign = "center";
+
+  const phHeader = document.createElement("div");
+  phHeader.textContent = "PH SCALE";
+  phHeader.style.fontSize = "12px";
+  phHeader.style.fontWeight = "700";
+
+  const phScale = document.createElement("div");
+  phScale.style.position = "relative";
+  phScale.style.height = "12px";
+  phScale.style.borderRadius = "999px";
+  phScale.style.border = "1px solid rgba(255,255,255,0.4)";
+  phScale.style.background =
+    "linear-gradient(90deg, rgba(80, 130, 230, 0.9) 0%, rgba(245, 245, 245, 0.9) 50%, rgba(210, 70, 70, 0.9) 100%)";
+  phScale.style.overflow = "hidden";
+
+  const phRangeSpan = document.createElement("div");
+  phRangeSpan.style.position = "absolute";
+  phRangeSpan.style.top = "0";
+  phRangeSpan.style.bottom = "0";
+  phRangeSpan.style.background = "rgba(255,255,255,0.35)";
+  phRangeSpan.style.border = "1px solid rgba(255,255,255,0.7)";
+  phRangeSpan.style.boxSizing = "border-box";
+
+  const phMarker = document.createElement("div");
+  phMarker.style.position = "absolute";
+  phMarker.style.top = "-4px";
+  phMarker.style.width = "2px";
+  phMarker.style.height = "20px";
+  phMarker.style.background = "rgba(10, 12, 16, 0.95)";
+  phMarker.style.boxShadow = "0 0 6px rgba(255,255,255,0.6)";
+
+  phScale.appendChild(phRangeSpan);
+  phScale.appendChild(phMarker);
+
+  const phValue = document.createElement("div");
+  phValue.style.fontSize = "12px";
+  phValue.style.fontWeight = "600";
+
+  const phRangeLabel = document.createElement("div");
+  phRangeLabel.style.fontSize = "11px";
+  phRangeLabel.style.opacity = "0.85";
+
+  const toPhPercent = (ph) => clamp((ph - 1) / 13, 0, 1) * 100;
+  const targetRange = 0.3;
+  const phRangeStart = clamp(targetPh - targetRange, 1, 14);
+  const phRangeEnd = clamp(targetPh + targetRange, 1, 14);
+  phRangeSpan.style.left = `${toPhPercent(phRangeStart)}%`;
+  phRangeSpan.style.width = `${toPhPercent(phRangeEnd) - toPhPercent(phRangeStart)}%`;
+  phRangeLabel.textContent = `Target range: ${phRangeStart.toFixed(1)} - ${phRangeEnd.toFixed(1)} pH`;
+
+  const updatePhDisplay = (ph) => {
+    phValue.textContent = `Sample pH: ${ph.toFixed(1)}`;
+    phMarker.style.left = `${toPhPercent(ph)}%`;
+  };
+  updatePhDisplay(currentPh);
+
+  phPanel.appendChild(phHeader);
+  phPanel.appendChild(phScale);
+  phPanel.appendChild(phValue);
+  phPanel.appendChild(phRangeLabel);
 
   const doseRow = document.createElement("div");
   doseRow.className = "btnRow";
@@ -12992,94 +13053,48 @@ function renderTitrationTransfer(game) {
   transferButton.style.flex = "1";
   cancelButton.style.flex = "1";
 
+  const statusLine = document.createElement("div");
+  statusLine.style.fontSize = "12px";
+  statusLine.style.textAlign = "center";
+  statusLine.style.opacity = "0.9";
+  statusLine.textContent = instanceState.statusMessage ?? "Adjust the mix, then apply the solution.";
+
+  const resetMixButton = document.createElement("button");
+  resetMixButton.type = "button";
+  resetMixButton.textContent = "RESET MIX";
+  resetMixButton.disabled = locked;
+  resetMixButton.addEventListener("click", () => {
+    resetTitrationTransferState(instanceState);
+    renderMiniGame();
+  });
+
+  const applyButton = document.createElement("button");
+  applyButton.type = "button";
+  applyButton.textContent = "APPLY SOLUTION";
+  applyButton.disabled = locked;
+  applyButton.addEventListener("click", () => {
+    if (instanceState.lockControls || instanceState.phase === "pouring") return;
+    const diffNow = instanceState.baseAddedMl - baseTargetMl;
+    if (Math.abs(diffNow) <= toleranceMl) {
+      handleMiniGameSuccess(game);
+      return;
+    }
+    instanceState.statusMessage = "Solution out of range. Adjust the mix or reset.";
+    renderMiniGame();
+  });
+
+  const applyRow = makeBtnRow([resetMixButton, applyButton], { wrap: false });
+  applyRow.style.width = "100%";
+  resetMixButton.style.flex = "1";
+  applyButton.style.flex = "2";
+
   wrapper.appendChild(beakerRow);
   wrapper.appendChild(readouts);
-  if (!isReadout) {
-    wrapper.appendChild(doseRow);
-    wrapper.appendChild(actionRow);
-  }
-
-  if (isReadout && instanceState.lastResult) {
-    const result = instanceState.lastResult;
-    const readoutOverlay = document.createElement("div");
-    readoutOverlay.style.position = "absolute";
-    readoutOverlay.style.left = "0";
-    readoutOverlay.style.right = "0";
-    readoutOverlay.style.bottom = "0";
-    readoutOverlay.style.padding = "12px";
-    readoutOverlay.style.background = "rgba(0,0,0,0.78)";
-    readoutOverlay.style.borderTop = "1px solid rgba(255,255,255,0.15)";
-    readoutOverlay.style.backdropFilter = "blur(2px)";
-
-    const readoutPanel = document.createElement("div");
-    readoutPanel.style.display = "grid";
-    readoutPanel.style.gap = "4px";
-    readoutPanel.style.textAlign = "center";
-
-    const title = document.createElement("div");
-    title.textContent = "READOUT";
-    title.style.fontSize = "14px";
-    title.style.fontWeight = "700";
-
-    const target = document.createElement("div");
-    target.textContent = `Target pH: ${targetPh.toFixed(1)}   Measured: ${result.ph.toFixed(1)}`;
-    target.style.fontSize = "12px";
-
-    const message = document.createElement("div");
-    message.textContent = result.statusLabel;
-    message.style.fontSize = "18px";
-    message.style.fontWeight = "700";
-    message.style.letterSpacing = "0.5px";
-
-    readoutPanel.appendChild(title);
-    readoutPanel.appendChild(target);
-    readoutPanel.appendChild(message);
-
-    const hint = document.createElement("div");
-    hint.style.fontSize = "12px";
-    if (result.hint) {
-      hint.textContent = result.hint;
-    } else if (result.diffMl !== 0) {
-      const direction = result.diffMl < 0 ? "under" : "over";
-      hint.textContent = `Estimate: ${formatMl(Math.abs(result.diffMl))} mL ${direction}`;
-    } else {
-      hint.textContent = "Estimate: 0 mL offset";
-    }
-    readoutPanel.appendChild(hint);
-
-    const buttonRow = makeBtnRow([], { wrap: false });
-    buttonRow.style.marginTop = "6px";
-    const tryAgain = document.createElement("button");
-    tryAgain.type = "button";
-    tryAgain.textContent = "TRY AGAIN";
-    tryAgain.addEventListener("click", () => {
-      if (!result.isSuccess) {
-        handleTitrationAttemptFailure(game);
-        return;
-      }
-      resetTitrationTransferState(instanceState);
-      renderMiniGame();
-    });
-    const cancelReadout = document.createElement("button");
-    cancelReadout.type = "button";
-    cancelReadout.textContent = "CANCEL";
-    cancelReadout.addEventListener("click", cancelMiniGame);
-    buttonRow.appendChild(tryAgain);
-    buttonRow.appendChild(cancelReadout);
-    readoutPanel.appendChild(buttonRow);
-
-    readoutOverlay.appendChild(readoutPanel);
-    wrapper.appendChild(readoutOverlay);
-
-    if (result.isSuccess && !instanceState.successQueued) {
-      instanceState.successQueued = true;
-      setTimeout(() => {
-        if (!state.miniGameActive || state.miniGame !== game) return;
-        if (game.instanceState.phase !== "readout") return;
-        handleMiniGameSuccess(game);
-      }, 600);
-    }
-  }
+  wrapper.appendChild(phPanel);
+  wrapper.appendChild(statusLine);
+  wrapper.appendChild(doseRow);
+  wrapper.appendChild(actionRow);
+  wrapper.appendChild(applyRow);
 
   dom.miniGameOptions.appendChild(wrapper);
   setMiniGameSubmitButton({ visible: false });
@@ -13118,6 +13133,7 @@ function renderTitrationTransfer(game) {
       sampleBeaker.fill.style.height = `${clamp(rightTotal / transferCapMl, 0, 1) * 100}%`;
       const samplePh = getTitrationPh(totalBase - baseTargetMl, toleranceMl);
       sampleBeaker.fill.style.background = getTitrationPhColor(samplePh);
+      updatePhDisplay(samplePh);
       if (sampleBeaker.bottomEl) {
         sampleBeaker.bottomEl.textContent = `Sample: ${formatMl(acidMl)} mL acid + ${formatMl(
           totalBase
@@ -13135,9 +13151,8 @@ function renderTitrationTransfer(game) {
         instanceState.baseAddedMl = startBase + startLoad;
         instanceState.loadedMl = 0;
         instanceState.lockControls = false;
-        instanceState.phase = "readout";
-        const diffAfter = instanceState.baseAddedMl - baseTargetMl;
-        instanceState.lastResult = getTitrationReadout(diffAfter, toleranceMl);
+        instanceState.phase = "loading";
+        instanceState.statusMessage = "Pour complete. Adjust or apply the solution.";
         instanceState.pourStartAt = null;
         instanceState.pourDurationMs = null;
         instanceState.pourStartLoadMl = null;
@@ -13158,45 +13173,20 @@ function renderTitrationTransfer(game) {
       if (instanceState.phase === "loading" || instanceState.phase === "pouring") {
         instanceState.timeoutHandled = true;
         applyMiniGamePressurePenalty();
-        instanceState.phase = "readout";
-        instanceState.lockControls = false;
-        instanceState.loadedMl = 0;
-        instanceState.baseAddedMl = 0;
-        instanceState.pourStartAt = null;
-        instanceState.pourDurationMs = null;
-        instanceState.pourStartLoadMl = null;
-        instanceState.pourStartBaseMl = null;
-        instanceState.lastResult = {
-          ph: targetPh,
-          diffMl: 0,
-          isSuccess: false,
-          statusLabel: "INTERRUPTED",
-          hint: "Interrupted. Try again.",
-        };
-        if (!instanceState.timeoutResetQueued) {
-          instanceState.timeoutResetQueued = true;
-          setTimeout(() => {
-            if (!state.miniGameActive || state.miniGame !== game) return;
-            if (game.instanceState.phase !== "readout") return;
-            if (game.instanceState.lastResult?.statusLabel !== "INTERRUPTED") return;
-            resetTitrationTransferState(game.instanceState);
-            renderMiniGame();
-          }, 700);
-        }
+        resetTitrationTransferState(instanceState);
+        instanceState.statusMessage = "Interrupted. Resetting the mix.";
         stopMiniGameAnimation();
         renderMiniGame();
       }
     }
   };
 
-  if (updatePour || !isReadout) {
-    startMiniGameAnimation(() => {
-      updateThreat();
-      if (updatePour) {
-        updatePour();
-      }
-    });
-  }
+  startMiniGameAnimation(() => {
+    updateThreat();
+    if (updatePour) {
+      updatePour();
+    }
+  });
 }
 
 function renderTitrationQuick(game) {
@@ -13449,7 +13439,7 @@ function selectPatchOp(op) {
   if (!PATCH_OPS.includes(op)) return;
   game.instanceState.selectedOp = op;
   const { slots } = game.instanceState;
-  const startIndex = game.instanceState.focusedSlot ?? slots.length - 1;
+  const startIndex = game.instanceState.focusedSlot ?? 0;
   const slotIndex = getNextPatchSlotIndex(slots, startIndex);
   if (slotIndex === null) {
     renderMiniGame();
@@ -13459,7 +13449,7 @@ function selectPatchOp(op) {
 }
 
 function getNextPatchSlotIndex(slots, startIndex) {
-  for (let index = startIndex; index >= 0; index -= 1) {
+  for (let index = startIndex; index < slots.length; index += 1) {
     if (!slots[index]) {
       return index;
     }
@@ -13474,7 +13464,7 @@ function placePatchOp(op, slotIndex) {
   const { slots } = game.instanceState;
   slots[slotIndex] = op;
   game.instanceState.selectedOp = op;
-  game.instanceState.focusedSlot = getNextPatchSlotIndex(slots, slotIndex - 1);
+  game.instanceState.focusedSlot = getNextPatchSlotIndex(slots, slotIndex + 1);
   game.instanceState.phase = "idle";
   resetPatchSim(game);
   game.instanceState.simMessage = "";
@@ -13732,17 +13722,7 @@ function finishPatchAutoSim(game) {
   if (!simState.failReason && simState.steps >= instanceState.maxSteps) {
     simState.failReason = "loop";
   }
-  instanceState.commitAttemptsUsed += 1;
   instanceState.simMessage = getPatchFailMessage(simState);
-  if (instanceState.commitAttemptsUsed >= instanceState.commitAttemptsMax) {
-    const roomId = state.playerRoom;
-    if (roomId !== null && roomId !== undefined) {
-      onAlarmTriggered(roomId);
-      pushStatus("Intrusion detection triggered.", 3);
-    }
-    closeMiniGame();
-    return;
-  }
   renderMiniGame();
 }
 
@@ -13787,21 +13767,6 @@ function renderPatchDrag(game) {
   dom.miniGameText.textContent = "Build a 5-slot program. Make CX reach 0, then RET.";
   dom.miniGameText.classList.add("patch-instruction");
   setMiniGameCancelVisibility({ showBottomBar: true, showInline: false });
-  const buildAttemptsLine = () => {
-    const attempts = document.createElement("div");
-    attempts.style.fontSize = "12px";
-    attempts.style.fontWeight = "600";
-    const remaining = game.instanceState.commitAttemptsMax - game.instanceState.commitAttemptsUsed;
-    let attemptsColor = "rgba(180, 220, 255, 0.9)";
-    if (remaining <= 1) {
-      attemptsColor = "rgba(255, 90, 90, 0.95)";
-    } else if (remaining <= 2) {
-      attemptsColor = "rgba(255, 180, 90, 0.9)";
-    }
-    attempts.style.color = attemptsColor;
-    attempts.textContent = `ATTEMPTS: ${game.instanceState.commitAttemptsUsed}/${game.instanceState.commitAttemptsMax}`;
-    return attempts;
-  };
   const board = document.createElement("div");
   board.className = "patch-board";
   board.style.display = "grid";
@@ -13847,7 +13812,7 @@ function renderPatchDrag(game) {
   resetButton.addEventListener("click", () => {
     game.instanceState.slots = Array.from({ length: 5 }, () => null);
     game.instanceState.selectedOp = null;
-    game.instanceState.focusedSlot = game.instanceState.slots.length - 1;
+    game.instanceState.focusedSlot = 0;
     resetPatchSim(game);
     renderMiniGame();
   });
@@ -13967,7 +13932,6 @@ function renderPatchDrag(game) {
   topPanel.style.gap = "6px";
   if (phase === "idle") {
     topPanel.appendChild(taskCard);
-    topPanel.appendChild(buildAttemptsLine());
   } else {
     const outputCard = document.createElement("div");
     outputCard.style.display = "grid";
@@ -13984,7 +13948,6 @@ function renderPatchDrag(game) {
       outputCard.appendChild(runningHeader);
     }
     outputCard.appendChild(outputPanel);
-    outputCard.appendChild(buildAttemptsLine());
     if (phase === "running") {
       outputCard.appendChild(simMessage);
     }
