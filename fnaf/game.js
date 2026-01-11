@@ -11983,6 +11983,7 @@ function ensureMiniGameStylesInjected() {
     #miniGamePanel .commit-pulse { animation: miniGameCommitPulse 0.6s ease-out; }
     #miniGamePanel .reskit-hud { padding: 10px; border: 1px solid rgba(255,255,255,0.15); background: rgba(0,0,0,0.35); width: 100%; display: grid; gap: 4px; }
     #miniGamePanel .reskit-hud .big { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+    #miniGamePanel .reskit-hud .reskit-now { transition: transform 0.2s ease; }
     #miniGamePanel .reskit-hud .status { font-size: 14px; opacity: 0.9; text-transform: uppercase; }
     #miniGamePanel .reskit-hud .hint { font-size: 12px; opacity: 0.8; }
     #miniGamePanel .reskit-meter { height: 18px; border-radius: 8px; }
@@ -12467,6 +12468,46 @@ function submitResistorKit(game) {
   closeMiniGame();
 }
 
+function updateResistorNowLine(instanceState, nowLine, targetCurrent) {
+  if (targetCurrent == null || Number.isNaN(targetCurrent)) {
+    instanceState.nowDisplayValue = null;
+    instanceState.nowAnimation = null;
+    nowLine.textContent = "NOW: —";
+    nowLine.style.transform = "translateY(0)";
+    return;
+  }
+  const previous = instanceState.nowDisplayValue ?? targetCurrent;
+  if (Math.abs(previous - targetCurrent) < 0.005) {
+    instanceState.nowDisplayValue = targetCurrent;
+    nowLine.textContent = `NOW: ${targetCurrent.toFixed(2)}A`;
+    nowLine.style.transform = "translateY(0)";
+    return;
+  }
+  const animation = {
+    startTime: performance.now(),
+    duration: 220,
+    from: previous,
+    to: targetCurrent,
+  };
+  instanceState.nowAnimation = animation;
+  nowLine.style.transform = targetCurrent >= previous ? "translateY(-2px)" : "translateY(2px)";
+  startMiniGameAnimation(() => {
+    if (instanceState.nowAnimation !== animation) return;
+    const elapsed = performance.now() - animation.startTime;
+    const t = clamp(elapsed / animation.duration, 0, 1);
+    const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    const value = animation.from + (animation.to - animation.from) * eased;
+    instanceState.nowDisplayValue = value;
+    nowLine.textContent = `NOW: ${value.toFixed(2)}A`;
+    if (t >= 1) {
+      instanceState.nowDisplayValue = animation.to;
+      instanceState.nowAnimation = null;
+      nowLine.style.transform = "translateY(0)";
+      stopMiniGameAnimation();
+    }
+  });
+}
+
 function renderResistorKit(game) {
   const { instanceState, instanceSolution } = game;
   const { V, I_target, toleranceA, PmaxW } = instanceSolution;
@@ -12525,11 +12566,12 @@ function renderResistorKit(game) {
   targetLine.textContent = `TARGET: ${I_target.toFixed(2)}A`;
 
   const nowLine = document.createElement("div");
-  nowLine.className = "big";
-  nowLine.textContent = hasSelection ? `NOW: ${Icalc.toFixed(2)}A` : "NOW: —";
+  nowLine.className = "big reskit-now";
 
-  hud.appendChild(targetLine);
   hud.appendChild(nowLine);
+  hud.appendChild(targetLine);
+
+  updateResistorNowLine(instanceState, nowLine, hasSelection ? Icalc : null);
 
   const microCopy = document.createElement("div");
   microCopy.style.fontSize = "12px";
@@ -12540,7 +12582,7 @@ function renderResistorKit(game) {
   } else if (statusText === "HIGH") {
     microCopy.textContent = "";
   } else if (statusText === "OVERHEAT") {
-    microCopy.textContent = "Too hot. Add resistance.";
+    microCopy.textContent = "";
   } else if (statusText === "OK") {
     microCopy.textContent = "";
   } else {
@@ -12592,6 +12634,7 @@ function renderResistorKit(game) {
   marker.style.height = "26px";
   marker.style.borderRadius = "4px";
   marker.style.background = markerColor;
+  marker.style.transition = "left 0.22s ease-out";
   const markerPct = hasSelection ? mapCurrentToPct(Icalc) : 100;
   marker.style.left = `${markerPct}%`;
 
@@ -12605,10 +12648,7 @@ function renderResistorKit(game) {
   scienceBlock.style.opacity = "0.75";
   const ohmsLine = document.createElement("div");
   ohmsLine.textContent = "V = I·R";
-  const powerLineDetail = document.createElement("div");
-  powerLineDetail.textContent = "P = I²R = V²/R";
   scienceBlock.appendChild(ohmsLine);
-  scienceBlock.appendChild(powerLineDetail);
 
   const reqReadout = document.createElement("div");
   reqReadout.style.fontSize = "12px";
