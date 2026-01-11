@@ -12511,8 +12511,7 @@ function updateResistorNowLine(instanceState, nowLine, targetCurrent) {
 function renderResistorKit(game) {
   const { instanceState, instanceSolution } = game;
   const { V, I_target, toleranceA, PmaxW } = instanceSolution;
-  dom.miniGameText.innerHTML =
-    "Assemble resistors to hit the target current without overheating.";
+  dom.miniGameText.innerHTML = "Assemble resistors to hit the target current.";
   setMiniGameCancelVisibility({ showBottomBar: false, showInline: true });
 
   const wrapper = document.createElement("div");
@@ -12634,10 +12633,15 @@ function renderResistorKit(game) {
   marker.style.background = markerColor;
   marker.style.transition = "left 0.22s ease-out";
   const markerPct = hasSelection ? mapCurrentToPct(Icalc) : 100;
-  marker.style.left = `${markerPct}%`;
+  const previousMarkerPct = instanceState.markerPct ?? markerPct;
+  marker.style.left = `${previousMarkerPct}%`;
 
   meter.appendChild(band);
   meter.appendChild(marker);
+  requestAnimationFrame(() => {
+    marker.style.left = `${markerPct}%`;
+  });
+  instanceState.markerPct = markerPct;
 
   const scienceBlock = document.createElement("div");
   scienceBlock.style.display = "grid";
