@@ -13770,6 +13770,19 @@ function runPatchAutoSim(game) {
   renderMiniGame();
 }
 
+function ensurePatchRet(game) {
+  const { slots } = game.instanceState;
+  if (slots.includes("RET")) return;
+  let slotIndex = slots.findIndex((slot) => slot === null);
+  if (slotIndex === -1) {
+    slotIndex = slots.length - 1;
+  }
+  slots[slotIndex] = "RET";
+  for (let index = slotIndex + 1; index < slots.length; index += 1) {
+    slots[index] = null;
+  }
+}
+
 function submitPatchDrag(game) {
   const { instanceState } = game;
   if (instanceState.phase === "result") {
@@ -13781,6 +13794,7 @@ function submitPatchDrag(game) {
     return;
   }
   if (instanceState.autoRunning) return;
+  ensurePatchRet(game);
   runPatchAutoSim(game);
 }
 
@@ -13818,15 +13832,11 @@ function renderPatchDrag(game) {
   taskTarget.style.fontWeight = "600";
   taskTarget.style.color = "rgba(220, 240, 255, 0.95)";
   const taskInput = document.createElement("div");
-  taskInput.textContent = `INPUT: CX = ${initialCx}`;
+  taskInput.textContent = `CURRENT: CX = ${initialCx}`;
   taskInput.style.color = "rgba(220, 240, 255, 0.95)";
   taskInput.style.fontWeight = "600";
-  const taskCurrent = document.createElement("div");
-  taskCurrent.className = "patch-output";
-  taskCurrent.textContent = `CURRENT: CX = ${sim.cx}`;
   taskCard.appendChild(taskTarget);
   taskCard.appendChild(taskInput);
-  taskCard.appendChild(taskCurrent);
 
   const slotsRow = document.createElement("div");
   slotsRow.style.display = "grid";
