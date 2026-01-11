@@ -13732,7 +13732,7 @@ function finishPatchAutoSim(game) {
   instanceState.phase = "result";
   const simState = instanceState.sim;
   if (simState.status === "success") {
-    instanceState.simMessage = "Latch: 100% — unlock pulse accepted.";
+    instanceState.simMessage = "Injection Attack Ready";
     renderMiniGame();
     return;
   }
@@ -13832,15 +13832,19 @@ function renderPatchDrag(game) {
   taskCard.style.padding = "8px";
   taskCard.style.border = "1px solid rgba(255,255,255,0.25)";
   taskCard.style.background = "rgba(10, 16, 22, 0.75)";
-  const makeTaskLine = (text) => {
+  const makeTaskLine = (text, color) => {
     const line = document.createElement("div");
     line.textContent = text;
     line.style.fontWeight = "600";
-    line.style.color = "rgba(220, 240, 255, 0.95)";
+    line.style.color = color ?? "rgba(220, 240, 255, 0.95)";
     return line;
   };
   if (phase === "result") {
-    const resultLine = makeTaskLine(sim.status === "success" ? "RESULT: SUCCESS" : "RESULT: FAIL");
+    const isSuccessResult = sim.status === "success";
+    const resultLine = makeTaskLine(
+      isSuccessResult ? "RESULT: SUCCESS" : "RESULT: FAIL",
+      isSuccessResult ? "rgba(90, 220, 120, 0.95)" : "rgba(220, 80, 80, 0.95)"
+    );
     const detailLine = makeTaskLine(game.instanceState.simMessage || "");
     taskCard.appendChild(resultLine);
     if (detailLine.textContent) {
