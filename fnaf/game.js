@@ -1834,9 +1834,15 @@ const dom = {
   godModeBtn: document.getElementById("godModeBtn"),
   eyesBtn: document.getElementById("eyesBtn"),
   debugStoryBtn: document.getElementById("debugStoryBtn"),
+  debugMiniGameIntroEscape: document.getElementById("debugMiniGameIntroEscape"),
   debugMiniGameCircuit: document.getElementById("debugMiniGameCircuit"),
+  debugMiniGameAlarmCalibration: document.getElementById("debugMiniGameAlarmCalibration"),
+  debugMiniGameScannerDiagnostic: document.getElementById("debugMiniGameScannerDiagnostic"),
+  debugMiniGameSignalFilter: document.getElementById("debugMiniGameSignalFilter"),
   debugMiniGameChem: document.getElementById("debugMiniGameChem"),
+  debugMiniGameMechTolerance: document.getElementById("debugMiniGameMechTolerance"),
   debugMiniGameAsm: document.getElementById("debugMiniGameAsm"),
+  debugMiniGameControlLoop: document.getElementById("debugMiniGameControlLoop"),
   debugMiniGameFlameSaw: document.getElementById("debugMiniGameFlameSaw"),
   debugSanityInput: document.getElementById("debugSanity"),
   debugSanityValue: document.getElementById("debugSanityValue"),
@@ -3729,9 +3735,15 @@ function attachEvents() {
   dom.godModeBtn.addEventListener("click", toggleGodMode);
   dom.eyesBtn.addEventListener("click", toggleDebugEyes);
   dom.debugStoryBtn?.addEventListener("click", startDebugStoryPreview);
+  dom.debugMiniGameIntroEscape?.addEventListener("click", () => startDebugMiniGame("INTRO_ESCAPE"));
   dom.debugMiniGameCircuit?.addEventListener("click", () => startDebugMiniGame("CIRCUIT_STABILIZE"));
+  dom.debugMiniGameAlarmCalibration?.addEventListener("click", () => startDebugMiniGame("ALARM_CALIBRATION"));
+  dom.debugMiniGameScannerDiagnostic?.addEventListener("click", () => startDebugMiniGame("SCANNER_DIAGNOSTIC"));
+  dom.debugMiniGameSignalFilter?.addEventListener("click", () => startDebugMiniGame("SIGNAL_FILTER_RC"));
   dom.debugMiniGameChem?.addEventListener("click", () => startDebugMiniGame("CHEM_BALANCE"));
+  dom.debugMiniGameMechTolerance?.addEventListener("click", () => startDebugMiniGame("MECH_TOLERANCE"));
   dom.debugMiniGameAsm?.addEventListener("click", () => startDebugMiniGame("ASM_PATCH"));
+  dom.debugMiniGameControlLoop?.addEventListener("click", () => startDebugMiniGame("CONTROL_LOOP"));
   dom.debugMiniGameFlameSaw?.addEventListener("click", () => startDebugMiniGame("FLAMESAW_FINISH"));
   if (dom.debugSanityInput) {
     dom.debugSanityInput.addEventListener("input", (event) => {
