@@ -12923,8 +12923,31 @@ function renderTitrationTransfer(game) {
     bottomText: `Sample: ${formatMl(rightTotalMl)}ml`,
   });
 
+  const lastResult = instanceState.lastResult;
+  const hasResult = Boolean(lastResult);
+  const hasSuccess = lastResult?.isSuccess;
+
   beakerRow.appendChild(baseBeaker.container);
   beakerRow.appendChild(sampleBeaker.container);
+  if (hasSuccess) {
+    const neutralizedBanner = document.createElement("div");
+    neutralizedBanner.textContent = "NEUTRALIZED";
+    neutralizedBanner.style.position = "absolute";
+    neutralizedBanner.style.inset = "0";
+    neutralizedBanner.style.display = "flex";
+    neutralizedBanner.style.alignItems = "center";
+    neutralizedBanner.style.justifyContent = "center";
+    neutralizedBanner.style.fontSize = "28px";
+    neutralizedBanner.style.fontWeight = "800";
+    neutralizedBanner.style.letterSpacing = "2px";
+    neutralizedBanner.style.color = "rgba(235, 255, 235, 0.95)";
+    neutralizedBanner.style.textShadow = "0 2px 10px rgba(0,0,0,0.7)";
+    neutralizedBanner.style.pointerEvents = "none";
+    neutralizedBanner.style.transform = "rotate(-6deg)";
+    neutralizedBanner.style.background =
+      "linear-gradient(90deg, rgba(40, 120, 70, 0.0), rgba(40, 120, 70, 0.45), rgba(40, 120, 70, 0.0))";
+    beakerRow.appendChild(neutralizedBanner);
+  }
 
   const readouts = document.createElement("div");
   readouts.style.display = "grid";
@@ -13025,9 +13048,6 @@ function renderTitrationTransfer(game) {
 
   const transferButton = document.createElement("button");
   transferButton.type = "button";
-  const lastResult = instanceState.lastResult;
-  const hasResult = Boolean(lastResult);
-  const hasSuccess = lastResult?.isSuccess;
   transferButton.textContent = hasResult ? (hasSuccess ? "APPLY SOLUTION" : "TRY AGAIN") : "POUR";
   transferButton.disabled = locked || (!hasResult && (!isLoading || loadedMl <= 0));
   if (hasSuccess) {
@@ -13137,7 +13157,7 @@ function renderTitrationTransfer(game) {
         const result = getTitrationReadout(diffNow, toleranceMl);
         instanceState.lastResult = { isSuccess: result.isSuccess, ph: result.ph };
         instanceState.statusMessage = result.isSuccess
-          ? "Solution balanced. Apply the solution."
+          ? ""
           : "";
         instanceState.pourStartAt = null;
         instanceState.pourDurationMs = null;
