@@ -5126,6 +5126,8 @@ function getUnlocks() {
 }
 
 function hasCollectedTool(name) {
+  if (name === "Noise Lure") return isDeployableUnlocked("noiseLure") || hasInventoryItem(name);
+  if (name === "Door Jam") return isDeployableUnlocked("doorJam") || hasInventoryItem(name);
   return state.toolCollected.has(name) || hasInventoryItem(name);
 }
 
@@ -5352,7 +5354,7 @@ function setupMissionForNight() {
     if (plan) {
       state.nightObjectiveId = plan.objectiveId;
     }
-    state.escapeConsoleInspected = state.currentNight !== 1;
+    state.escapeConsoleInspected = false;
     if (state.currentNight === 10) {
       const flameRecipe = getObjectiveRecipeByName("Flame-Saw");
       if (flameRecipe) {
@@ -5549,22 +5551,34 @@ function setupSpecialPickupsForNight() {
   }
 
   if (state.currentNight === 5) {
-    const introLine = getCaitNightData(5).intro;
-    state.nightIntroLine = introLine;
-    if (state.requiredPickup) {
-      state.requiredPickup.caitIntroLine = introLine;
-    }
+    const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
+    const night5Data = getCaitNightData(5);
+    state.requiredPickup = {
+      itemName: "Noise Lure",
+      roomId,
+      caitIntroLine: night5Data.intro,
+      caitWarnLine: night5Data.pickupWarning,
+      blocksEscapeConsole: true,
+      warned: false,
+    };
+    state.specialPickups.set(roomId, "Noise Lure");
+    state.nightIntroLine = state.requiredPickup.caitIntroLine;
   }
 
   if (state.currentNight === 6) {
-    const roomId = state.requiredPickup?.roomId ?? PICKUP_START_ROOM;
+    const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
     const night6Data = getCaitNightData(6);
     const introLine = formatCaitLine(night6Data.intro, { room: rooms[roomId].name });
-    state.nightIntroLine = introLine;
-    if (state.requiredPickup) {
-      state.requiredPickup.caitIntroLine = introLine;
-      state.requiredPickup.caitWarnLine = night6Data.pickupWarning;
-    }
+    state.requiredPickup = {
+      itemName: "Door Jam",
+      roomId,
+      caitIntroLine: introLine,
+      caitWarnLine: night6Data.pickupWarning,
+      blocksEscapeConsole: true,
+      warned: false,
+    };
+    state.specialPickups.set(roomId, "Door Jam");
+    state.nightIntroLine = state.requiredPickup.caitIntroLine;
   }
 
   if (state.currentNight === 7) {
@@ -6144,7 +6158,12 @@ function configureRobotStart() {
     if (state.weather?.type === "Storm") {
       schedulePowerSurge();
     }
+    return;
   }
+  if (state.robotRoom === state.playerRoom) {
+    state.robotRoom = pickRandomRoomId(new Set([state.playerRoom]));
+  }
+}
 }
 
 function scheduleSignal(roomId, strength, delay, options = {}) {
@@ -7636,7 +7655,7 @@ function canStartNightObjective() {
   if (state.nightObjectiveComplete) return false;
   if (state.objectiveHoldUntil > 0 && state.turn < state.objectiveHoldUntil) return false;
   if (state.requiredPickup && !isRequiredPickupComplete()) return false;
-  if (!state.escapeConsoleInspected && state.currentNight === 1) return false;
+  if (!state.escapeConsoleInspected) return false;
   return true;
 }
 
@@ -9320,8 +9339,18 @@ function collectSpecialPickup(roomId, { force = false } = {}) {
   if (state.hidden) return;
   const itemName = state.specialPickups.get(roomId);
   if (!itemName || hasCollectedTool(itemName)) return;
-  state.toolCollected.add(itemName);
-  addInventoryItem(itemName);
+  if (DEPLOYABLE_ITEMS.has(itemName)) {
+    if (itemName === "Noise Lure") {
+      state.deployableUnlocks.noiseLure = true;
+      state.noiseLureCharges += 3;
+    } else if (itemName === "Door Jam") {
+      state.deployableUnlocks.doorJam = true;
+      state.doorJamCharges += 2;
+    }
+  } else {
+    state.toolCollected.add(itemName);
+    addInventoryItem(itemName);
+  }
   state.specialPickups.delete(roomId);
   if (itemName === "Pulse Scanner") {
     state.unlocks.allowScannerToggle = true;
