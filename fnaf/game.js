@@ -3484,10 +3484,14 @@ async function handleAudioGateGesture(event) {
   if (dom.audioGateBtn) {
     dom.audioGateBtn.removeEventListener("click", handleAudioGateGesture, true);
   }
-  if (dom.titleScreen && !dom.titleScreen.classList.contains("title-visible")) {
-    requestAnimationFrame(() => {
-      dom.titleScreen?.classList.add("title-visible");
-    });
+  if (dom.titleScreen) {
+    dom.titleScreen.setAttribute("aria-hidden", "false");
+    document.body.classList.add("title-active");
+    if (!dom.titleScreen.classList.contains("title-visible")) {
+      requestAnimationFrame(() => {
+        dom.titleScreen?.classList.add("title-visible");
+      });
+    }
   }
   if (dom.titleStartBtn) {
     dom.titleStartBtn.disabled = false;
