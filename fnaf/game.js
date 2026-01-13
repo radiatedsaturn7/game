@@ -1852,11 +1852,13 @@ const dom = {
   svgSpriteHost: document.getElementById("svgSpriteHost"),
   audioGate: document.getElementById("audioGate"),
   audioGateBtn: document.getElementById("audioGateBtn"),
+  audioGateDebugBtn: document.getElementById("audioGateDebugBtn"),
   titleScreen: document.getElementById("titleScreen"),
   titleVideoBackdrop: document.getElementById("titleVideoBackdrop"),
   titleVideo: document.getElementById("titleVideo"),
   titleVideos: document.querySelectorAll(".title-video"),
   titleAudio: document.getElementById("titleAudio"),
+  titleDebugBtn: document.getElementById("titleDebugBtn"),
   introFade: document.getElementById("introFade"),
   rainAudio: document.getElementById("rainAudio"),
   fogAudio: document.getElementById("fogAudio"),
@@ -3946,6 +3948,16 @@ function attachEvents() {
     loadGameById(button.dataset.saveId);
   });
   dom.openDebugPanelBtn?.addEventListener("click", () => {
+    if (!DEBUG_UI) return;
+    openDebug();
+    closeSystemMenu();
+  });
+  dom.audioGateDebugBtn?.addEventListener("click", () => {
+    if (!DEBUG_UI) return;
+    openDebug();
+    closeSystemMenu();
+  });
+  dom.titleDebugBtn?.addEventListener("click", () => {
     if (!DEBUG_UI) return;
     openDebug();
     closeSystemMenu();
