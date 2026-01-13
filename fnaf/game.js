@@ -3448,7 +3448,7 @@ async function initTitleScreen() {
 
 async function ensureAudioUnlockedFromGesture(event) {
   if (audioUnlockedOnce) return true;
-  if (!event || !event.isTrusted) return false;
+  if (!event) return false;
   if (event.type === "keydown") {
     const allowedKeys = new Set(["Enter", " ", "Spacebar"]);
     if (!allowedKeys.has(event.key)) return false;
