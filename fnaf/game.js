@@ -1202,7 +1202,7 @@ const NIGHT_UNLOCKS = {
   },
   2: {
     showMap: true,
-    robotActive: true,
+    robotActive: false,
     allowSirens: false,
     allowSlowRewire: false,
     allowScannerToggle: false,
@@ -1214,7 +1214,7 @@ const NIGHT_UNLOCKS = {
   },
   3: {
     showMap: true,
-    robotActive: true,
+    robotActive: false,
     allowSirens: true,
     allowSlowRewire: true,
     allowScannerToggle: false,
@@ -1226,7 +1226,7 @@ const NIGHT_UNLOCKS = {
   },
   4: {
     showMap: true,
-    robotActive: true,
+    robotActive: false,
     allowSirens: true,
     allowSlowRewire: true,
     allowScannerToggle: true,
