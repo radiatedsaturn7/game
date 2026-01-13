@@ -3454,9 +3454,13 @@ async function ensureAudioUnlockedFromGesture(event) {
     if (!allowedKeys.has(event.key)) return false;
     event.preventDefault();
   }
-  const audioReady = await AudioManager.init();
-  if (audioReady) {
-    await AudioManager.unlock();
+  try {
+    const audioReady = await AudioManager.init();
+    if (audioReady) {
+      await AudioManager.unlock();
+    }
+  } catch (err) {
+    console.warn("audio: unlock failed, continuing without audio:", err);
   }
   audioUnlockedOnce = true;
   primeLoopTracksInGesture();
