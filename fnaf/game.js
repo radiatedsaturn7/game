@@ -3448,7 +3448,7 @@ async function initTitleScreen() {
 
 async function ensureAudioUnlockedFromGesture(event) {
   if (audioUnlockedOnce) return true;
-  if (!event || !event.isTrusted) return false;
+  if (!event) return false;
   if (event.type === "keydown") {
     const allowedKeys = new Set(["Enter", " ", "Spacebar"]);
     if (!allowedKeys.has(event.key)) return false;
@@ -3480,7 +3480,17 @@ async function ensureAudioUnlockedFromGesture(event) {
 }
 
 async function handleAudioGateGesture(event) {
-  if (!(await ensureAudioUnlockedFromGesture(event))) return;
+  let audioUnlocked = false;
+  let unlockFailed = false;
+  try {
+    audioUnlocked = await ensureAudioUnlockedFromGesture(event);
+  } catch (err) {
+    unlockFailed = true;
+    console.warn("audio: unlock gesture failed; continuing to title screen", err);
+  }
+  if (!audioUnlocked && !unlockFailed) {
+    console.warn("audio: unlock gesture rejected; continuing to title screen");
+  }
   if (dom.audioGate) {
     dom.audioGate.removeEventListener("click", handleAudioGateGesture, true);
     dom.audioGate.setAttribute("aria-hidden", "true");
