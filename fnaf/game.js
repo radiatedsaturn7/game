@@ -1344,6 +1344,7 @@ const SCANNER_BLEED_SIGNAL = 0.04;
 const ALARM_TICK_SIGNAL = 0.07;
 const ALARM_BLEED_SIGNAL = 0.03;
 const PICKUP_START_ROOM = 0;
+const CONTROL_ROOM_ID = 0;
 
 const LURE_TYPES = {
   siren: {
@@ -5156,6 +5157,12 @@ function isTwistNight(night) {
   return [5, 6, 10].includes(night);
 }
 
+function shouldRobotStartActive(night = state.currentNight) {
+  const unlocks = getUnlocksForNight(night);
+  if (!unlocks.robotActive) return false;
+  return night === 5;
+}
+
 function getFirstUnlockNight(feature) {
   const nights = Object.keys(NIGHT_UNLOCKS)
     .map((value) => Number(value))
@@ -5365,8 +5372,11 @@ function setupMissionForNight() {
       state.requiredEscapeSchematic = null;
       state.selectedSchematic = null;
     }
-    if (state.unlocks.robotActive) {
-      state.robotDisabled = false;
+    const startRobotActive = shouldRobotStartActive();
+    state.robotDisabled = !startRobotActive;
+    if (!startRobotActive) {
+      state.robotRoom = CONTROL_ROOM_ID;
+      state.robotDormant = 0;
     }
     setupEnvironmentForNight();
     const objectiveIntro = getNightObjectiveIntroLine();
@@ -6144,12 +6154,14 @@ function setCurrentNight(night) {
 }
 
 function configureRobotStart() {
-  if (!state.unlocks.robotActive) {
+  const startActive = shouldRobotStartActive();
+  if (!startActive) {
     state.robotDisabled = true;
+    state.robotRoom = CONTROL_ROOM_ID;
     return;
   }
   state.robotRechargeCooldown = getRobotRechargeCooldown();
-  if (isTwistNight(state.currentNight)) {
+  if (state.currentNight === 5) {
     const exitRoom = rooms.find((room) => room.isExit)?.id ?? 13;
     state.robotRoom = exitRoom;
     state.robotDisabled = false;
