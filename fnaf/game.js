@@ -3480,9 +3480,15 @@ async function ensureAudioUnlockedFromGesture(event) {
 }
 
 async function handleAudioGateGesture(event) {
-  if (!event) return;
-  const audioUnlocked = await ensureAudioUnlockedFromGesture(event);
-  if (!audioUnlocked) {
+  let audioUnlocked = false;
+  let unlockFailed = false;
+  try {
+    audioUnlocked = await ensureAudioUnlockedFromGesture(event);
+  } catch (err) {
+    unlockFailed = true;
+    console.warn("audio: unlock gesture failed; continuing to title screen", err);
+  }
+  if (!audioUnlocked && !unlockFailed) {
     console.warn("audio: unlock gesture rejected; continuing to title screen");
   }
   if (dom.audioGate) {
