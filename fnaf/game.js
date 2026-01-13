@@ -310,15 +310,15 @@ const OBJECTIVE_RECIPES_BY_NAME = new Map(
 const DATA_FRAGMENT_SCHEMATIC = "Data Fragment";
 
 const NIGHT_PLAN = {
-  1: { objectiveId: "INTRO_ESCAPE", room: "Escape Workshop" },
-  2: { objectiveId: "CIRCUIT_STABILIZE", room: "Power Junction" },
-  3: { objectiveId: "ALARM_CALIBRATION", room: "Diagnostics Bay" },
-  4: { objectiveId: "SCANNER_DIAGNOSTIC", room: "Research Annex" },
-  5: { objectiveId: "SIGNAL_FILTER_RC", room: "Server Nest" },
-  6: { objectiveId: "CHEM_BALANCE", room: "Coolant Vault" },
-  7: { objectiveId: "MECH_TOLERANCE", room: "Hydraulic Core" },
-  8: { objectiveId: "ASM_PATCH", room: "Server Nest" },
-  9: { objectiveId: "CONTROL_LOOP", room: "Control Bay" },
+  1: { objectiveId: "CIRCUIT_STABILIZE", room: "Power Junction" },
+  2: { objectiveId: "CHEM_BALANCE", room: "Coolant Vault" },
+  3: { objectiveId: "ASM_PATCH", room: "Server Nest" },
+  4: { objectiveId: "CIRCUIT_STABILIZE", room: "Power Junction" },
+  5: { objectiveId: "CHEM_BALANCE", room: "Coolant Vault" },
+  6: { objectiveId: "ASM_PATCH", room: "Server Nest" },
+  7: { objectiveId: "CIRCUIT_STABILIZE", room: "Power Junction" },
+  8: { objectiveId: "CHEM_BALANCE", room: "Coolant Vault" },
+  9: { objectiveId: "ASM_PATCH", room: "Server Nest" },
   10: { objectiveId: "FLAMESAW_FINAL", room: "Escape Workshop", miniGameId: "FLAMESAW_FINISH" },
 };
 
@@ -420,12 +420,35 @@ const MINI_GAME_TEMPLATES = {
     difficultyByNight: { tolerance: 1, pattern: ["L", "L", "R"] },
     generate: generateDialLock,
   },
+  FLAMESAW_GAS: {
+    id: "FLAMESAW_GAS",
+    title: "Gas Valve",
+    actionLabel: "Open Gas",
+    type: "dial_lock",
+    roomHintText: "Turn the gas fully on. One clean sequence.",
+    difficultyByNight: { tolerance: 1, pattern: ["L", "L", "R"] },
+    generate: generateDialLock,
+  },
+  FLAMESAW_IGNITE: {
+    id: "FLAMESAW_IGNITE",
+    title: "Ignition Tuner",
+    actionLabel: "Ignite",
+    type: "signal_tuner",
+    roomHintText: "Catch the ignition window. No second chances.",
+    difficultyByNight: (night) => ({
+      sweepWindowSize: clamp(0.26 - night * 0.01, 0.14, 0.26),
+      locksNeeded: night < 5 ? 2 : 3,
+      decryptWindowSize: clamp(0.16 - night * 0.008, 0.08, 0.16),
+      sweepPeriod: clamp(1800 - night * 80, 1000, 1800),
+    }),
+    generate: generateSignalTuner,
+  },
   FLAMESAW_FINISH: {
     id: "FLAMESAW_FINISH",
     title: "Flame-Saw Finish",
     actionLabel: "Use Flame-Saw",
     type: "boss_finish",
-    roomHintText: "Stay on rhythm. Finish the cut.",
+    roomHintText: "Hold the flame on the seam. Stay on rhythm.",
     difficultyByNight: {
       heatBand: [0.62, 0.78],
       alignWindow: 0.08,
@@ -435,6 +458,22 @@ const MINI_GAME_TEMPLATES = {
       driftPeriod: 2000,
     },
     generate: generateBossFinish,
+  },
+  FLAMESAW_BALANCE: {
+    id: "FLAMESAW_BALANCE",
+    title: "Saw Balance",
+    actionLabel: "Hold Steady",
+    type: "balance_hold",
+    roomHintText: "Balance the saw on the seam. Hold it steady.",
+    difficultyByNight: {
+      safeBand: [0.44, 0.56],
+      winInsideMs: 5500,
+      maxOutsideMs: 1200,
+      timeLimitMs: 12000,
+      driftStrength: 0.0025,
+      nudgeImpulse: 0.06,
+    },
+    generate: generateBalanceHold,
   },
 };
 
@@ -507,6 +546,33 @@ function generateDialLock(rngSeed, night, template) {
       sequence,
       pattern: difficulty.pattern ?? ["L", "R", "L"],
       tolerance: difficulty.tolerance ?? 2,
+    },
+    ui: {
+      text: template.roomHintText,
+    },
+  };
+}
+
+function generateBalanceHold(rngSeed, night, template) {
+  const difficulty = getMiniGameDifficulty(template, night);
+  return {
+    state: {
+      value: 0.5,
+      velocity: 0,
+      startedAt: null,
+      insideMs: 0,
+      outsideMs: 0,
+      lastTickAt: null,
+      nudgeDirection: 0,
+      lastNudgeAt: null,
+    },
+    solution: {
+      safeBand: difficulty.safeBand ?? [0.44, 0.56],
+      winInsideMs: difficulty.winInsideMs ?? 5500,
+      maxOutsideMs: difficulty.maxOutsideMs ?? 1200,
+      timeLimitMs: difficulty.timeLimitMs ?? 12000,
+      driftStrength: difficulty.driftStrength ?? 0.0025,
+      nudgeImpulse: difficulty.nudgeImpulse ?? 0.06,
     },
     ui: {
       text: template.roomHintText,
@@ -1586,6 +1652,8 @@ const state = {
   nightObjectiveComplete: false,
   robotKilled: false,
   hasFlameSaw: false,
+  flameSawFinaleStage: null,
+  flameSawFinaleActive: false,
   robotKillGrace: 0,
   actionLock: null,
   escapeConsoleInspected: false,
@@ -8161,6 +8229,23 @@ function alignManualOverride(roomId) {
   updateUI();
 }
 
+function startFlameSawFinale() {
+  state.flameSawFinaleActive = true;
+  state.flameSawFinaleStage = "gas";
+  openMiniGame("FLAMESAW_GAS");
+}
+
+function advanceFlameSawFinale(nextStage) {
+  state.flameSawFinaleStage = nextStage;
+  if (nextStage === "ignite") {
+    openMiniGame("FLAMESAW_IGNITE");
+  } else if (nextStage === "heat") {
+    openMiniGame("FLAMESAW_FINISH");
+  } else if (nextStage === "balance") {
+    openMiniGame("FLAMESAW_BALANCE");
+  }
+}
+
 function startFlameSawAssault() {
   if (state.objectiveBlocked || isActionLocked()) return;
   if (!state.hasFlameSaw || state.robotKilled) return;
@@ -8175,7 +8260,7 @@ function startFlameSawAssault() {
         pushStatus("Heating the armor seam…", 3);
       }
       if (step >= steps) {
-        openMiniGame("FLAMESAW_FINISH");
+        startFlameSawFinale();
       }
     },
   });
@@ -9844,7 +9929,7 @@ function handleFlameSawThreatWindow() {
     state.robotKillGrace = 0;
     return false;
   }
-  if (state.miniGameActive && state.miniGame?.id === "FLAMESAW_FINISH") {
+  if (state.flameSawFinaleActive || isFlameSawFinaleMiniGame(state.miniGame?.id)) {
     return true;
   }
   if (state.robotRoom !== state.playerRoom) {
@@ -11911,6 +11996,9 @@ function renderMiniGame() {
       break;
     case "boss_finish":
       renderBossFinish(game);
+      break;
+    case "balance_hold":
+      renderBalanceHold(game);
       break;
     default:
       break;
@@ -14206,6 +14294,149 @@ function renderBossFinish(game) {
   });
 }
 
+function renderBalanceHold(game) {
+  const { instanceState, instanceSolution } = game;
+  dom.miniGameText.textContent = game.roomHintText || "Balance the saw on the seam. Hold it steady.";
+
+  const wrapper = document.createElement("div");
+  wrapper.style.display = "grid";
+  wrapper.style.gap = "12px";
+
+  const bar = document.createElement("div");
+  bar.style.position = "relative";
+  bar.style.height = "16px";
+  bar.style.border = "1px solid rgba(255,255,255,0.4)";
+  bar.style.background = "rgba(10, 15, 20, 0.6)";
+
+  const band = document.createElement("div");
+  band.style.position = "absolute";
+  band.style.top = "0";
+  band.style.bottom = "0";
+  band.style.left = `${instanceSolution.safeBand[0] * 100}%`;
+  band.style.width = `${(instanceSolution.safeBand[1] - instanceSolution.safeBand[0]) * 100}%`;
+  band.style.background = "rgba(80, 200, 120, 0.5)";
+
+  const marker = document.createElement("div");
+  marker.style.position = "absolute";
+  marker.style.top = "-3px";
+  marker.style.width = "4px";
+  marker.style.height = "22px";
+  marker.style.background = "rgba(220, 220, 220, 0.9)";
+
+  bar.appendChild(band);
+  bar.appendChild(marker);
+  wrapper.appendChild(bar);
+
+  const status = document.createElement("div");
+  status.style.fontSize = "12px";
+  wrapper.appendChild(status);
+
+  const applyNudge = (direction) => {
+    instanceState.value = clamp(
+      instanceState.value + direction * instanceSolution.nudgeImpulse,
+      0,
+      1
+    );
+    instanceState.velocity += direction * instanceSolution.nudgeImpulse * 0.08;
+  };
+
+  const createNudgeButton = (label, direction) => {
+    const button = document.createElement("button");
+    button.textContent = label;
+    const startHold = (event) => {
+      event.preventDefault();
+      instanceState.nudgeDirection = direction;
+      instanceState.lastNudgeAt = null;
+      applyNudge(direction);
+    };
+    const endHold = () => {
+      if (instanceState.nudgeDirection === direction) {
+        instanceState.nudgeDirection = 0;
+      }
+    };
+    button.addEventListener("pointerdown", startHold);
+    button.addEventListener("pointerup", endHold);
+    button.addEventListener("pointerleave", endHold);
+    button.addEventListener("click", () => applyNudge(direction));
+    return button;
+  };
+
+  const leftButton = createNudgeButton("LEFT", -1);
+  const rightButton = createNudgeButton("RIGHT", 1);
+  wrapper.appendChild(makeBtnRow([leftButton, rightButton], { wrap: false }));
+
+  if (isMiniGameMobile()) {
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "100";
+    slider.step = "1";
+    slider.value = String(Math.round(instanceState.value * 100));
+    slider.addEventListener("input", () => {
+      instanceState.value = clamp(Number(slider.value) / 100, 0, 1);
+      instanceState.velocity = 0;
+    });
+    wrapper.appendChild(slider);
+  }
+
+  dom.miniGameOptions.appendChild(wrapper);
+  setMiniGameSubmitButton({ visible: false });
+
+  const updateBalance = () => {
+    const now = performance.now();
+    if (!instanceState.startedAt) {
+      instanceState.startedAt = now;
+      instanceState.lastTickAt = now;
+    }
+    const delta = now - instanceState.lastTickAt;
+    instanceState.lastTickAt = now;
+    const drift = (Math.random() - 0.5) * instanceSolution.driftStrength * delta;
+    instanceState.velocity += drift;
+    instanceState.velocity *= 0.995;
+    instanceState.velocity = clamp(instanceState.velocity, -0.004, 0.004);
+    instanceState.value += instanceState.velocity * delta;
+    if (instanceState.nudgeDirection !== 0) {
+      const interval = 90;
+      if (!instanceState.lastNudgeAt || now - instanceState.lastNudgeAt >= interval) {
+        applyNudge(instanceState.nudgeDirection);
+        instanceState.lastNudgeAt = now;
+      }
+    }
+    instanceState.value = clamp(instanceState.value, 0, 1);
+    if (instanceState.value === 0 || instanceState.value === 1) {
+      instanceState.velocity = 0;
+    }
+
+    const inBand =
+      instanceState.value >= instanceSolution.safeBand[0] &&
+      instanceState.value <= instanceSolution.safeBand[1];
+    if (inBand) {
+      instanceState.insideMs += delta;
+    } else {
+      instanceState.outsideMs += delta;
+    }
+
+    const elapsed = now - instanceState.startedAt;
+    const remaining = Math.max(0, instanceSolution.timeLimitMs - elapsed);
+    if (instanceState.insideMs >= instanceSolution.winInsideMs) {
+      handleMiniGameSuccess(game);
+      return;
+    }
+    if (instanceState.outsideMs >= instanceSolution.maxOutsideMs || remaining <= 0) {
+      handleMiniGameFailure(game);
+      return;
+    }
+
+    marker.style.left = `${instanceState.value * 100}%`;
+    status.textContent = `Stable: ${Math.ceil(
+      Math.max(0, instanceSolution.winInsideMs - instanceState.insideMs) / 1000
+    )}s | Time: ${Math.ceil(remaining / 1000)}s`;
+  };
+
+  updateBalance();
+  startMiniGameAnimation(updateBalance);
+}
+
 function applyMiniGameFailurePenalty(tries = 0) {
   const profile = getNightProfile();
   const effects = getPassiveEffects();
@@ -14255,10 +14486,33 @@ function completeNightObjective() {
   updateUI();
 }
 
+function isFlameSawFinaleMiniGame(miniGameId) {
+  return [
+    "FLAMESAW_GAS",
+    "FLAMESAW_IGNITE",
+    "FLAMESAW_FINISH",
+    "FLAMESAW_BALANCE",
+  ].includes(miniGameId);
+}
+
 function resolveMiniGameSuccess(miniGameId) {
+  if (miniGameId === "FLAMESAW_GAS") {
+    advanceFlameSawFinale("ignite");
+    return;
+  }
+  if (miniGameId === "FLAMESAW_IGNITE") {
+    advanceFlameSawFinale("heat");
+    return;
+  }
   if (miniGameId === "FLAMESAW_FINISH") {
+    advanceFlameSawFinale("balance");
+    return;
+  }
+  if (miniGameId === "FLAMESAW_BALANCE") {
     state.robotKilled = true;
     state.nightObjectiveComplete = true;
+    state.flameSawFinaleActive = false;
+    state.flameSawFinaleStage = null;
     triggerFinalVictory();
     return;
   }
@@ -14270,7 +14524,9 @@ function resolveMiniGameSuccess(miniGameId) {
 }
 
 function resolveMiniGameFailure(miniGameId) {
-  if (miniGameId === "FLAMESAW_FINISH") {
+  if (isFlameSawFinaleMiniGame(miniGameId)) {
+    state.flameSawFinaleActive = false;
+    state.flameSawFinaleStage = null;
     closeMiniGame();
     triggerDeath();
     return;
@@ -14287,7 +14543,7 @@ function handleMiniGameSuccess(game) {
 function handleMiniGameFailure(game) {
   game.tries += 1;
   resolveMiniGameFailure(game.id);
-  if (!state.miniGameActive || game.id === "FLAMESAW_FINISH") return;
+  if (!state.miniGameActive || isFlameSawFinaleMiniGame(game.id)) return;
   regenerateMiniGameInstance();
   renderMiniGame();
 }
@@ -14326,6 +14582,10 @@ function handleTitrationAttemptFailure(game) {
   return false;
 }
 
+function submitBalanceHold() {
+  return;
+}
+
 function submitMiniGameAnswer() {
   const game = state.miniGame;
   if (!game) return;
@@ -14344,6 +14604,9 @@ function submitMiniGameAnswer() {
       break;
     case "resistor_kit":
       submitResistorKit(game);
+      break;
+    case "balance_hold":
+      submitBalanceHold(game);
       break;
     default:
       break;
