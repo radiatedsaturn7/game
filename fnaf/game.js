@@ -6206,7 +6206,6 @@ function configureRobotStart() {
     state.robotRoom = pickRandomRoomId(new Set([state.playerRoom]));
   }
 }
-}
 
 function scheduleSignal(roomId, strength, delay, options = {}) {
   state.pendingSignals.push({
