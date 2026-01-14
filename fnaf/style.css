@@ -2470,6 +2470,10 @@ body.night-11 .map-node text {
   z-index: 60;
 }
 
+#debugPanel {
+  z-index: 200;
+}
+
 .menu-panel.active {
   opacity: 1;
   visibility: visible;
