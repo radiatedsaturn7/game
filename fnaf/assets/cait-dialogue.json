@@ -21,9 +21,9 @@
       "objectiveIntro": "Cait: Console needs a live calibration. Hit it clean.",
       "objectiveSuccess": "Cait: Good. Door's awake. Get out.",
       "comment": "Cait: Geist… stop. You’re ringing the halls.",
-      "escapeConsoleInspect": "Cait: What the hell…?\n\nThat door shouldn’t be—\n\nDamn it. I can’t talk long.\nThe robots are pushing the husks toward me.\n\nDo this fast. Get the door unstuck.",
+      "escapeConsoleInspect": "Cait: It's not working? What the hell?\nLooks like the power coil is fried.\nGo to the Power Junction and stabilize the circuit.\nIt'll get it running again.",
       "objectiveComplete": "Cait: Okay— listen.\n\nI need to stay quiet now.\nThey’re everywhere out here.\n\nGo.\nGet back to the escape ⎋ workshop and get out.",
-      "escapeReady": "Cait: I have to move.\n\nAnd… Rob—\n\nYou’re not going to like what you see out here."
+      "escapeReady": "Cait: Hurry up and get out, I don't like what I see."
     },
     "2": {
       "intro": "Cait: Geist…\n\nThey’re building.\nFast. Faster than I’ve ever seen.\n\nI wanted to tell you sooner, but the husks were all around me.\n\nI can see more frames going up.\nYou need to get out.",
