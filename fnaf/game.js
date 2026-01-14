@@ -2603,6 +2603,18 @@ function isHotkeyBlocked() {
   return modals.some((modal) => modal?.classList.contains("active"));
 }
 
+function getActiveModalOkButton() {
+  const modalButtons = [
+    { modal: dom.componentPanel, button: dom.componentOkBtn },
+    { modal: dom.objectiveModal, button: dom.ackObjectiveBtn },
+    { modal: dom.robotAlertModal, button: dom.ackRobotAlertBtn },
+    { modal: dom.caitQuietModal, button: dom.ackCaitQuietBtn },
+  ];
+  return (
+    modalButtons.find(({ modal }) => modal?.classList.contains("active"))?.button ?? null
+  );
+}
+
 const ACTION_HOTKEY_LABELS = new Map([
   ["escape", "E"],
   ["inspect-console", "I"],
@@ -3991,9 +4003,27 @@ function attachEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.defaultPrevented) return;
     if (event.metaKey || event.ctrlKey) return;
+    const key = event.key;
+    const isSpace = key === " " || key === "Spacebar";
+    if (key === "Enter" || isSpace) {
+      const active = document.activeElement;
+      const tag = active?.tagName?.toLowerCase();
+      if (
+        tag !== "input" &&
+        tag !== "textarea" &&
+        tag !== "select" &&
+        tag !== "button" &&
+        !active?.isContentEditable
+      ) {
+        const modalOkButton = getActiveModalOkButton();
+        if (modalOkButton && clickButton(modalOkButton)) {
+          event.preventDefault();
+          return;
+        }
+      }
+    }
     if (isHotkeyBlocked()) return;
     if (event.altKey) return;
-    const key = event.key;
     const lower = key.toLowerCase();
     const mapActive = dom.mapPanel?.classList.contains("active");
     let handled = false;
@@ -4008,7 +4038,6 @@ function attachEvents() {
         handled = navigateMapSelection(direction);
       }
       if (!handled) {
-        const isSpace = key === " " || key === "Spacebar";
         if (key === "Enter" || isSpace) {
           handled = true;
           handleMapMove(key === "Enter");
