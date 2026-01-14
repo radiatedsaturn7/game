@@ -258,7 +258,7 @@ body {
   background-repeat: no-repeat;
   background-attachment: fixed;
   background-position: center top;
-  background-size: var(--viewport-size) auto;
+  background-size: var(--viewport-size) 100svh;
   color: var(--text-primary);
   position: relative;
 }
@@ -1286,7 +1286,7 @@ main {
   display: flex;
   gap: 10px;
   padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
-  width: min(calc(100% - (var(--app-pad-x) * 2)), var(--app-max-width));
+  width: min(100%, var(--app-max-width));
   max-width: var(--app-max-width);
   min-height: var(--nav-h);
   justify-content: space-between;
@@ -2492,7 +2492,7 @@ body.night-11 .map-node text {
     url("images/background.png") center/cover no-repeat;
   display: flex;
   align-items: stretch;
-  justify-content: flex-start;
+  justify-content: center;
   padding: calc(12px + env(safe-area-inset-top)) 16px
     calc(12px + var(--nav-h) + env(safe-area-inset-bottom)) 16px;
   z-index: 25;
@@ -2521,7 +2521,7 @@ body.night-11 .map-node text {
   border: 1px solid var(--map-border);
   border-radius: 4px;
   padding: 24px;
-  width: min(560px, 100%);
+  width: min(100%, var(--app-max-width));
   height: 100%;
   max-height: 100%;
   display: flex;
