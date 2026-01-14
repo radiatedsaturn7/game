@@ -3992,6 +3992,7 @@ function attachEvents() {
     if (event.defaultPrevented) return;
     if (event.metaKey || event.ctrlKey) return;
     if (isHotkeyBlocked()) return;
+    if (event.altKey) return;
     const key = event.key;
     const lower = key.toLowerCase();
     const mapActive = dom.mapPanel?.classList.contains("active");
@@ -4006,29 +4007,37 @@ function attachEvents() {
       if (direction) {
         handled = navigateMapSelection(direction);
       }
+      if (!handled) {
+        const isSpace = key === " " || key === "Spacebar";
+        if (key === "Enter" || isSpace) {
+          handled = true;
+          handleMapMove(key === "Enter");
+        }
+      }
     }
     if (!handled && key === "Escape") {
       handled = true;
-      if (isPlayerTraveling()) {
-        cancelMovement();
-      } else {
-        closePanels();
-      }
+      openSystemMenu();
     }
-    if (!handled && event.altKey) {
+    if (!handled) {
       switch (lower) {
+        case "1":
         case "b":
           handled = clickButton(dom.menuBtn);
           break;
+        case "2":
         case "m":
           handled = clickButton(dom.mapBtn);
           break;
+        case "3":
         case "l":
           handled = clickButton(dom.liveBtn);
           break;
+        case "4":
         case "t":
           handled = clickButton(dom.tasksBtn);
           break;
+        case "5":
         case "u":
           handled = clickButton(dom.useBtn);
           break;

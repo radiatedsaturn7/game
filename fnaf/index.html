@@ -140,11 +140,11 @@
   </div>
 
   <div class="overlay-footer" role="navigation" aria-label="Primary">
-    <button id="menuBtn" aria-label="Bag (Alt+B)"><u>B</u>ag</button>
-    <button id="mapBtn" aria-label="Map (Alt+M)"><u>M</u>ap</button>
-    <button id="liveBtn" class="primary" aria-label="Live (Alt+L)"><u>L</u>ive</button>
-    <button id="tasksBtn" aria-label="Task (Alt+T)"><u>T</u>ask</button>
-    <button id="useBtn" aria-label="Use (Alt+U)"><u>U</u>se</button>
+    <button id="menuBtn" aria-label="Bag (1/B)"><u>B</u>ag</button>
+    <button id="mapBtn" aria-label="Map (2/M)"><u>M</u>ap</button>
+    <button id="liveBtn" class="primary" aria-label="Live (3/L)"><u>L</u>ive</button>
+    <button id="tasksBtn" aria-label="Task (4/T)"><u>T</u>ask</button>
+    <button id="useBtn" aria-label="Use (5/U)"><u>U</u>se</button>
   </div>
 
   <div id="deathScreen" class="death-screen" aria-hidden="true">
@@ -234,20 +234,20 @@
         <section class="system-tab" data-system-panel="help" role="tabpanel" aria-labelledby="systemTabHelp">
           <div class="system-actions">
             <ul class="list help-list">
-              <li><span class="hotkey-label"><u>B</u></span> Bag</li>
-              <li><span class="hotkey-label"><u>M</u></span> Map</li>
-              <li><span class="hotkey-label"><u>L</u></span> Live</li>
-              <li><span class="hotkey-label"><u>T</u></span> Tasks</li>
-              <li><span class="hotkey-label"><u>U</u></span> Use</li>
-              <li><span class="hotkey-label"><u>S</u></span> Sneak (map open)</li>
-              <li><span class="hotkey-label"><u>R</u></span> Run (map open)</li>
+              <li><span class="hotkey-label">1</span> Bag (B)</li>
+              <li><span class="hotkey-label">2</span> Map (M)</li>
+              <li><span class="hotkey-label">3</span> Live (L)</li>
+              <li><span class="hotkey-label">4</span> Tasks (T)</li>
+              <li><span class="hotkey-label">5</span> Use (U)</li>
+              <li><span class="hotkey-label">Space</span> Sneak (map open)</li>
+              <li><span class="hotkey-label">Enter</span> Run (map open)</li>
               <li><span class="hotkey-label"><u>C</u></span> Cancel movement / deploy</li>
               <li><span class="hotkey-label"><u>E</u></span> Escape / Leave</li>
               <li><span class="hotkey-label"><u>I</u></span> Inspect Escape Console</li>
               <li><span class="hotkey-label"><u>A</u></span> Align Override Node</li>
               <li><span class="hotkey-label"><u>D</u></span> Disable Alarm</li>
               <li><span class="hotkey-label"><u>K</u></span> Talk to Cait</li>
-              <li><span class="hotkey-label">Esc</span> Close panels / cancel travel</li>
+              <li><span class="hotkey-label">Esc</span> Open menu</li>
             </ul>
           </div>
         </section>
@@ -316,11 +316,11 @@
         <div class="quick-actions compact">
           <div class="quick-buttons">
             <button id="sneakBtn" class="move-action" type="button">
-              <span class="quick-label">Sneak <span class="hotkey-hint" aria-hidden="true">S</span></span>
+              <span class="quick-label">Sneak <span class="hotkey-hint" aria-hidden="true">Space</span></span>
               <span class="quick-sub">Quiet</span>
             </button>
             <button id="runBtn" class="move-action" type="button">
-              <span class="quick-label">Run <span class="hotkey-hint" aria-hidden="true">R</span></span>
+              <span class="quick-label">Run <span class="hotkey-hint" aria-hidden="true">Enter</span></span>
               <span class="quick-sub">Motion</span>
             </button>
             <button id="scannerToggleBtn" class="hidden" type="button" hidden>
