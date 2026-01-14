@@ -2603,6 +2603,130 @@ function isHotkeyBlocked() {
   return modals.some((modal) => modal?.classList.contains("active"));
 }
 
+const NAVIGATION_PANELS = [
+  () => dom.miniGamePanel,
+  () => dom.craftMiniGame,
+  () => dom.menuPanel,
+  () => dom.systemMenuPanel,
+  () => dom.usePanel,
+  () => dom.debugPanel,
+  () => dom.componentPanel,
+  () => dom.tasksPanel,
+  () => dom.objectiveModal,
+  () => dom.robotAlertModal,
+  () => dom.caitQuietModal,
+  () => dom.deathScreen,
+  () => dom.victoryScreen,
+  () => dom.creditsScreen,
+];
+
+function getActiveNavigationRoot() {
+  const activePanel = NAVIGATION_PANELS
+    .map((getPanel) => getPanel())
+    .find((panel) => panel?.classList.contains("active"));
+  if (activePanel) return activePanel;
+  return dom.roomActions ?? null;
+}
+
+function getFocusableCandidates(root) {
+  if (!root) return [];
+  return Array.from(
+    root.querySelectorAll("button, [role=\"button\"], [tabindex]")
+  ).filter((el) => {
+    if (!el) return false;
+    if (el.closest("[aria-hidden=\"true\"]")) return false;
+    if (el.tabIndex < 0) return false;
+    if (!el.getClientRects().length) return false;
+    if (el.matches("button") && el.disabled) return false;
+    if (el.getAttribute("aria-disabled") === "true") return false;
+    return true;
+  });
+}
+
+function getDirectionalFocusTarget(candidates, current, direction) {
+  if (!candidates.length) return null;
+  if (!current || !candidates.includes(current)) {
+    return candidates[0];
+  }
+  const currentRect = current.getBoundingClientRect();
+  const currentCenter = {
+    x: currentRect.left + currentRect.width / 2,
+    y: currentRect.top + currentRect.height / 2,
+  };
+  const primaryAxis = direction === "up" || direction === "down" ? "y" : "x";
+  const directionSign = direction === "up" || direction === "left" ? -1 : 1;
+  const candidatesInDirection = candidates.filter((candidate) => {
+    if (candidate === current) return false;
+    const rect = candidate.getBoundingClientRect();
+    const center = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    };
+    const delta = center[primaryAxis] - currentCenter[primaryAxis];
+    return directionSign * delta > 0;
+  });
+  if (!candidatesInDirection.length) {
+    return direction === "up" || direction === "left"
+      ? candidates[candidates.length - 1]
+      : candidates[0];
+  }
+  const scored = candidatesInDirection.map((candidate) => {
+    const rect = candidate.getBoundingClientRect();
+    const center = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    };
+    const dx = center.x - currentCenter.x;
+    const dy = center.y - currentCenter.y;
+    const primaryDistance = primaryAxis === "y" ? Math.abs(dy) : Math.abs(dx);
+    const secondaryDistance = primaryAxis === "y" ? Math.abs(dx) : Math.abs(dy);
+    return {
+      candidate,
+      score: primaryDistance * 1000 + secondaryDistance,
+    };
+  });
+  scored.sort((a, b) => a.score - b.score);
+  return scored[0]?.candidate ?? null;
+}
+
+function handleDirectionalNavigation(event) {
+  if (!event) return false;
+  if (event.metaKey || event.ctrlKey || event.altKey) return false;
+  const direction = {
+    ArrowUp: "up",
+    ArrowDown: "down",
+    ArrowLeft: "left",
+    ArrowRight: "right",
+  }[event.key];
+  const isSpace = event.key === " " || event.key === "Spacebar";
+  if (!direction && !isSpace) return false;
+  if (dom.mapPanel?.classList.contains("active")) return false;
+  const root = getActiveNavigationRoot();
+  const candidates = getFocusableCandidates(root);
+  if (!candidates.length) return false;
+  const active = document.activeElement;
+  if (active) {
+    const tag = active.tagName?.toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || active.isContentEditable) {
+      return false;
+    }
+  }
+  if (isSpace) {
+    if (active && candidates.includes(active)) {
+      if (active.matches("button") && active.disabled) return false;
+      active.click();
+      event.preventDefault();
+      return true;
+    }
+    return false;
+  }
+  const target = getDirectionalFocusTarget(candidates, active, direction);
+  if (!target) return false;
+  target.focus({ preventScroll: true });
+  event.preventDefault();
+  return true;
+}
+
 function getActiveModalOkButton() {
   const modalButtons = [
     { modal: dom.componentPanel, button: dom.componentOkBtn },
@@ -4021,6 +4145,9 @@ function attachEvents() {
           return;
         }
       }
+    }
+    if (handleDirectionalNavigation(event)) {
+      return;
     }
     if (isHotkeyBlocked()) return;
     if (event.altKey) return;
