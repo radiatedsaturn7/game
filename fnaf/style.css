@@ -484,6 +484,16 @@ body.fx-critical .map-node text {
   transform: none;
 }
 
+.audio-gate-button.audio-gate-debug {
+  font-size: 0.85rem;
+  letter-spacing: 0.18em;
+  padding: 10px 22px;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.18);
+  animation: none;
+}
+
 .audio-gate-button:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.8);
   outline-offset: 3px;
@@ -648,6 +658,34 @@ body.fx-critical .map-node text {
 
 .title-start:focus-visible {
   outline: 2px solid rgba(242, 201, 76, 0.9);
+  outline-offset: 4px;
+}
+
+.title-debug {
+  margin-top: 16px;
+  padding: 10px 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(12, 12, 12, 0.55);
+  color: #f8f8f8;
+  font-size: 0.8rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.title-debug:hover,
+.title-debug:focus-visible {
+  background: rgba(20, 20, 20, 0.75);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+}
+
+.title-debug:active {
+  transform: scale(0.98);
+}
+
+.title-debug:focus-visible {
+  outline: 2px solid rgba(248, 248, 248, 0.75);
   outline-offset: 4px;
 }
 
@@ -2430,6 +2468,10 @@ body.night-11 .map-node text {
 
 .menu-panel.modal-panel {
   z-index: 60;
+}
+
+#debugPanel {
+  z-index: 200;
 }
 
 .menu-panel.active {
