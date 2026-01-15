@@ -5329,6 +5329,9 @@ function hasCollectedTool(name) {
 
 function isRequiredPickupComplete() {
   if (!state.requiredPickup) return true;
+  if (state.requiredPickup.type === "schematic") {
+    return state.foundSchematics.has(state.requiredPickup.itemName);
+  }
   return hasCollectedTool(state.requiredPickup.itemName);
 }
 
@@ -5759,14 +5762,14 @@ function setupSpecialPickupsForNight() {
     const roomId = pickRandomRoomId(new Set([PICKUP_START_ROOM]));
     const night5Data = getCaitNightData(5);
     state.requiredPickup = {
-      itemName: "Noise Lure",
+      itemName: "Noise Lure Schematic",
       roomId,
+      type: "schematic",
       caitIntroLine: night5Data.intro,
       caitWarnLine: night5Data.pickupWarning,
       blocksEscapeConsole: true,
       warned: false,
     };
-    state.specialPickups.set(roomId, "Noise Lure");
     state.nightIntroLine = state.requiredPickup.caitIntroLine;
   }
 
@@ -5775,14 +5778,14 @@ function setupSpecialPickupsForNight() {
     const night6Data = getCaitNightData(6);
     const introLine = formatCaitLine(night6Data.intro, { room: rooms[roomId].name });
     state.requiredPickup = {
-      itemName: "Door Jam",
+      itemName: "Door Jam Schematic",
       roomId,
+      type: "schematic",
       caitIntroLine: introLine,
       caitWarnLine: night6Data.pickupWarning,
       blocksEscapeConsole: true,
       warned: false,
     };
-    state.specialPickups.set(roomId, "Door Jam");
     state.nightIntroLine = state.requiredPickup.caitIntroLine;
   }
 
@@ -8890,7 +8893,8 @@ function revealEscapeSchematic() {
 }
 
 function getPartSpawnBudget(night) {
-  return 0;
+  if (isNight11(night)) return 0;
+  return 4;
 }
 
 function getSchematicSpawnBudget(night) {
@@ -8970,6 +8974,12 @@ function assignRoomFinds() {
     room.schematic = undefined;
   });
   const baseExclusions = new Set([PICKUP_START_ROOM]);
+  const requiredSchematicPickup = state.requiredPickup?.type === "schematic"
+    ? state.requiredPickup
+    : null;
+  if (requiredSchematicPickup?.roomId != null) {
+    baseExclusions.add(requiredSchematicPickup.roomId);
+  }
   const guaranteedItems = getGuaranteedItems();
   const basePartBudget = getPartSpawnBudget(state.currentNight);
   const partBudget = Math.max(basePartBudget, guaranteedItems.length);
@@ -9036,6 +9046,9 @@ function assignRoomFinds() {
       }
     });
   }
+  if (requiredSchematicPickup?.roomId != null && requiredSchematicPickup.itemName) {
+    rooms[requiredSchematicPickup.roomId].schematic = requiredSchematicPickup.itemName;
+  }
 }
 
 function alarmObjectiveText() {
@@ -9053,7 +9066,8 @@ function getObjectiveText() {
     objective = "Keep moving. Listen for Cait.";
   } else if (state.requiredPickup && !isRequiredPickupComplete()) {
     const roomName = rooms[state.requiredPickup.roomId]?.name ?? "a nearby room";
-    objective = `Collect the ${state.requiredPickup.itemName} in ${roomName}.`;
+    const verb = state.requiredPickup.type === "schematic" ? "Scan" : "Collect";
+    objective = `${verb} the ${state.requiredPickup.itemName} in ${roomName}.`;
   } else if (
     state.objectiveBlocksEscapeConsole &&
     state.requiredEscapeSchematic &&

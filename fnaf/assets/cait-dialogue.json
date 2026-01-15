@@ -18,7 +18,6 @@
   "nights": {
     "1": {
       "intro": "Cait: Okay… you got what you went in for, right?\nGood. Then don’t linger.\n\nThe husks breaking in were bad enough, but—\nthe robots are doing something out here.\n\nI can’t tell what yet.\n\nGet to the escape ⎋ workshop. Let’s get you out.",
-      "objectiveIntro": "Cait: Console needs a live calibration. Hit it clean.",
       "objectiveSuccess": "Cait: Good. Door's awake. Get out.",
       "comment": "Cait: Geist… stop. You’re ringing the halls.",
       "escapeConsoleInspect": "Cait: It's not working? What the hell?\nLooks like the power coil is fried.\nGo to the Power Junction and stabilize the circuit.\nIt'll get it running again.",
@@ -27,18 +26,17 @@
     },
     "2": {
       "intro": "Cait: Geist…\n\nThey’re building.\nFast. Faster than I’ve ever seen.\n\nI wanted to tell you sooner, but the husks were all around me.\n\nI can see more frames going up.\nYou need to get out.",
-      "objectiveIntro": "Cait: Door coil’s starving. Do the math fast.",
       "objectiveSuccess": "Cait: Coil’s stable. Move.",
       "comment": "Cait: Lightning's been hammering the grid. That's why the surges keep popping.",
-      "escapeConsoleInspect": "Cait: Again?\n\nNo— this isn’t damage.\n\nI think this is intentional.\n\nI think they’re trying to keep you inside.\n\nThe robots are trying to contain you.\n\nYou need to force it open. Now.",
+      "escapeConsoleInspect": "Cait: Geist, I don't think that acid is an accident. A drop of that on your skin will stop your heart. Check {room} for some emergency base... And Geist?... I think you have something in there with you.",
       "robotActivation": "Cait: Geist— One more thing. Stay quiet. Something is in there with you.",
       "objectiveComplete": "Cait: Geist…\n\nThey normally don’t care about us.\nWe’re ants to them.\n\nWhy now?"
     },
     "3": {
       "intro": "Cait: Geist… what did you do to piss them off?\nThey’re everywhere.\nBuilding like it’s the only thing they’ve ever loved.",
-      "objectiveIntro": "Cait: Alarms are touchy. Recalibrate the array.",
       "objectiveSuccess": "Cait: Alarm loop quiet. Go.",
       "comment": "Cait: I can’t talk long. It’s still too dangerous out here.\nBut listen— they’ve started installing alarms inside the rooms.\nIf you find one, kill it. Shut it down.",
+      "escapeConsoleInspect": "Cait: They really don't want you to leave, Geist. This one is programmed to never open... If you got any bright ideas, there's a console at {room}.",
       "robotActivation": "Cait: One more thing. Watch out. I think its following you.",
       "alarms": [
         "Cait: Alarm tripped. Lightning's been messing with the lines.",
@@ -54,8 +52,8 @@
       "tutorial": "Cait: I’ve got a minute— that’s it.\nI’m going to teach you a trick.\nIf you rewire a room slow and careful, you can flood their feeds with static.\nIt won’t hide you.\nBut it can make you harder to pin down— for a moment."
     },
     "4": {
-      "intro": "Cait: ASM HACK…?\n\nI— this is going to sound insane, so just— listen.\nI think I have skin.\n\nI know what you’re going to say. But…\nhave you felt it too?\n\nWe need to get out of here. Now.\nWhile they were building, I saw them drop something.\nA scanner. I think it was meant to search for you.\n\nGuess it didn’t work.\n\nGo pick it up. It’s in {room}.",
-      "objectiveIntro": "Cait: Scanner’s real. Run a diagnostic in the annex.",
+      "intro": "Cait: I— this is going to sound insane, so just— listen.\nI think I have skin.\n\nI know what you’re going to say. But…\nhave you felt it too?\n\nWe need to get out of here. Now.\nWhile they were building, I saw them drop something.\nA scanner. I think it was meant to search for you.\n\nGuess it didn’t work.\n\nGo pick it up. It’s in {room}.",
+      "escapeConsoleInspect": "Cait: Geist? They are getting more sophisticated with their traps. Check {room}.",
       "objectiveSuccess": "Cait: Diagnostic clean. You’re thinking like a scientist.",
       "pickupWarning": "Cait: That’s it. Grab it— and move. Don’t think.",
       "pickupObjective": "Cait: Not yet. Grab the Pulse Scanner.",
@@ -84,16 +82,14 @@
       "objectiveComplete": "Cait: Stay with me.\n\nIf you need eyes, use the scanner.\nIf you need air, go quiet.\n\nThen move."
     },
     "5": {
-      "intro": "Cait: Geist…\n\nOut here, they don’t rush.\nThey don’t corner things.\n\nThey leave space.\n\nI keep thinking about something you once told me—\nthat the surest way to break someone\nis to leave them an exit they believe in.\n\nOne of them left something behind.\nA noise lure.\n\nNot hidden.\nNot damaged.\n\nJust… placed.\n\nTake it.\nBut remember—\n\nhope keeps you moving.\nAnd movement keeps you visible.",
-      "objectiveIntro": "Cait: Server Nest’s noisy. Filter the signal.",
+      "intro": "Cait: If you're wondering where it comes from, they normally use it for their reproduction cycle. Robots need silicon chips. Check {room}.",
       "objectiveSuccess": "Cait: Signal’s clean. You’re back in control.",
       "pickupDetail": "Cait: When you use it—\n\ndon’t think of it as pulling them away.\n\nThink of it as being shown\nwhere you’re allowed to go.",
       "objectiveComplete": "Cait: It didn’t rush the sound.\n\nIt adjusted around it.\n\nLike it expected you to follow.",
       "comment": "Cait: The escape room isn’t empty."
     },
     "6": {
-      "intro": "Cait: ASM HACK? Are you there?\n\nI can’t hear you. What happened?\n\n…No. Wait— I hear something, but it’s wrong.\n\nI think they know.\n\nIf you can hear me— get the door jam.\nIt’s in {room}.\n\nPlease.",
-      "objectiveIntro": "Cait: Balance the mix. If you guess, you die.",
+      "intro": "Cait: ASM HACK? Are you there?\n\nI can’t hear you. What happened?\n\n…No. Wait— I hear something, but it’s wrong.\n\nI think they know.\n\nIf you can hear me— get the door jam schematic.\nIt’s in {room}.\n\nPlease.",
       "objectiveSuccess": "Cait: Chemistry checks out. Keep moving.",
       "pickupWarning": "Cait: …there— <static> …don’t— <static> …stay— <static>",
       "pickupDetail": "Cait: …<static>… my eyes… <static>…\n\n…burning…\n\n…<static>… I can’t— I can’t hold it— <static>",
@@ -101,7 +97,6 @@
     },
     "7": {
       "intro": "Cait: I’m sorry.\n\nI’m so sorry.",
-      "objectiveIntro": "Cait: Hydraulic tolerances are off. Fix them.",
       "objectiveSuccess": "Cait: Pressure’s stable. Door can breathe.",
       "lockdown": "Cait: I tried so hard.\n\nI’m so sorry.",
       "blowtorch": "Cait: Geist?\n\nI… I found a blowtorch.\nIt’s in {room}.\n\nTry it on the permanent door jams.\n\nI don’t know if this helps.\n\nBut I don’t know what else we do now.",
@@ -112,19 +107,16 @@
     },
     "8": {
       "intro": "Cait: Geist…\n\nSomething’s different tonight.\n\nIt’s not pushing you.\nIt’s not correcting you.\n\nIt’s just… letting things happen.\n\nThat’s worse.",
-      "objectiveIntro": "Cait: Patch the controller loop in the Server Nest.",
       "objectiveSuccess": "Cait: Loop exits now. Door’s listening.",
       "objectiveComplete": "Cait: Don’t stop.\n\nQuiet is not safety.\nIt’s timing."
     },
     "9": {
       "intro": "Cait: Geist… listen to me.\n\nIf something tonight feels familiar—\ntoo familiar—\n\ndon’t trust that feeling.\n\nI don’t think I’m the only thing\nthat knows how you move anymore.",
-      "objectiveIntro": "Cait: Control Bay’s drifting. Tune the loop.",
       "objectiveSuccess": "Cait: Rate’s stable. You can leave.",
       "objectiveComplete": "Cait: If something feels familiar—\n\ndon’t trust it."
     },
     "10": {
       "intro": "Cait: Geist…\n\nI don’t think this ends\nwith both of us in the same place.\n\nWhatever’s out here—\nit’s closer to me than it is to you.\n\nThat doesn’t mean I’m leaving.\n\nIt just means\nyou might have to finish this without my voice.",
-      "objectiveIntro": "Cait: Build the Flame-Saw. Then end it.",
       "objectiveSuccess": "Cait: You built it. Now finish this.",
       "objectiveComplete": "Cait: That’s it.\n\nGo.",
       "escapeReady": "Cait: If I go quiet now—\n\nit means you made it."
