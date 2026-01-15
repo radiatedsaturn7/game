@@ -1202,7 +1202,7 @@ const NIGHT_UNLOCKS = {
   },
   2: {
     showMap: true,
-    robotActive: false,
+    robotActive: true,
     allowSirens: false,
     allowSlowRewire: false,
     allowScannerToggle: false,
@@ -1214,7 +1214,7 @@ const NIGHT_UNLOCKS = {
   },
   3: {
     showMap: true,
-    robotActive: false,
+    robotActive: true,
     allowSirens: true,
     allowSlowRewire: true,
     allowScannerToggle: false,
@@ -1226,7 +1226,7 @@ const NIGHT_UNLOCKS = {
   },
   4: {
     showMap: true,
-    robotActive: false,
+    robotActive: true,
     allowSirens: true,
     allowSlowRewire: true,
     allowScannerToggle: true,
@@ -1658,6 +1658,7 @@ const state = {
   robotKillGrace: 0,
   actionLock: null,
   escapeConsoleInspected: false,
+  roomActionsSignature: null,
   tasksAcknowledgedNightOne: false,
   runAcknowledgedNightOne: false,
   runHighlightActive: false,
@@ -1929,6 +1930,7 @@ const dom = {
   sneakBtn: document.getElementById("sneakBtn"),
   runBtn: document.getElementById("runBtn"),
   menuPanel: document.getElementById("menuPanel"),
+  menuCloseBtn: document.getElementById("menuCloseBtn"),
   bagTabSchematics: document.getElementById("bagTabSchematics"),
   bagTabItems: document.getElementById("bagTabItems"),
   bagTabTools: document.getElementById("bagTabTools"),
@@ -1953,6 +1955,7 @@ const dom = {
   openDebugPanelBtn: document.getElementById("openDebugPanelBtn"),
   mapPanel: document.getElementById("mapPanel"),
   usePanel: document.getElementById("usePanel"),
+  useCloseBtn: document.getElementById("useCloseBtn"),
   debugPanel: document.getElementById("debugPanel"),
   useList: document.getElementById("useList"),
   componentPanel: document.getElementById("componentPanel"),
@@ -1963,7 +1966,7 @@ const dom = {
   componentOkBtn: document.getElementById("componentOkBtn"),
   tasksPanel: document.getElementById("tasksPanel"),
   tasksText: document.getElementById("tasksText"),
-  tasksOkBtn: document.getElementById("tasksOkBtn"),
+  tasksCloseBtn: document.getElementById("tasksCloseBtn"),
   objectiveModal: document.getElementById("objectiveModal"),
   objectiveModalTitle: document.getElementById("objectiveModalTitle"),
   objectiveModalText: document.getElementById("objectiveModalText"),
@@ -2643,11 +2646,64 @@ function getFocusableCandidates(root) {
   });
 }
 
+function getGridFocusTarget(candidates, current, direction) {
+  const group = current?.dataset?.navGroup;
+  if (!group) return null;
+  const groupCandidates = candidates.filter((candidate) => candidate?.dataset?.navGroup === group);
+  if (!groupCandidates.length) return null;
+  const currentRow = Number(current.dataset.navRow);
+  const currentCol = Number(current.dataset.navCol);
+  if (!Number.isFinite(currentRow) || !Number.isFinite(currentCol)) return null;
+  const positions = groupCandidates
+    .map((candidate) => ({
+      candidate,
+      row: Number(candidate.dataset.navRow),
+      col: Number(candidate.dataset.navCol),
+    }))
+    .filter((entry) => Number.isFinite(entry.row) && Number.isFinite(entry.col));
+  if (!positions.length) return null;
+  const maxRow = Math.max(...positions.map((entry) => entry.row));
+  const maxCol = Math.max(...positions.map((entry) => entry.col));
+  const findAt = (row, col) =>
+    positions.find((entry) => entry.row === row && entry.col === col)?.candidate ?? null;
+  switch (direction) {
+    case "left":
+      for (let col = currentCol - 1; col >= 0; col -= 1) {
+        const target = findAt(currentRow, col);
+        if (target) return target;
+      }
+      break;
+    case "right":
+      for (let col = currentCol + 1; col <= maxCol; col += 1) {
+        const target = findAt(currentRow, col);
+        if (target) return target;
+      }
+      break;
+    case "up":
+      for (let row = currentRow - 1; row >= 0; row -= 1) {
+        const target = findAt(row, currentCol);
+        if (target) return target;
+      }
+      break;
+    case "down":
+      for (let row = currentRow + 1; row <= maxRow; row += 1) {
+        const target = findAt(row, currentCol);
+        if (target) return target;
+      }
+      break;
+    default:
+      break;
+  }
+  return null;
+}
+
 function getDirectionalFocusTarget(candidates, current, direction) {
   if (!candidates.length) return null;
   if (!current || !candidates.includes(current)) {
     return candidates[0];
   }
+  const gridTarget = getGridFocusTarget(candidates, current, direction);
+  if (gridTarget) return gridTarget;
   const currentRect = current.getBoundingClientRect();
   const currentCenter = {
     x: currentRect.left + currentRect.width / 2,
@@ -4002,12 +4058,14 @@ function attachEvents() {
   }
   dom.deployBtn?.addEventListener("click", handleDeployAction);
   dom.menuBtn.addEventListener("click", openMenu);
+  dom.menuCloseBtn?.addEventListener("click", closeMenu);
   dom.mapBtn.addEventListener("click", openMap);
   dom.liveBtn.addEventListener("click", returnToRoom);
   dom.tasksBtn.addEventListener("click", openTasks);
-  dom.tasksOkBtn?.addEventListener("click", closeTasks);
+  dom.tasksCloseBtn?.addEventListener("click", closeTasks);
   dom.componentOkBtn.addEventListener("click", closeComponent);
   dom.useBtn.addEventListener("click", openUse);
+  dom.useCloseBtn?.addEventListener("click", closeUse);
   dom.systemMenuBtn.addEventListener("click", openSystemMenu);
   dom.toggleRobotBtn.addEventListener("click", toggleRobot);
   dom.ackObjectiveBtn.addEventListener("click", acknowledgeObjective);
@@ -4130,6 +4188,25 @@ function attachEvents() {
     const key = event.key;
     const isSpace = key === " " || key === "Spacebar";
     if (key === "Enter" || isSpace) {
+      if (isTitleScreenActive()) {
+        const audioGateVisible =
+          dom.audioGate && dom.audioGate.getAttribute("aria-hidden") !== "true";
+        if (audioGateVisible) {
+          if (clickButton(dom.audioGateBtn)) {
+            event.preventDefault();
+            return;
+          }
+          if (dom.audioGate) {
+            dom.audioGate.click();
+            event.preventDefault();
+            return;
+          }
+        }
+        if (clickButton(dom.titleStartBtn)) {
+          event.preventDefault();
+          return;
+        }
+      }
       const active = document.activeElement;
       const tag = active?.tagName?.toLowerCase();
       if (
@@ -4173,7 +4250,11 @@ function attachEvents() {
     }
     if (!handled && key === "Escape") {
       handled = true;
-      openSystemMenu();
+      if (shouldReturnToLiveOnEscape()) {
+        returnToRoom();
+      } else {
+        openSystemMenu();
+      }
     }
     if (!handled) {
       switch (lower) {
@@ -7427,6 +7508,15 @@ function closeMap() {
   clearSelectedRoom();
 }
 
+function shouldReturnToLiveOnEscape() {
+  return Boolean(
+    dom.menuPanel?.classList.contains("active") ||
+    dom.usePanel?.classList.contains("active") ||
+    dom.tasksPanel?.classList.contains("active") ||
+    dom.mapPanel?.classList.contains("active")
+  );
+}
+
 function returnToRoom() {
   closePanels();
   clearMapTarget();
@@ -8057,8 +8147,31 @@ function onAlarmTriggered(roomId) {
   }
 }
 
+function getRoomActionFocusKey(button) {
+  if (!button) return null;
+  return button.dataset?.focusKey || button.dataset?.actionKey || button.textContent || null;
+}
+
+function buildRoomActionsSignature(actions, emptyLabel = "empty") {
+  if (!actions?.length) return JSON.stringify([{ label: emptyLabel }]);
+  return JSON.stringify(actions.map((action) => ({
+    label: action.label,
+    disabled: Boolean(action.disabled),
+    highlight: Boolean(action.highlight),
+    className: action.className ?? null,
+    risk: action.risk ?? null,
+    info: Boolean(action.info),
+    actionKey: action.actionKey ?? null,
+    tags: (action.tags || []).map((tag) => `${tag.label}:${tag.className ?? ""}`),
+  })));
+}
+
 function updateRoomActions() {
-  dom.roomActions.innerHTML = "";
+  if (!dom.roomActions) return;
+  const activeElement = document.activeElement;
+  const previousFocusKey = dom.roomActions.contains(activeElement)
+    ? getRoomActionFocusKey(activeElement)
+    : null;
   const room = rooms[state.playerRoom];
   const actions = [];
   const blocked = state.objectiveBlocked || isActionLocked();
@@ -8087,6 +8200,12 @@ function updateRoomActions() {
   }
 
   if (isNight11()) {
+    const signature = buildRoomActionsSignature(actions);
+    if (signature === state.roomActionsSignature && dom.roomActions.children.length > 0) {
+      return;
+    }
+    state.roomActionsSignature = signature;
+    dom.roomActions.innerHTML = "";
     actions.forEach((action) => {
       const button = document.createElement("button");
       const label = document.createElement("span");
@@ -8099,6 +8218,7 @@ function updateRoomActions() {
       if (action.actionKey) {
         button.dataset.actionKey = action.actionKey;
       }
+      button.dataset.focusKey = action.actionKey ?? action.label;
       button.disabled = action.disabled;
       if (action.highlight) {
         button.classList.add("objective-highlight");
@@ -8108,6 +8228,12 @@ function updateRoomActions() {
       }
       dom.roomActions.appendChild(button);
     });
+    if (previousFocusKey) {
+      const target = dom.roomActions.querySelector(
+        `[data-focus-key="${CSS.escape(previousFocusKey)}"]`
+      );
+      target?.focus({ preventScroll: true });
+    }
     return;
   }
 
@@ -8343,13 +8469,26 @@ function updateRoomActions() {
   }
 
   if (actions.length === 0) {
+    const signature = buildRoomActionsSignature(actions);
+    if (signature === state.roomActionsSignature && dom.roomActions.children.length > 0) {
+      return;
+    }
+    state.roomActionsSignature = signature;
+    dom.roomActions.innerHTML = "";
     const empty = document.createElement("button");
     empty.textContent = "No immediate actions here.";
     empty.disabled = true;
+    empty.dataset.focusKey = "empty";
     dom.roomActions.appendChild(empty);
     return;
   }
 
+  const signature = buildRoomActionsSignature(actions);
+  if (signature === state.roomActionsSignature && dom.roomActions.children.length > 0) {
+    return;
+  }
+  state.roomActionsSignature = signature;
+  dom.roomActions.innerHTML = "";
   actions.forEach((action) => {
     const button = document.createElement("button");
     const label = document.createElement("span");
@@ -8387,6 +8526,7 @@ function updateRoomActions() {
     if (action.actionKey) {
       button.dataset.actionKey = action.actionKey;
     }
+    button.dataset.focusKey = action.actionKey ?? action.label;
     appendHotkeyHint(button, action.actionKey);
     button.disabled = action.disabled;
     if (action.highlight) {
@@ -8397,6 +8537,12 @@ function updateRoomActions() {
     }
     dom.roomActions.appendChild(button);
   });
+  if (previousFocusKey) {
+    const target = dom.roomActions.querySelector(
+      `[data-focus-key="${CSS.escape(previousFocusKey)}"]`
+    );
+    target?.focus({ preventScroll: true });
+  }
 }
 
 function getStabilizeTarget(roomId) {
@@ -13031,9 +13177,8 @@ function renderResistorKit(game) {
   kitTray.style.display = "grid";
   kitTray.style.gap = "8px";
   kitTray.style.width = "100%";
-  kitTray.style.gridTemplateColumns = isMiniGameMobile()
-    ? "repeat(2, minmax(0, 1fr))"
-    : "repeat(4, minmax(0, 1fr))";
+  const kitColumns = isMiniGameMobile() ? 2 : 4;
+  kitTray.style.gridTemplateColumns = `repeat(${kitColumns}, minmax(0, 1fr))`;
 
   instanceState.kit.forEach((value, index) => {
     const active = instanceState.selected[index];
@@ -13050,6 +13195,9 @@ function renderResistorKit(game) {
     chip.style.color = "white";
     chip.style.fontWeight = "600";
     chip.textContent = active ? `${value}Ω ✓` : `${value}Ω`;
+    chip.dataset.navGroup = "resistor-kit";
+    chip.dataset.navRow = String(Math.floor(index / kitColumns));
+    chip.dataset.navCol = String(index % kitColumns);
     chip.addEventListener("click", () => {
       instanceState.selected[index] = !instanceState.selected[index];
       renderMiniGame();
