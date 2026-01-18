@@ -116,6 +116,22 @@
           <button id="systemMenuBtn">Menu</button>
         </div>
         <div class="room-media" id="roomMedia">
+          <div id="roomStageStrip" class="room-stage-strip" aria-hidden="true">
+            <div class="room-stage room-stage-current" data-stage="current">
+              <div class="parallax-layer parallax-mountains"></div>
+              <div class="parallax-layer parallax-city"></div>
+              <div class="parallax-layer parallax-clouds"></div>
+              <div class="room-scene"></div>
+            </div>
+            <div class="room-stage room-stage-next" data-stage="next">
+              <div class="parallax-layer parallax-mountains"></div>
+              <div class="parallax-layer parallax-city"></div>
+              <div class="parallax-layer parallax-clouds"></div>
+              <div class="room-scene"></div>
+            </div>
+          </div>
+          <div class="room-door room-door-left" aria-hidden="true"></div>
+          <div class="room-door room-door-right" aria-hidden="true"></div>
           <div class="room-topline">
             <div class="room-title-stack">
               <p id="actionStatus" class="action-status hidden"></p>

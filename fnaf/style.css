@@ -902,6 +902,10 @@ main {
   filter: saturate(var(--surge-sat)) contrast(var(--surge-contrast)) blur(var(--surge-blur));
   --sunlight-overlay: rgba(0, 0, 0, 0);
   --sunlight-border: rgba(196, 166, 96, 0.3);
+  --room-slide-duration: 650ms;
+  --parallax-mountains: url("images/background.png");
+  --parallax-city: url("images/map.png");
+  --parallax-clouds: url("images/screen.png");
 }
 
 .app.alarm-active .room-media {
@@ -938,6 +942,119 @@ main {
   z-index: 1;
 }
 
+.room-stage-strip {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  width: 200%;
+  height: 100%;
+  transform: translateX(var(--room-stage-shift, 0%));
+  transition: transform var(--room-slide-duration) ease-in-out;
+  z-index: 0;
+}
+
+.room-media.is-transitioning .room-stage-strip {
+  pointer-events: none;
+}
+
+.room-stage {
+  position: relative;
+  width: 50%;
+  height: 100%;
+  overflow: hidden;
+  background: rgba(8, 10, 14, 0.82);
+}
+
+.room-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(20, 26, 38, 0.7), rgba(3, 5, 8, 0.92));
+  opacity: 0.6;
+  mix-blend-mode: screen;
+}
+
+.room-scene {
+  position: absolute;
+  inset: 0;
+  background-image: var(--room-bg, none);
+  background-size: 110% 110%;
+  background-position: 50% 50%;
+  background-repeat: no-repeat;
+  filter: saturate(0.92) contrast(1.05);
+  z-index: 2;
+}
+
+.parallax-layer {
+  position: absolute;
+  inset: -6%;
+  background-repeat: repeat-x;
+  background-position: center bottom;
+  background-size: cover;
+  opacity: 0.65;
+  z-index: 1;
+  transform: translate3d(calc(var(--parallax-shift, 0px) * var(--parallax-depth, 1)), 0, 0);
+  transition: transform var(--room-slide-duration) ease-in-out, opacity 400ms ease;
+}
+
+.parallax-mountains {
+  --parallax-depth: 0.2;
+  background-image: var(--parallax-mountains);
+  opacity: 0.55;
+}
+
+.parallax-city {
+  --parallax-depth: 0.45;
+  background-image: var(--parallax-city);
+  opacity: 0.7;
+}
+
+.parallax-clouds {
+  --parallax-depth: 0.75;
+  background-image: var(--parallax-clouds);
+  opacity: 0.85;
+  filter: blur(0.4px);
+}
+
+.room-media.hide-parallax .parallax-layer {
+  opacity: 0;
+}
+
+.room-door {
+  position: absolute;
+  top: 0;
+  width: 52%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(10, 12, 18, 0.95), rgba(30, 20, 12, 0.98));
+  z-index: 4;
+  transform: translateX(0);
+  transition: transform 420ms ease;
+  pointer-events: none;
+}
+
+.room-door-left {
+  left: 0;
+  transform: translateX(-120%);
+}
+
+.room-door-right {
+  right: 0;
+  transform: translateX(120%);
+}
+
+.room-media.doors-closed .room-door-left {
+  transform: translateX(0);
+}
+
+.room-media.doors-closed .room-door-right {
+  transform: translateX(0);
+}
+
+.room-media.doors-closing .room-door-left,
+.room-media.doors-closing .room-door-right {
+  transition: transform 340ms ease;
+}
+
 .room-media.threat-nearby {
   box-shadow: 0 0 35px rgba(255, 80, 80, 0.6);
   border-color: rgba(255, 120, 120, 0.8);
@@ -968,7 +1085,7 @@ main {
   z-index: 2;
 }
 
-.room-media > * {
+.room-media > *:not(.room-stage-strip):not(.room-door) {
   position: relative;
   z-index: 3;
 }

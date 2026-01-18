@@ -141,6 +141,23 @@ const ROOM_BG = {
 
 const ROOM_BG_BASE_PATH = "images/";
 const preloadedRoomImages = new Set();
+const ROOM_PARALLAX_DEFAULT = {
+  clouds: `${ROOM_BG_BASE_PATH}screen.png`,
+  city: `${ROOM_BG_BASE_PATH}map.png`,
+  mountains: `${ROOM_BG_BASE_PATH}background.png`,
+};
+
+const PARALLAX_REGIONS = {
+  default: ROOM_PARALLAX_DEFAULT,
+};
+
+const ROOM_DIMENSIONS = { width: 12, height: 8 };
+const ROOM_REGION_DEFAULT = "default";
+const ROOM_MAP_ORIGIN = { x: 70, y: 45 };
+const ROOM_MAP_SPACING = { x: 110, y: 95 };
+const ROOM_SLIDE_MS = 650;
+const DOOR_CLOSE_MS = 340;
+const DOOR_HOLD_MS = 220;
 
 function preloadImages(urls) {
   urls.filter(Boolean).forEach((url) => {
@@ -176,13 +193,145 @@ function preloadRoomBackgrounds() {
   if (currentRoom) {
     const currentUrl = getRoomBackgroundImage(currentRoom);
     if (currentUrl) urls.add(currentUrl);
+    const parallax = getRoomParallax(currentRoom);
+    Object.values(parallax).forEach((url) => urls.add(url));
     (roomConnections[state.playerRoom] || []).forEach((neighborId) => {
       const neighbor = rooms[neighborId];
       const neighborUrl = getRoomBackgroundImage(neighbor);
       if (neighborUrl) urls.add(neighborUrl);
+      const neighborParallax = getRoomParallax(neighbor);
+      Object.values(neighborParallax).forEach((url) => urls.add(url));
     });
   }
   preloadImages([...urls]);
+}
+
+function getRoomParallax(room) {
+  const key = room?.parallaxKey ?? room?.region ?? ROOM_REGION_DEFAULT;
+  return PARALLAX_REGIONS[key] ?? ROOM_PARALLAX_DEFAULT;
+}
+
+function getRoomParallaxShift(room) {
+  const position = mapPositions[room?.id];
+  if (!position) return "0px";
+  const centerX = ROOM_MAP_ORIGIN.x + ROOM_MAP_SPACING.x * 1.5;
+  const offset = (position.x - centerX) / 5;
+  return `${offset.toFixed(2)}px`;
+}
+
+function setRoomStage(stage, room) {
+  if (!stage) return;
+  if (!room) {
+    stage.style.setProperty("--room-bg", "none");
+    stage.style.setProperty("--parallax-mountains", `url("${ROOM_PARALLAX_DEFAULT.mountains}")`);
+    stage.style.setProperty("--parallax-city", `url("${ROOM_PARALLAX_DEFAULT.city}")`);
+    stage.style.setProperty("--parallax-clouds", `url("${ROOM_PARALLAX_DEFAULT.clouds}")`);
+    stage.style.setProperty("--parallax-shift", "0px");
+    stage.dataset.roomId = "";
+    return;
+  }
+  const bg = getRoomBackgroundImage(room);
+  const parallax = getRoomParallax(room);
+  stage.style.setProperty("--room-bg", bg ? `url("${bg}")` : "none");
+  stage.style.setProperty("--parallax-mountains", `url("${parallax.mountains}")`);
+  stage.style.setProperty("--parallax-city", `url("${parallax.city}")`);
+  stage.style.setProperty("--parallax-clouds", `url("${parallax.clouds}")`);
+  stage.style.setProperty("--parallax-shift", getRoomParallaxShift(room));
+  stage.dataset.roomId = String(room.id);
+  stage.dataset.region = room.region ?? ROOM_REGION_DEFAULT;
+}
+
+function setRoomStagesTo(room) {
+  setRoomStage(dom.roomStageCurrent, room);
+  setRoomStage(dom.roomStageNext, room);
+  dom.roomStageStrip?.style.setProperty("--room-stage-shift", "0%");
+  dom.roomMedia?.classList.remove("is-transitioning");
+}
+
+function getRoomSlideDirection(fromRoomId, toRoomId) {
+  const from = mapPositions[fromRoomId];
+  const to = mapPositions[toRoomId];
+  if (!from || !to) return "right";
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    return dx >= 0 ? "right" : "left";
+  }
+  return dy >= 0 ? "right" : "left";
+}
+
+function closeRoomDoors({ fast = false } = {}) {
+  if (!dom.roomMedia) return;
+  dom.roomMedia.classList.add("doors-closed");
+  dom.roomMedia.classList.toggle("doors-closing", fast);
+}
+
+function openRoomDoors() {
+  if (!dom.roomMedia) return;
+  dom.roomMedia.classList.remove("doors-closed");
+  dom.roomMedia.classList.remove("doors-closing");
+}
+
+function closeDoorsBriefly() {
+  if (state.doorTimeoutId) {
+    clearTimeout(state.doorTimeoutId);
+    state.doorTimeoutId = null;
+  }
+  closeRoomDoors({ fast: true });
+  state.doorTimeoutId = setTimeout(() => {
+    openRoomDoors();
+    state.doorTimeoutId = null;
+  }, DOOR_HOLD_MS);
+}
+
+function beginRoomTransition(nextRoomId) {
+  const currentRoom = rooms[state.playerRoom];
+  const nextRoom = rooms[nextRoomId];
+  if (!currentRoom || !nextRoom || !dom.roomStageStrip) return;
+  const direction = getRoomSlideDirection(state.playerRoom, nextRoomId);
+  state.roomTransition = {
+    fromRoom: state.playerRoom,
+    toRoom: nextRoomId,
+    direction,
+    startedAt: performance.now(),
+  };
+  setRoomStage(dom.roomStageCurrent, currentRoom);
+  setRoomStage(dom.roomStageNext, nextRoom);
+  dom.roomMedia?.classList.add("is-transitioning");
+  closeRoomDoors({ fast: true });
+  if (state.doorTimeoutId) {
+    clearTimeout(state.doorTimeoutId);
+    state.doorTimeoutId = null;
+  }
+  state.doorTimeoutId = setTimeout(() => {
+    openRoomDoors();
+    dom.roomStageStrip?.style.setProperty(
+      "--room-stage-shift",
+      direction === "right" ? "-50%" : "50%"
+    );
+    state.doorTimeoutId = null;
+  }, 120);
+}
+
+function finalizeRoomTransition(room) {
+  if (!dom.roomStageStrip) return;
+  dom.roomStageStrip.style.transition = "none";
+  dom.roomStageStrip.style.setProperty("--room-stage-shift", "0%");
+  setRoomStage(dom.roomStageCurrent, room);
+  setRoomStage(dom.roomStageNext, room);
+  requestAnimationFrame(() => {
+    if (dom.roomStageStrip) {
+      dom.roomStageStrip.style.transition = "";
+    }
+    dom.roomMedia?.classList.remove("is-transitioning");
+  });
+}
+
+function getUniformMapSlots() {
+  return ROOM_RECT_SLOTS.map((slot) => ({
+    x: ROOM_MAP_ORIGIN.x + slot.col * ROOM_MAP_SPACING.x,
+    y: ROOM_MAP_ORIGIN.y + slot.row * ROOM_MAP_SPACING.y,
+  }));
 }
 
 const ITEM_CLASSES = {
@@ -1082,6 +1231,23 @@ const mapPositions = {
   13: { x: 420, y: 340 },
 };
 
+const ROOM_RECT_SLOTS = [
+  { col: 0, row: 0 },
+  { col: 1, row: 0 },
+  { col: 2, row: 0 },
+  { col: 3, row: 0 },
+  { col: 0, row: 1 },
+  { col: 1, row: 1 },
+  { col: 2, row: 1 },
+  { col: 3, row: 1 },
+  { col: 0, row: 2 },
+  { col: 1, row: 2 },
+  { col: 2, row: 2 },
+  { col: 3, row: 2 },
+  { col: 0, row: 3 },
+  { col: 1, row: 3 },
+];
+
 let roomConnections = {
   0: [1, 3],
   1: [0, 2, 4],
@@ -1134,6 +1300,22 @@ const NIGHT_11_POSITIONS = {
   12: { x: 260, y: 360 },
   13: { x: 380, y: 360 },
 };
+
+const ROOM_TILE_OVERRIDES = {
+  // Placeholder for editor data tiles:
+  // [roomId]: { region: "coast", parallaxKey: "coastline" },
+};
+
+rooms.forEach((room) => {
+  room.region = room.region ?? ROOM_REGION_DEFAULT;
+  room.parallaxKey = room.parallaxKey ?? room.region;
+  room.size = room.size ?? { ...ROOM_DIMENSIONS };
+  const override = ROOM_TILE_OVERRIDES[room.id];
+  if (override) {
+    room.region = override.region ?? room.region;
+    room.parallaxKey = override.parallaxKey ?? room.parallaxKey;
+  }
+});
 
 const BASE_ROOMS = rooms.map((room) => ({
   ...room,
@@ -1796,6 +1978,9 @@ const state = {
   mapTargetMode: null,
   mapTargetSourceRoom: null,
   mapTargetSelection: null,
+  invincible: false,
+  roomTransition: null,
+  doorTimeoutId: null,
   robotLastRoom: null,
   recentMoves: [],
   lastMeaningfulActionTurn: -999,
@@ -1884,6 +2069,9 @@ const dom = {
   overlayFooter: document.querySelector(".overlay-footer"),
   dateLabel: document.getElementById("dateLabel"),
   roomMedia: document.getElementById("roomMedia"),
+  roomStageStrip: document.getElementById("roomStageStrip"),
+  roomStageCurrent: document.querySelector(".room-stage-current"),
+  roomStageNext: document.querySelector(".room-stage-next"),
   currentRooms: document.querySelectorAll(".current-room"),
   robotStatuses: document.querySelectorAll(".robot-status"),
   travelStatus: document.getElementById("travelStatus"),
@@ -4420,14 +4608,8 @@ function updateUI() {
   dom.roomMedia.classList.toggle("threat-nearby", dangerRoom);
   dom.roomMedia.classList.toggle("glitch", false);
   dom.roomMedia.style.background = "transparent";
-  const roomBackground = getRoomBackgroundImage(room);
-  if (roomBackground) {
-    dom.roomMedia.style.backgroundImage = `url("${roomBackground}")`;
-    dom.roomMedia.style.backgroundSize = "112% 112%";
-    dom.roomMedia.style.backgroundPosition = "45% center";
-    dom.roomMedia.style.backgroundRepeat = "no-repeat";
-  } else {
-    dom.roomMedia.style.backgroundImage = "";
+  if (!state.roomTransition && !isPlayerTraveling()) {
+    setRoomStagesTo(room);
   }
   document.body.style.setProperty("--room-theme", room.theme);
   const robotLabel = robotStatusLabel();
@@ -9460,6 +9642,10 @@ function startPlayerTravelStep() {
   const isRun = state.playerTravelMode === "run";
   state.playerTravelStepStart = Date.now();
   state.playerTravelStepDuration = (isRun ? 1 : 2) * TICK_MS;
+  if (state.playerPath.length > 0) {
+    beginRoomTransition(state.playerPath[0]);
+    state.invincible = true;
+  }
 }
 
 function startRobotTravelStep() {
@@ -9663,6 +9849,10 @@ function cancelMovement() {
     state.playerTravelTotal = 0;
     state.playerTravelStepStart = null;
     state.playerTravelStepDuration = 0;
+    state.invincible = false;
+    state.roomTransition = null;
+    closeDoorsBriefly();
+    setRoomStagesTo(rooms[state.playerRoom]);
   }
   clearMapTarget();
   state.routePreviewRoom = null;
@@ -10320,6 +10510,10 @@ function advanceRobot() {
 }
 
 function handleFlameSawThreatWindow() {
+  if (state.invincible) {
+    state.robotKillGrace = 0;
+    return false;
+  }
   if (state.currentNight !== 10 || !state.hasFlameSaw || state.robotKilled) {
     state.robotKillGrace = 0;
     return false;
@@ -10346,6 +10540,7 @@ function handleFlameSawThreatWindow() {
 }
 
 function checkThreat() {
+  if (state.invincible) return;
   if (state.robotDisabled) return;
   if (state.robotRoom !== state.playerRoom) return;
   if (handleFlameSawThreatWindow()) return;
@@ -10396,6 +10591,7 @@ function checkThreat() {
 }
 
 function attemptKill() {
+  if (state.invincible) return;
   if (handleFlameSawThreatWindow()) return;
   const learned = state.hidden && isHideSpotLearned(state.playerRoom, state.hiddenSpot);
   const signal = state.roomSignals.get(state.playerRoom) || 0;
@@ -10414,6 +10610,7 @@ function attemptKill() {
 }
 
 function triggerDeath() {
+  if (state.invincible) return;
   if (state.godMode) {
     pushStatus("God mode: robot kill blocked.", 3);
     return;
@@ -10628,6 +10825,8 @@ function resetGame({ preserveItems = false } = {}) {
   state.playerTravelTotal = 0;
   state.playerTravelStepStart = null;
   state.playerTravelStepDuration = 0;
+  state.invincible = false;
+  state.roomTransition = null;
   state.robotPath = [];
   state.robotTravelStepStart = null;
   state.robotTravelStepDuration = 0;
@@ -12121,7 +12320,7 @@ function addConnection(connections, a, b) {
 
 function optimizeLayout() {
   const ids = rooms.map((room) => room.id);
-  const slots = Object.values(mapPositions);
+  const slots = getUniformMapSlots();
   const placement = new Map();
   ids.forEach((id, index) => {
     placement.set(id, slots[index]);
@@ -15683,6 +15882,7 @@ function tickPlayerTravel() {
   if (state.playerPath.length === 0) {
     state.playerTravelStepStart = null;
     state.playerTravelStepDuration = 0;
+    state.invincible = false;
     updateMovementAudioState();
     return;
   }
@@ -15696,6 +15896,8 @@ function tickPlayerTravel() {
   const nextRoom = state.playerPath.shift();
   const previousRoom = state.playerRoom;
   state.playerRoom = nextRoom;
+  finalizeRoomTransition(rooms[nextRoom]);
+  state.roomTransition = null;
   state.vista = Math.max(0, state.vista + 1);
   state.hidden = false;
   state.hiddenSpot = null;
@@ -15808,6 +16010,8 @@ function tickPlayerTravel() {
     state.playerTravelTotal = 0;
     state.playerTravelStepStart = null;
     state.playerTravelStepDuration = 0;
+    state.invincible = false;
+    closeDoorsBriefly();
     updateMovementAudioState();
   } else {
     startPlayerTravelStep();
